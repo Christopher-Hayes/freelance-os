@@ -51,7 +51,11 @@ export default function TimeEntriesPage() {
   const [error, setError] = useState("");
 
   // Day view state
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Start at midnight local time
+    return today;
+  });
   const [showQuickModal, setShowQuickModal] = useState(false);
   const [quickModalTimes, setQuickModalTimes] = useState<{
     start: Date;

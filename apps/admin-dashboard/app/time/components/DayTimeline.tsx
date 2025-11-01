@@ -56,6 +56,66 @@ export default function DayTimeline({
   }>({});
   const [justFinishedDragging, setJustFinishedDragging] = useState(false);
 
+  // Refs for syncing scroll
+  const activityScrollRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Merge adjacent sessions for the same app within 1 hour
+  const mergedSessions = (() => {
+    // First, sort sessions by start time
+    const sortedSessions = [...sessions].sort((a, b) => {
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+
+    // Then merge adjacent sessions with the same app
+    return sortedSessions.reduce((acc, session) => {
+      if (acc.length === 0) {
+        // Deep copy to avoid mutations
+        return [{ ...session }];
+      }
+
+      const lastSession = acc[acc.length - 1]!;
+      const lastEnd = new Date(lastSession.endTime);
+      const currentStart = new Date(session.startTime);
+      const currentEnd = new Date(session.endTime);
+      
+      // Check if same app and within 1 hour gap (or overlapping)
+      const timeDiffMs = currentStart.getTime() - lastEnd.getTime();
+      const timeDiffMinutes = timeDiffMs / (1000 * 60);
+      
+      // Merge if same app AND (overlapping OR gap is less than 5 minutes)
+      if (
+        lastSession.appClass === session.appClass &&
+        timeDiffMinutes <= 5 // Allow up to 5 minute gaps
+      ) {
+        // Merge: extend the last session's end time
+        lastSession.endTime = currentEnd > lastEnd ? session.endTime : lastSession.endTime;
+        
+        // Add durations, including gap time if positive
+        const gapSeconds = timeDiffMs > 0 ? Math.floor(timeDiffMs / 1000) : 0;
+        lastSession.durationSeconds += session.durationSeconds + gapSeconds;
+        
+        // Combine window titles if different and not too long
+        if (session.windowTitle && session.windowTitle !== lastSession.windowTitle) {
+          const currentTitle = lastSession.windowTitle || '';
+          const newTitle = session.windowTitle;
+          // Only add if it's not already included and keep it reasonable
+          if (!currentTitle.includes(newTitle)) {
+            const combined = currentTitle ? `${currentTitle} / ${newTitle}` : newTitle;
+            // Limit combined title length to avoid clutter
+            lastSession.windowTitle = combined.length > 100 
+              ? combined.substring(0, 97) + '...'
+              : combined;
+          }
+        }
+        return acc;
+      } else {
+        // Not mergeable, add as new session (deep copy)
+        return [...acc, { ...session }];
+      }
+    }, [] as ActivitySession[]);
+  })();
+
   // Calculate overlapping entries and their positions
   const calculateOverlaps = () => {
     // Get all entries with their current times (including dragged times)
@@ -144,7 +204,19 @@ export default function DayTimeline({
   };
 
   const overlapPositions = calculateOverlaps();
-  const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll between activity sessions and time entries
+  const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (timelineRef.current) {
+      timelineRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
+
+  const handleTimelineScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (activityScrollRef.current) {
+      activityScrollRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+  };
 
   // Fetch data for the selected date
   useEffect(() => {
@@ -153,7 +225,11 @@ export default function DayTimeline({
 
   const fetchDayData = async () => {
     setLoading(true);
-    const dateStr = selectedDate.toISOString().split("T")[0];
+    // Format the date in local timezone (YYYY-MM-DD)
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
 
     try {
       const [sessionsRes, entriesRes] = await Promise.all([
@@ -185,7 +261,9 @@ export default function DayTimeline({
   };
 
   const goToToday = () => {
-    onDateChange(new Date());
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to midnight local time
+    onDateChange(today);
   };
 
   const formatDate = (date: Date) => {
@@ -391,7 +469,7 @@ export default function DayTimeline({
   };
 
   const renderSessions = () => {
-    return sessions.map((session) => {
+    return mergedSessions.map((session) => {
       const start = new Date(session.startTime);
       const end = new Date(session.endTime);
       const top = timeToY(start);
@@ -565,17 +643,21 @@ export default function DayTimeline({
             </h3>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
+                ref={activityScrollRef}
                 className="relative overflow-y-auto"
-                style={{ height: `${24 * HOUR_HEIGHT}px`, maxHeight: "600px" }}
+                style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
+                onScroll={handleActivityScroll}
               >
-                {renderHourMarkers()}
-                {loading ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-                  </div>
-                ) : (
-                  <div className="relative ml-12">{renderSessions()}</div>
-                )}
+                <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingBottom: '40px' }}>
+                  {renderHourMarkers()}
+                  {loading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+                    </div>
+                  ) : (
+                    <div className="relative ml-12">{renderSessions()}</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -589,17 +671,20 @@ export default function DayTimeline({
               <div
                 ref={timelineRef}
                 className="relative overflow-y-auto cursor-crosshair"
-                style={{ height: `${24 * HOUR_HEIGHT}px`, maxHeight: "600px" }}
+                style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
                 onClick={handleTimelineClick}
+                onScroll={handleTimelineScroll}
               >
-                {renderHourMarkers()}
-                {loading ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-                  </div>
-                ) : (
-                  <div className="relative ml-12">{renderTimeEntries()}</div>
-                )}
+                <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingBottom: '40px' }}>
+                  {renderHourMarkers()}
+                  {loading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+                    </div>
+                  ) : (
+                    <div className="relative ml-12">{renderTimeEntries()}</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

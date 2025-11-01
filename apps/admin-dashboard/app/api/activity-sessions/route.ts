@@ -14,15 +14,22 @@ export async function GET(request: Request) {
       );
     }
 
-    // Parse the date and create start/end of day
-    const targetDate = new Date(date);
-    const startOfDay = new Date(targetDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Parse the date string (YYYY-MM-DD) as a local date
+    // Since we don't have timezone info from the client, we need to query a wider range
+    // The date "2025-10-31" could span from Oct 31 00:00 in UTC+14 to Oct 31 23:59 in UTC-12
+    // That's roughly Oct 30 10:00 UTC to Nov 01 11:59 UTC (a ~38 hour window)
+    // We'll be conservative and query +/- 24 hours, then filter in-memory
+    const [year, month, day] = date.split('-').map(Number);
     
-    const endOfDay = new Date(targetDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Create date in UTC for the query range
+    const queryDate = new Date(Date.UTC(year!, month! - 1, day!, 0, 0, 0, 0));
+    const startOfDay = new Date(queryDate);
+    startOfDay.setUTCHours(startOfDay.getUTCHours() - 24); // 24 hours before
+    
+    const endOfDay = new Date(queryDate);
+    endOfDay.setUTCHours(endOfDay.getUTCHours() + 48); // 48 hours after (covers +24h)
 
-    const sessions = await prisma.activitySession.findMany({
+    const allSessions = await prisma.activitySession.findMany({
       where: {
         startTime: {
           gte: startOfDay,
@@ -32,6 +39,17 @@ export async function GET(request: Request) {
       orderBy: {
         startTime: "asc",
       },
+    });
+
+    // Filter sessions to only those whose LOCAL date matches the requested date
+    // This handles timezone conversion properly
+    const sessions = allSessions.filter((session) => {
+      const localStart = new Date(session.startTime);
+      const localYear = localStart.getFullYear();
+      const localMonth = localStart.getMonth() + 1;
+      const localDay = localStart.getDate();
+      
+      return localYear === year && localMonth === month && localDay === day;
     });
 
     return NextResponse.json({ sessions });

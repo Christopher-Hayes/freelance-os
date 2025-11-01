@@ -22,21 +22,32 @@ export async function GET(request: Request) {
       };
     }
 
-    if (startDate || endDate) {
+    // Build initial where clause for database query
+    let queryStartDate: Date | undefined;
+    let queryEndDate: Date | undefined;
+
+    if (startDate) {
+      const [year, month, day] = startDate.split('-').map(Number);
+      queryStartDate = new Date(Date.UTC(year!, month! - 1, day!, 0, 0, 0, 0));
+      queryStartDate.setUTCHours(queryStartDate.getUTCHours() - 24); // Query 24 hours before
+    }
+    if (endDate) {
+      const [year, month, day] = endDate.split('-').map(Number);
+      queryEndDate = new Date(Date.UTC(year!, month! - 1, day!, 23, 59, 59, 999));
+      queryEndDate.setUTCHours(queryEndDate.getUTCHours() + 24); // Query 24 hours after
+    }
+
+    if (queryStartDate || queryEndDate) {
       where.startTime = {};
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        where.startTime.gte = start;
+      if (queryStartDate) {
+        where.startTime.gte = queryStartDate;
       }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        where.startTime.lte = end;
+      if (queryEndDate) {
+        where.startTime.lte = queryEndDate;
       }
     }
 
-    const timeEntries = await prisma.timeEntry.findMany({
+    const allTimeEntries = await prisma.timeEntry.findMany({
       where,
       include: {
         project: {
@@ -48,6 +59,29 @@ export async function GET(request: Request) {
       orderBy: {
         startTime: "desc",
       },
+    });
+
+    // Filter entries to only those whose LOCAL date falls within the requested range
+    const timeEntries = allTimeEntries.filter((entry) => {
+      const localStart = new Date(entry.startTime);
+      const localYear = localStart.getFullYear();
+      const localMonth = localStart.getMonth() + 1;
+      const localDay = localStart.getDate();
+
+      // Check if local date is within range
+      if (startDate) {
+        const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+        const entryDate = localYear * 10000 + localMonth * 100 + localDay;
+        const rangeStart = startYear! * 10000 + startMonth! * 100 + startDay!;
+        if (entryDate < rangeStart) return false;
+      }
+      if (endDate) {
+        const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+        const entryDate = localYear * 10000 + localMonth * 100 + localDay;
+        const rangeEnd = endYear! * 10000 + endMonth! * 100 + endDay!;
+        if (entryDate > rangeEnd) return false;
+      }
+      return true;
     });
 
     // Calculate total duration

@@ -75,8 +75,10 @@ async function main() {
   console.log('✅ Created time entries:', { timeEntry1, timeEntry2 });
 
   // Create sample invoices
-  const invoice1 = await prisma.invoice.create({
-    data: {
+  const invoice1 = await prisma.invoice.upsert({
+    where: { invoiceNumber: 'INV-2025-001' },
+    update: {},
+    create: {
       invoiceNumber: 'INV-2025-001',
       clientId: client1.id,
       projectId: project1.id,
@@ -89,8 +91,10 @@ async function main() {
     },
   });
 
-  const invoice2 = await prisma.invoice.create({
-    data: {
+  const invoice2 = await prisma.invoice.upsert({
+    where: { invoiceNumber: 'INV-2025-002' },
+    update: {},
+    create: {
       invoiceNumber: 'INV-2025-002',
       clientId: client2.id,
       projectId: project2.id,
@@ -105,6 +109,67 @@ async function main() {
   });
 
   console.log('✅ Created invoices:', { invoice1, invoice2 });
+
+  // Create sample activity sessions for today (Oct 31, 2025)
+  const today = new Date('2025-10-31');
+  
+  const activitySession1 = await prisma.activitySession.create({
+    data: {
+      startTime: new Date('2025-10-31T08:30:00Z'),
+      endTime: new Date('2025-10-31T09:15:00Z'),
+      appClass: 'VS Code',
+      windowTitle: 'DayTimeline.tsx - freelance-os',
+      durationSeconds: 2700, // 45 minutes
+    },
+  });
+
+  const activitySession2 = await prisma.activitySession.create({
+    data: {
+      startTime: new Date('2025-10-31T09:20:00Z'),
+      endTime: new Date('2025-10-31T10:45:00Z'),
+      appClass: 'Chrome',
+      windowTitle: 'React Documentation - Google Chrome',
+      durationSeconds: 5100, // 85 minutes
+    },
+  });
+
+  const activitySession3 = await prisma.activitySession.create({
+    data: {
+      startTime: new Date('2025-10-31T11:00:00Z'),
+      endTime: new Date('2025-10-31T12:30:00Z'),
+      appClass: 'VS Code',
+      windowTitle: 'schema.prisma - freelance-os',
+      durationSeconds: 5400, // 90 minutes
+    },
+  });
+
+  const activitySession4 = await prisma.activitySession.create({
+    data: {
+      startTime: new Date('2025-10-31T13:30:00Z'),
+      endTime: new Date('2025-10-31T15:00:00Z'),
+      appClass: 'Slack',
+      windowTitle: 'Client Communications',
+      durationSeconds: 5400, // 90 minutes
+    },
+  });
+
+  const activitySession5 = await prisma.activitySession.create({
+    data: {
+      startTime: new Date('2025-10-31T15:15:00Z'),
+      endTime: new Date('2025-10-31T17:00:00Z'),
+      appClass: 'Terminal',
+      windowTitle: null,
+      durationSeconds: 6300, // 105 minutes
+    },
+  });
+
+  console.log('✅ Created activity sessions:', { 
+    activitySession1, 
+    activitySession2, 
+    activitySession3,
+    activitySession4,
+    activitySession5
+  });
 
   console.log('🎉 Database seeded successfully!');
 }
