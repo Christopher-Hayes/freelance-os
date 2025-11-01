@@ -79,21 +79,21 @@ export default function NewProjectPage() {
   return (
     <div className="p-8 max-w-2xl">
       <div className="mb-6">
-        <Link href="/projects" className="text-blue-600 hover:text-blue-700 text-sm">
+        <Link href="/projects" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm">
           ← Back to Projects
         </Link>
-        <h1 className="text-3xl font-bold mt-2">Create New Project</h1>
+        <h1 className="text-3xl font-bold dark:text-white mt-2">Create New Project</h1>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded mb-6">
           {error}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-2">
+          <label htmlFor="name" className="block text-sm font-medium dark:text-gray-300 mb-2">
             Project Name *
           </label>
           <input
@@ -103,13 +103,13 @@ export default function NewProjectPage() {
             required
             value={formData.name}
             onChange={handleChange}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Website Redesign"
           />
         </div>
 
         <div>
-          <label htmlFor="clientId" className="block text-sm font-medium mb-2">
+          <label htmlFor="clientId" className="block text-sm font-medium dark:text-gray-300 mb-2">
             Client *
           </label>
           <select
@@ -118,7 +118,7 @@ export default function NewProjectPage() {
             required
             value={formData.clientId}
             onChange={handleChange}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="">Select a client</option>
             {clients.map((client) => (
@@ -130,7 +130,7 @@ export default function NewProjectPage() {
         </div>
 
         <div>
-          <label htmlFor="description" className="block text-sm font-medium mb-2">
+          <label htmlFor="description" className="block text-sm font-medium dark:text-gray-300 mb-2">
             Description
           </label>
           <textarea
@@ -139,13 +139,13 @@ export default function NewProjectPage() {
             value={formData.description}
             onChange={handleChange}
             rows={4}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             placeholder="Project details, goals, etc."
           />
         </div>
 
         <div>
-          <label htmlFor="status" className="block text-sm font-medium mb-2">
+          <label htmlFor="status" className="block text-sm font-medium dark:text-gray-300 mb-2">
             Status
           </label>
           <select
@@ -153,7 +153,7 @@ export default function NewProjectPage() {
             name="status"
             value={formData.status}
             onChange={handleChange}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="active">Active</option>
             <option value="on-hold">On Hold</option>
@@ -163,7 +163,7 @@ export default function NewProjectPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="startDate" className="block text-sm font-medium mb-2">
+            <label htmlFor="startDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
               Start Date
             </label>
             <input
@@ -172,12 +172,12 @@ export default function NewProjectPage() {
               name="startDate"
               value={formData.startDate}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
 
           <div>
-            <label htmlFor="endDate" className="block text-sm font-medium mb-2">
+            <label htmlFor="endDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
               End Date
             </label>
             <input
@@ -186,7 +186,7 @@ export default function NewProjectPage() {
               name="endDate"
               value={formData.endDate}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
         </div>
@@ -195,13 +195,13 @@ export default function NewProjectPage() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+            className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-blue-300 dark:disabled:bg-blue-700 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating...' : 'Create Project'}
           </button>
           <Link
             href="/projects"
-            className="border border-gray-300 px-6 py-2 rounded hover:bg-gray-50"
+            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-6 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
           >
             Cancel
           </Link>

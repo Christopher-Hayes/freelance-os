@@ -179,7 +179,7 @@ export default function ProjectDetailPage({
   if (loading) {
     return (
       <div className="p-8">
-        <div className="animate-pulse">Loading project...</div>
+        <div className="animate-pulse dark:text-white">Loading project...</div>
       </div>
     );
   }
@@ -187,10 +187,10 @@ export default function ProjectDetailPage({
   if (error && !project) {
     return (
       <div className="p-8">
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded">
           Error: {error}
         </div>
-        <Link href="/projects" className="text-blue-600 hover:text-blue-700 mt-4 inline-block">
+        <Link href="/projects" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-4 inline-block">
           ← Back to Projects
         </Link>
       </div>
@@ -202,23 +202,23 @@ export default function ProjectDetailPage({
   return (
     <div className="p-8 max-w-4xl">
       <div className="mb-6">
-        <Link href="/projects" className="text-blue-600 hover:text-blue-700 text-sm">
+        <Link href="/projects" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm">
           ← Back to Projects
         </Link>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded mb-6">
           {error}
         </div>
       )}
 
       {editing ? (
         <form onSubmit={handleSubmit} className="space-y-6">
-          <h1 className="text-3xl font-bold mb-6">Edit Project</h1>
+          <h1 className="text-3xl font-bold dark:text-white mb-6">Edit Project</h1>
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium mb-2">
+            <label htmlFor="name" className="block text-sm font-medium dark:text-gray-300 mb-2">
               Project Name *
             </label>
             <input
@@ -228,12 +228,12 @@ export default function ProjectDetailPage({
               required
               value={formData.name}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
 
           <div>
-            <label htmlFor="clientId" className="block text-sm font-medium mb-2">
+            <label htmlFor="clientId" className="block text-sm font-medium dark:text-gray-300 mb-2">
               Client *
             </label>
             <select
@@ -242,7 +242,7 @@ export default function ProjectDetailPage({
               required
               value={formData.clientId}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
@@ -253,7 +253,7 @@ export default function ProjectDetailPage({
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium mb-2">
+            <label htmlFor="description" className="block text-sm font-medium dark:text-gray-300 mb-2">
               Description
             </label>
             <textarea
@@ -262,12 +262,12 @@ export default function ProjectDetailPage({
               value={formData.description}
               onChange={handleChange}
               rows={4}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
 
           <div>
-            <label htmlFor="status" className="block text-sm font-medium mb-2">
+            <label htmlFor="status" className="block text-sm font-medium dark:text-gray-300 mb-2">
               Status
             </label>
             <select
@@ -275,7 +275,7 @@ export default function ProjectDetailPage({
               name="status"
               value={formData.status}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
               <option value="active">Active</option>
               <option value="on-hold">On Hold</option>
@@ -285,7 +285,7 @@ export default function ProjectDetailPage({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label htmlFor="startDate" className="block text-sm font-medium mb-2">
+              <label htmlFor="startDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
                 Start Date
               </label>
               <input
@@ -294,12 +294,12 @@ export default function ProjectDetailPage({
                 name="startDate"
                 value={formData.startDate}
                 onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               />
             </div>
 
             <div>
-              <label htmlFor="endDate" className="block text-sm font-medium mb-2">
+              <label htmlFor="endDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
                 End Date
               </label>
               <input
@@ -308,7 +308,7 @@ export default function ProjectDetailPage({
                 name="endDate"
                 value={formData.endDate}
                 onChange={handleChange}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               />
             </div>
           </div>
@@ -317,7 +317,7 @@ export default function ProjectDetailPage({
             <button
               type="submit"
               disabled={saving}
-              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-blue-300 dark:disabled:bg-blue-700 disabled:cursor-not-allowed"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
@@ -337,7 +337,7 @@ export default function ProjectDetailPage({
                   });
                 }
               }}
-              className="border border-gray-300 px-6 py-2 rounded hover:bg-gray-50"
+              className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-6 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
@@ -348,7 +348,7 @@ export default function ProjectDetailPage({
           <div className="flex justify-between items-start mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold">{project.name}</h1>
+                <h1 className="text-3xl font-bold dark:text-white">{project.name}</h1>
                 <span
                   className={`px-3 py-1 text-sm font-medium rounded ${
                     statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
@@ -357,11 +357,11 @@ export default function ProjectDetailPage({
                   {statusLabels[project.status as keyof typeof statusLabels] || project.status}
                 </span>
               </div>
-              <div className="text-gray-600">
+              <div className="text-gray-600 dark:text-gray-400">
                 Client:{' '}
                 <Link
                   href={`/clients/${project.client.id}`}
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
                 >
                   {project.client.name}
                 </Link>
@@ -371,13 +371,13 @@ export default function ProjectDetailPage({
             <div className="flex gap-2">
               <button
                 onClick={() => setEditing(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600"
               >
                 Edit
               </button>
               <button
                 onClick={handleDelete}
-                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                className="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700 dark:hover:bg-red-600"
               >
                 Delete
               </button>
@@ -386,32 +386,32 @@ export default function ProjectDetailPage({
 
           {project.description && (
             <div className="mb-6">
-              <h2 className="text-lg font-semibold mb-2">Description</h2>
-              <p className="text-gray-700 whitespace-pre-wrap">{project.description}</p>
+              <h2 className="text-lg font-semibold dark:text-white mb-2">Description</h2>
+              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{project.description}</p>
             </div>
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="border border-gray-200 rounded p-4">
-              <div className="text-sm text-gray-600">Total Hours</div>
-              <div className="text-2xl font-bold">{project.totalHours}</div>
+            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">Total Hours</div>
+              <div className="text-2xl font-bold dark:text-white">{project.totalHours}</div>
             </div>
-            <div className="border border-gray-200 rounded p-4">
-              <div className="text-sm text-gray-600">Time Entries</div>
-              <div className="text-2xl font-bold">{project._count.timeEntries}</div>
+            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">Time Entries</div>
+              <div className="text-2xl font-bold dark:text-white">{project._count.timeEntries}</div>
             </div>
             {project.startDate && (
-              <div className="border border-gray-200 rounded p-4">
-                <div className="text-sm text-gray-600">Start Date</div>
-                <div className="text-lg font-semibold">
+              <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+                <div className="text-lg font-semibold dark:text-white">
                   {new Date(project.startDate).toLocaleDateString()}
                 </div>
               </div>
             )}
             {project.endDate && (
-              <div className="border border-gray-200 rounded p-4">
-                <div className="text-sm text-gray-600">End Date</div>
-                <div className="text-lg font-semibold">
+              <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
+                <div className="text-lg font-semibold dark:text-white">
                   {new Date(project.endDate).toLocaleDateString()}
                 </div>
               </div>
@@ -419,30 +419,30 @@ export default function ProjectDetailPage({
           </div>
 
           <div>
-            <h2 className="text-xl font-semibold mb-4">Recent Time Entries</h2>
+            <h2 className="text-xl font-semibold dark:text-white mb-4">Recent Time Entries</h2>
             {project.timeEntries.length === 0 ? (
-              <p className="text-gray-600">No time entries yet</p>
+              <p className="text-gray-600 dark:text-gray-400">No time entries yet</p>
             ) : (
               <div className="space-y-2">
                 {project.timeEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="border border-gray-200 rounded p-4 flex justify-between items-start"
+                    className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4 flex justify-between items-start"
                   >
                     <div>
-                      <div className="font-medium">
+                      <div className="font-medium dark:text-white">
                         {entry.description || 'No description'}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         {new Date(entry.startTime).toLocaleDateString()} at{' '}
                         {new Date(entry.startTime).toLocaleTimeString()}
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold">
+                      <div className="font-semibold dark:text-white">
                         {(entry.durationMinutes / 60).toFixed(2)} hrs
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
                         {entry.billable ? 'Billable' : 'Non-billable'}
                       </div>
                     </div>

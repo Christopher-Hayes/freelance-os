@@ -106,7 +106,7 @@ export default function ProjectsPage() {
   if (loading && projects.length === 0) {
     return (
       <div className="p-8">
-        <div className="animate-pulse">Loading projects...</div>
+        <div className="animate-pulse dark:text-white">Loading projects...</div>
       </div>
     );
   }
@@ -114,7 +114,7 @@ export default function ProjectsPage() {
   if (error) {
     return (
       <div className="p-8">
-        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded">
           Error: {error}
         </div>
       </div>
@@ -124,10 +124,10 @@ export default function ProjectsPage() {
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Projects</h1>
+        <h1 className="text-3xl font-bold dark:text-white">Projects</h1>
         <Link
           href="/projects/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600"
         >
           New Project
         </Link>
@@ -136,11 +136,11 @@ export default function ProjectsPage() {
       {/* Filters */}
       <div className="mb-6 flex gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Filter by Client</label>
+          <label className="block text-sm font-medium dark:text-gray-300 mb-1">Filter by Client</label>
           <select
             value={filterClient}
             onChange={(e) => setFilterClient(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2"
+            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="">All Clients</option>
             {clients.map((client) => (
@@ -151,11 +151,11 @@ export default function ProjectsPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Filter by Status</label>
+          <label className="block text-sm font-medium dark:text-gray-300 mb-1">Filter by Status</label>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-2"
+            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
           >
             <option value="">All Statuses</option>
             <option value="active">Active</option>
@@ -166,11 +166,11 @@ export default function ProjectsPage() {
       </div>
 
       {projects.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-600 mb-4">No projects found</p>
+        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <p className="text-gray-600 dark:text-gray-400 mb-4">No projects found</p>
           <Link
             href="/projects/new"
-            className="text-blue-600 hover:text-blue-700"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
           >
             Create your first project
           </Link>
@@ -180,13 +180,13 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+              className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg p-6 hover:shadow-md dark:hover:shadow-gray-900 transition-shadow"
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <Link href={`/projects/${project.id}`}>
-                      <h2 className="text-xl font-semibold hover:text-blue-600">
+                      <h2 className="text-xl font-semibold dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
                         {project.name}
                       </h2>
                     </Link>
@@ -199,14 +199,14 @@ export default function ProjectsPage() {
                     </span>
                   </div>
                   {project.description && (
-                    <p className="text-gray-600 mb-3">{project.description}</p>
+                    <p className="text-gray-600 dark:text-gray-400 mb-3">{project.description}</p>
                   )}
-                  <div className="flex gap-6 text-sm text-gray-500">
+                  <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
                     <div>
                       <span className="font-medium">Client:</span>{' '}
                       <Link
                         href={`/clients/${project.client.id}`}
-                        className="text-blue-600 hover:underline"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         {project.client.name}
                       </Link>
@@ -219,7 +219,7 @@ export default function ProjectsPage() {
                     </div>
                   </div>
                   {(project.startDate || project.endDate) && (
-                    <div className="flex gap-6 text-sm text-gray-500 mt-2">
+                    <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400 mt-2">
                       {project.startDate && (
                         <div>
                           <span className="font-medium">Start:</span>{' '}
@@ -238,13 +238,13 @@ export default function ProjectsPage() {
                 <div className="flex gap-2">
                   <Link
                     href={`/projects/${project.id}`}
-                    className="text-blue-600 hover:text-blue-700 px-3 py-1 text-sm"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 text-sm"
                   >
                     Edit
                   </Link>
                   <button
                     onClick={() => handleDelete(project.id)}
-                    className="text-red-600 hover:text-red-700 px-3 py-1 text-sm"
+                    className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 px-3 py-1 text-sm"
                   >
                     Delete
                   </button>
