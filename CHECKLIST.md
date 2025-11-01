@@ -138,36 +138,36 @@ Complete checklist for building out the freelance-os features.
 ## 💰 Phase 5: Admin Dashboard - Invoice Management
 
 ### API Routes
-- [ ] Create `apps/admin-dashboard/app/api/invoices/route.ts`
-  - [ ] GET (list invoices)
-  - [ ] POST (create invoice)
-- [ ] Create `apps/admin-dashboard/app/api/invoices/[id]/route.ts`
-  - [ ] GET (get single invoice)
-  - [ ] PUT (update invoice)
-  - [ ] DELETE (delete invoice)
-- [ ] Create `apps/admin-dashboard/app/api/invoices/generate/route.ts`
-  - [ ] POST (auto-generate from time entries)
+- [X] Create `apps/admin-dashboard/app/api/invoices/route.ts`
+  - [X] GET (list invoices)
+  - [X] POST (create invoice)
+- [X] Create `apps/admin-dashboard/app/api/invoices/[id]/route.ts`
+  - [X] GET (get single invoice)
+  - [X] PUT (update invoice)
+  - [X] DELETE (delete invoice)
+- [X] Create `apps/admin-dashboard/app/api/invoices/generate/route.ts`
+  - [X] POST (auto-generate from time entries)
 
 ### UI Pages
-- [ ] Create `apps/admin-dashboard/app/invoices/page.tsx` (list view)
-- [ ] Create `apps/admin-dashboard/app/invoices/new/page.tsx` (create form)
-- [ ] Create `apps/admin-dashboard/app/invoices/[id]/page.tsx` (view/edit)
-- [ ] Add navigation link to invoices
+- [X] Create `apps/admin-dashboard/app/invoices/page.tsx` (list view)
+- [X] Create `apps/admin-dashboard/app/invoices/new/page.tsx` (create form)
+- [X] Create `apps/admin-dashboard/app/invoices/[id]/page.tsx` (view/edit)
+- [X] Add navigation link to invoices
 
 ### Components
-- [ ] InvoiceList component
-- [ ] InvoiceForm component
-- [ ] InvoicePreview component
-- [ ] StatusBadge component
-- [ ] Auto-calculate from time entries
+- [X] InvoiceList component (integrated in page)
+- [X] InvoiceForm component (integrated in pages)
+- [X] InvoicePreview component (integrated in detail page)
+- [X] StatusBadge component (integrated in pages)
+- [X] Auto-calculate from time entries
 
 ### Features
-- [ ] Auto-generate invoice number
-- [ ] Calculate amount from time entries
-- [ ] Set due date (e.g., +30 days from issue)
-- [ ] Mark as sent/paid
-- [ ] Filter by status
-- [ ] Filter by client
+- [X] Auto-generate invoice number
+- [X] Calculate amount from time entries
+- [X] Set due date (e.g., +30 days from issue)
+- [X] Mark as sent/paid
+- [X] Filter by status
+- [X] Filter by client
 
 ### Testing
 - [ ] Test creating invoice manually
@@ -178,8 +178,9 @@ Complete checklist for building out the freelance-os features.
 ## 📈 Phase 6: Admin Dashboard - Activity Analytics
 
 ### Install Charting Library
-- [ ] Choose library (Recharts, Chart.js, or Tremor)
-- [ ] Install: `pnpm add recharts` (or alternative)
+<!-- - [ ] Choose library (Recharts, Chart.js, or Tremor) -->
+<!-- - [ ] Install: `pnpm add recharts` (or alternative) -->
+- [ ] Use D3.js for charts.
 
 ### API Routes
 - [ ] Create `apps/admin-dashboard/app/api/analytics/activity/route.ts`
@@ -467,13 +468,14 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 4 (Complete) → Moving to Phase 5
+**Current Phase**: Phase 5 (Complete) → Ready for Phase 6
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
 - ✅ Phase 2: Admin Dashboard - Client Management
 - ✅ Phase 3: Admin Dashboard - Project Management
 - ✅ Phase 4: Admin Dashboard - Time Tracking
+- ✅ Phase 5: Admin Dashboard - Invoice Management
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours

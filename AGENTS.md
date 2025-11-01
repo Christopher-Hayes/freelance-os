@@ -13,6 +13,13 @@ Freelance-OS is a **Turborepo monorepo** for managing freelance business operati
 - **`apps/admin-dashboard`** (:3000) - Full access admin interface
 - **`apps/client-portal`** (:3001) - Client-facing portal (data filtered by clientId)
 
+## UI
+
+- Use tailwindcss for styling
+- Always support dark mode
+- Prefer Server Components (default in Next.js 15+)
+- Use shared components from `@freelance-os/ui` package when it makes sense
+
 ### Packages
 - **`packages/database`** - Prisma schema + singleton client ⚠️ **Use this, never create new PrismaClient**
 - **`packages/types`** - Shared TypeScript types ⚠️ **Use these, not Prisma-generated types**
