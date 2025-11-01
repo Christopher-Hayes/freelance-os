@@ -1,0 +1,458 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+
+type Client = {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+};
+
+type TimeEntry = {
+  id: number;
+  description: string | null;
+  startTime: string;
+  durationMinutes: number;
+  billable: boolean;
+};
+
+type Project = {
+  id: number;
+  name: string;
+  description: string | null;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  client: Client;
+  timeEntries: TimeEntry[];
+  totalHours: number;
+  _count: {
+    timeEntries: number;
+  };
+};
+
+const statusColors = {
+  active: 'bg-green-100 text-green-800',
+  completed: 'bg-blue-100 text-blue-800',
+  'on-hold': 'bg-yellow-100 text-yellow-800',
+};
+
+const statusLabels = {
+  active: 'Active',
+  completed: 'Completed',
+  'on-hold': 'On Hold',
+};
+
+export default function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const router = useRouter();
+  const [project, setProject] = useState<Project | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    clientId: '',
+    status: 'active',
+    startDate: '',
+    endDate: '',
+  });
+
+  useEffect(() => {
+    params.then(({ id }) => {
+      setProjectId(id);
+      fetchProject(id);
+      fetchClients();
+    });
+  }, [params]);
+
+  const fetchProject = async (id: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/projects/${id}`);
+      if (!res.ok) throw new Error('Failed to fetch project');
+      const data = await res.json();
+      setProject(data);
+      setFormData({
+        name: data.name,
+        description: data.description || '',
+        clientId: data.client.id.toString(),
+        status: data.status,
+        startDate: data.startDate ? data.startDate.split('T')[0] : '',
+        endDate: data.endDate ? data.endDate.split('T')[0] : '',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const res = await fetch('/api/clients');
+      if (!res.ok) throw new Error('Failed to fetch clients');
+      const data = await res.json();
+      setClients(data);
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectId) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          startDate: formData.startDate || null,
+          endDate: formData.endDate || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update project');
+      }
+
+      const updatedProject = await res.json();
+      setProject({
+        ...updatedProject,
+        timeEntries: project?.timeEntries || [],
+        totalHours: project?.totalHours || 0,
+        _count: project?._count || { timeEntries: 0 },
+      });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleDelete = async () => {
+    if (!projectId || !project) return;
+    
+    if (!confirm('Are you sure you want to delete this project? This will also delete all associated time entries.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error('Failed to delete project');
+      
+      const result = await res.json();
+      alert(`Project deleted successfully. ${result.deletedTimeEntries} time entries were also deleted.`);
+      router.push('/projects');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to delete project');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="animate-pulse">Loading project...</div>
+      </div>
+    );
+  }
+
+  if (error && !project) {
+    return (
+      <div className="p-8">
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded">
+          Error: {error}
+        </div>
+        <Link href="/projects" className="text-blue-600 hover:text-blue-700 mt-4 inline-block">
+          ← Back to Projects
+        </Link>
+      </div>
+    );
+  }
+
+  if (!project) return null;
+
+  return (
+    <div className="p-8 max-w-4xl">
+      <div className="mb-6">
+        <Link href="/projects" className="text-blue-600 hover:text-blue-700 text-sm">
+          ← Back to Projects
+        </Link>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded mb-6">
+          {error}
+        </div>
+      )}
+
+      {editing ? (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <h1 className="text-3xl font-bold mb-6">Edit Project</h1>
+
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-2">
+              Project Name *
+            </label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              required
+              value={formData.name}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="clientId" className="block text-sm font-medium mb-2">
+              Client *
+            </label>
+            <select
+              id="clientId"
+              name="clientId"
+              required
+              value={formData.clientId}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name} {client.company ? `(${client.company})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium mb-2">
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              rows={4}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="status" className="block text-sm font-medium mb-2">
+              Status
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="active">Active</option>
+              <option value="on-hold">On Hold</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startDate" className="block text-sm font-medium mb-2">
+                Start Date
+              </label>
+              <input
+                type="date"
+                id="startDate"
+                name="startDate"
+                value={formData.startDate}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="endDate" className="block text-sm font-medium mb-2">
+                End Date
+              </label>
+              <input
+                type="date"
+                id="endDate"
+                name="endDate"
+                value={formData.endDate}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setError(null);
+                if (project) {
+                  setFormData({
+                    name: project.name,
+                    description: project.description || '',
+                    clientId: project.client.id.toString(),
+                    status: project.status,
+                    startDate: project.startDate ? (project.startDate.split('T')[0] ?? '') : '',
+                    endDate: project.endDate ? (project.endDate.split('T')[0] ?? '') : '',
+                  });
+                }
+              }}
+              className="border border-gray-300 px-6 py-2 rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div>
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold">{project.name}</h1>
+                <span
+                  className={`px-3 py-1 text-sm font-medium rounded ${
+                    statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {statusLabels[project.status as keyof typeof statusLabels] || project.status}
+                </span>
+              </div>
+              <div className="text-gray-600">
+                Client:{' '}
+                <Link
+                  href={`/clients/${project.client.id}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {project.client.name}
+                </Link>
+                {project.client.company && ` (${project.client.company})`}
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditing(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          {project.description && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-2">Description</h2>
+              <p className="text-gray-700 whitespace-pre-wrap">{project.description}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="border border-gray-200 rounded p-4">
+              <div className="text-sm text-gray-600">Total Hours</div>
+              <div className="text-2xl font-bold">{project.totalHours}</div>
+            </div>
+            <div className="border border-gray-200 rounded p-4">
+              <div className="text-sm text-gray-600">Time Entries</div>
+              <div className="text-2xl font-bold">{project._count.timeEntries}</div>
+            </div>
+            {project.startDate && (
+              <div className="border border-gray-200 rounded p-4">
+                <div className="text-sm text-gray-600">Start Date</div>
+                <div className="text-lg font-semibold">
+                  {new Date(project.startDate).toLocaleDateString()}
+                </div>
+              </div>
+            )}
+            {project.endDate && (
+              <div className="border border-gray-200 rounded p-4">
+                <div className="text-sm text-gray-600">End Date</div>
+                <div className="text-lg font-semibold">
+                  {new Date(project.endDate).toLocaleDateString()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Recent Time Entries</h2>
+            {project.timeEntries.length === 0 ? (
+              <p className="text-gray-600">No time entries yet</p>
+            ) : (
+              <div className="space-y-2">
+                {project.timeEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="border border-gray-200 rounded p-4 flex justify-between items-start"
+                  >
+                    <div>
+                      <div className="font-medium">
+                        {entry.description || 'No description'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {new Date(entry.startTime).toLocaleDateString()} at{' '}
+                        {new Date(entry.startTime).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold">
+                        {(entry.durationMinutes / 60).toFixed(2)} hrs
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {entry.billable ? 'Billable' : 'Non-billable'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
