@@ -49,6 +49,21 @@ const PIXELS_PER_HOUR = 60; // Height of one hour in pixels
 const HOUR_HEIGHT = PIXELS_PER_HOUR;
 const TIMELINE_PADDING_TOP = 16; // Padding at the top of the timeline
 const TIMELINE_DRAG_OFFSET = -8;
+const MIN_DISPLAY_DURATION_MINUTES = 15; // Minimum duration for display purposes
+
+// Color palette for different apps
+const APP_COLORS = [
+  '#3B82F6', // blue
+  '#10B981', // green
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // purple
+  '#EC4899', // pink
+  '#14B8A6', // teal
+  '#F97316', // orange
+  '#6366F1', // indigo
+  '#06B6D4', // cyan
+];
 
 export default function DayTimeline({
   selectedDate,
@@ -89,58 +104,172 @@ export default function DayTimeline({
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
+  // Get consistent color for an app
+  const getAppColor = (appClass: string): string => {
+    // Simple hash function to get consistent color for each app
+    let hash = 0;
+    for (let i = 0; i < appClass.length; i++) {
+      hash = appClass.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return APP_COLORS[Math.abs(hash) % APP_COLORS.length]!;
+  };
+
   // Merge adjacent sessions for the same app within 1 hour
   const mergedSessions = (() => {
-    // First, sort sessions by start time
-    const sortedSessions = [...sessions].sort((a, b) => {
+    // Step 1: Apply minimum display duration (15 minutes)
+    const sessionsWithMinDuration = sessions.map(session => {
+      const start = new Date(session.startTime);
+      const end = new Date(session.endTime);
+      const durationMs = end.getTime() - start.getTime();
+      const durationMinutes = durationMs / (1000 * 60);
+      
+      if (durationMinutes < MIN_DISPLAY_DURATION_MINUTES) {
+        // Extend the end time to make it 15 minutes
+        const newEnd = new Date(start.getTime() + MIN_DISPLAY_DURATION_MINUTES * 60 * 1000);
+        return {
+          ...session,
+          endTime: newEnd.toISOString(),
+          durationSeconds: MIN_DISPLAY_DURATION_MINUTES * 60,
+        };
+      }
+      
+      return { ...session };
+    });
+
+    // Step 2: Sort by start time
+    const sortedSessions = [...sessionsWithMinDuration].sort((a, b) => {
       return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
     });
 
-    // Then merge adjacent sessions with the same app
-    return sortedSessions.reduce((acc, session) => {
-      if (acc.length === 0) {
-        // Deep copy to avoid mutations
-        return [{ ...session }];
-      }
-
-      const lastSession = acc[acc.length - 1]!;
-      const lastEnd = new Date(lastSession.endTime);
+    // Step 3: Merge overlapping sessions of the same app
+    const merged: ActivitySession[] = [];
+    
+    for (const session of sortedSessions) {
       const currentStart = new Date(session.startTime);
       const currentEnd = new Date(session.endTime);
-
-      // Check if same app and within 1 hour gap (or overlapping)
-      const timeDiffMs = currentStart.getTime() - lastEnd.getTime();
-      const timeDiffMinutes = timeDiffMs / (1000 * 60);
-
-      // Merge if same app AND (overlapping OR gap is less than 5 minutes)
-      if (
-        lastSession.appClass === session.appClass &&
-        timeDiffMinutes <= 10 // Allow up to 10 minute gaps
-      ) {
-        // Merge: extend the last session's end time
-        lastSession.endTime = currentEnd > lastEnd ? session.endTime : lastSession.endTime;
-
-        // Add durations, including gap time if positive
-        const gapSeconds = timeDiffMs > 0 ? Math.floor(timeDiffMs / 1000) : 0;
-        lastSession.durationSeconds += session.durationSeconds + gapSeconds;
-
-        // Combine window titles if different and not too long
-        if (session.windowTitle && session.windowTitle !== lastSession.windowTitle) {
-          const currentTitle = lastSession.windowTitle || '';
+      
+      // Find if there's an existing session for this app that overlaps
+      const existingIndex = merged.findIndex(m => {
+        if (m.appClass !== session.appClass) return false;
+        
+        const mStart = new Date(m.startTime);
+        const mEnd = new Date(m.endTime);
+        
+        // Check if they overlap (allowing up to 10 minute gap)
+        const gapMs = currentStart.getTime() - mEnd.getTime();
+        const gapMinutes = gapMs / (1000 * 60);
+        
+        return gapMinutes <= 10 && currentStart <= mEnd;
+      });
+      
+      if (existingIndex >= 0) {
+        // Merge with existing session
+        const existing = merged[existingIndex]!;
+        const existingEnd = new Date(existing.endTime);
+        
+        // Extend end time if current session goes beyond
+        if (currentEnd > existingEnd) {
+          existing.endTime = session.endTime;
+        }
+        
+        // Update duration
+        const newDurationMs = new Date(existing.endTime).getTime() - new Date(existing.startTime).getTime();
+        existing.durationSeconds = Math.floor(newDurationMs / 1000);
+        
+        // Combine window titles
+        if (session.windowTitle && session.windowTitle !== existing.windowTitle) {
+          const currentTitle = existing.windowTitle || '';
           const newTitle = session.windowTitle;
-          // Only add if it's not already included and keep it reasonable
           if (!currentTitle.includes(newTitle)) {
             const combined = currentTitle ? `${currentTitle} / ${newTitle}` : newTitle;
-            lastSession.windowTitle = combined
+            existing.windowTitle = combined;
           }
         }
-        return acc;
       } else {
-        // Not mergeable, add as new session (deep copy)
-        return [...acc, { ...session }];
+        // Add as new session
+        merged.push({ ...session });
       }
-    }, [] as ActivitySession[]);
+    }
+    
+    return merged;
   })();
+
+  // Calculate overlapping sessions and their positions (for activity sessions)
+  const calculateActivityOverlaps = () => {
+    const sessionsWithTimes = mergedSessions.map((session) => ({
+      id: session.id,
+      appClass: session.appClass,
+      start: new Date(session.startTime),
+      end: new Date(session.endTime),
+    }));
+
+    const positions: {
+      [key: number]: { column: number; totalColumns: number };
+    } = {};
+
+    sessionsWithTimes.forEach((session) => {
+      // Find all sessions that overlap with this session
+      const overlappingEntries = sessionsWithTimes.filter((other) => {
+        if (session.id === other.id) return false;
+        return session.start < other.end && session.end > other.start;
+      });
+
+      if (overlappingEntries.length === 0) {
+        positions[session.id] = { column: 0, totalColumns: 1 };
+        return;
+      }
+
+      // Create a group of all sessions that overlap with this one (including itself)
+      const overlapGroup = [session, ...overlappingEntries];
+
+      // Find the maximum number of sessions that overlap at any single point
+      const allTimes = new Set<number>();
+      overlapGroup.forEach((s) => {
+        allTimes.add(s.start.getTime());
+        allTimes.add(s.end.getTime());
+      });
+
+      const sortedTimes = Array.from(allTimes).sort((a, b) => a - b);
+
+      let maxConcurrent = 0;
+      const concurrentGroups: number[][] = [];
+
+      for (let i = 0; i < sortedTimes.length - 1; i++) {
+        const currentTime = sortedTimes[i];
+        if (currentTime === undefined) continue;
+        const checkTime = new Date(currentTime + 1);
+        const concurrent = overlapGroup.filter((s) => {
+          return checkTime >= s.start && checkTime < s.end;
+        });
+
+        if (concurrent.length > maxConcurrent) {
+          maxConcurrent = concurrent.length;
+        }
+
+        concurrentGroups.push(concurrent.map((s) => s.id));
+      }
+
+      // Find the largest concurrent group that includes this session
+      const largestGroupWithEntry = concurrentGroups
+        .filter((group) => group.includes(session.id))
+        .reduce((largest, current) => {
+          return current.length > largest.length ? current : largest;
+        }, [] as number[]);
+
+      // Sort by ID for consistent column assignment
+      const sortedGroup = largestGroupWithEntry.sort((a, b) => a - b);
+      const column = sortedGroup.indexOf(session.id);
+
+      positions[session.id] = {
+        column: column >= 0 ? column : 0,
+        totalColumns: Math.min(maxConcurrent, 4),
+      };
+    });
+
+    return positions;
+  };
+
+  const activityOverlapPositions = calculateActivityOverlaps();
 
   // Calculate overlapping entries and their positions
   const calculateOverlaps = () => {
@@ -722,27 +851,42 @@ export default function DayTimeline({
     return mergedSessions.map((session) => {
       const start = new Date(session.startTime);
       const end = new Date(session.endTime);
-      const top = timeToY(start) + TIMELINE_PADDING_TOP;
-      const bottom = timeToY(end) + TIMELINE_PADDING_TOP;
+      const top = timeToY(start);
+      const bottom = timeToY(end);
       const height = bottom - top;
+
+      // Get overlap position
+      const position = activityOverlapPositions[session.id] || { column: 0, totalColumns: 1 };
+      const widthPercent = 100 / position.totalColumns;
+      const leftPercent = (position.column / position.totalColumns) * 100;
+
+      // Add small gap between overlapping sessions
+      const gap = position.totalColumns > 1 ? 1 : 0;
+
+      // Get app color
+      const appColor = getAppColor(session.appClass);
 
       return (
         <div
           key={session.id}
-          className="timeline-session absolute z-10 left-0 right-0 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded px-1 overflow-hidden cursor-help"
+          className={`timeline-session absolute z-10 flex ${height > 35 ? 'items-start' : 'items-center'} border rounded px-1 overflow-hidden cursor-help`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
             minHeight: "2px",
+            left: `calc(${leftPercent}% + ${gap}px)`,
+            right: `calc(${100 - leftPercent - widthPercent}% + ${gap}px)`,
+            backgroundColor: `${appColor}20`, // 20 is hex for ~12% opacity
+            borderColor: appColor,
           }}
           title={`${session.appClass}\n${session.windowTitle || ""}\n${Math.round(session.durationSeconds / 60)} min`}
         >
-          {height > 20 && (
-            <div className="flex flex-wrap text-xs text-blue-800 dark:text-blue-200 truncate">
+          {height > 10 && (
+            <div className="flex flex-wrap text-xs truncate" style={{ color: appColor }}>
               {(height > 35 && session.windowTitle) ? (
                 <>
                   <div className="font-semibold truncate mb-0.5">{session.appClass}</div>
-                  <div className="w-full text-blue-600 dark:text-blue-300 text-[10px]">
+                  <div className="w-full text-[10px] opacity-80">
                     {session.windowTitle.split(' / ').map((title, index) => (
                       <div key={index} className="truncate">
                         {/* remove everything after the last " - ", including the " - " */}
@@ -755,7 +899,7 @@ export default function DayTimeline({
                 <div className="truncate">
                   <span className="font-semibold">{session.appClass}</span>
                   {/* split by " - " and then only keep everything before the first " - " */}
-                  <span className="text-[10px] text-blue-600 dark:text-blue-300">{session.windowTitle ? ` - ${session.windowTitle.split(' / ').map(title => title.slice(0, title.indexOf(' - ') > 0 ? title.indexOf(' - ') : title.length)).join(' - ')}` : ''}</span>
+                  <span className="text-[10px] opacity-70">{session.windowTitle ? ` - ${session.windowTitle.split(' / ').map(title => title.slice(0, title.indexOf(' - ') > 0 ? title.indexOf(' - ') : title.length)).join(' - ')}` : ''}</span>
                 </div>
               )}
             </div>
@@ -919,7 +1063,7 @@ export default function DayTimeline({
         <div
           key={entry.id}
           className={`timeline-entry group absolute flex items-center border-2 rounded px-2 ${isDraggingThis ? "opacity-70" : ""
-            } ${isGhost ? "opacity-50 border-dashed pointer-events-none" : ""} ${isEditing ? "overflow-visible z-50" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"}`}
+            } ${isGhost ? "justify-center opacity-50 border-dashed pointer-events-none" : ""} ${isEditing ? "overflow-visible z-50" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"}`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
@@ -1075,12 +1219,12 @@ export default function DayTimeline({
           
           {/* Ghost entry content */}
           {isGhost && (
-            <div className="py-2 text-xs text-center">
-              <div className="font-semibold text-gray-500 dark:text-gray-400">
+            <div className="text-center py-2 text-xs">
+              <div className="font-semibold text-black dark:text-white">
                 {draggingNewEntry ? "Release to create" : "Click & drag to create"}
               </div>
               {height > 35 && (
-                <div className="text-gray-400 dark:text-gray-500 text-[10px] mt-1">
+                <div className="text-black dark:text-white text-[10px] mt-1">
                   {start.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
@@ -1093,7 +1237,7 @@ export default function DayTimeline({
                 </div>
               )}
               {height > 50 && (
-                <div className="text-gray-400 dark:text-gray-500 text-[10px]">
+                <div className="text-black dark:text-white text-[10px]">
                   ({Math.round((end.getTime() - start.getTime()) / 60000)} min)
                 </div>
               )}
@@ -1150,11 +1294,11 @@ export default function DayTimeline({
             style={{ cursor: 'ns-resize' }}
           />
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-5 gap-4">
           {/* Activity Sessions Column */}
-          <div className="select-none">
+          <div className="col-span-3 select-none">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              Activity Sessions
+              App Activity
             </h3>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
@@ -1179,9 +1323,9 @@ export default function DayTimeline({
           </div>
 
           {/* Time Entries Column */}
-          <div>
+          <div className="col-span-2">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 select-none">
-              Project Time Entries
+              Project Tracking
             </h3>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
@@ -1326,7 +1470,7 @@ export default function DayTimeline({
 
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
           <p>
-            <strong>Activity Sessions:</strong> Hover to see details. Data from external tracking utility.
+            <strong>Apps:</strong> Hover to see details. Data from external tracking utility.
           </p>
           <p>
             <strong>Project Entries:</strong> Click & drag to create new entries. Click entry to edit. Drag top/bottom edges to resize.
