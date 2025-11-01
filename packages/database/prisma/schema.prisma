@@ -1,0 +1,126 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Activity tracking from your existing utility
+model ActivitySession {
+  id              Int      @id @default(autoincrement())
+  startTime       DateTime @map("start_time") @db.Timestamptz
+  endTime         DateTime @map("end_time") @db.Timestamptz
+  appClass        String   @map("app_class") @db.VarChar(255)
+  windowTitle     String?  @map("window_title") @db.Text
+  durationSeconds Int      @map("duration_seconds")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([appClass], name: "idx_sessions_app_class")
+  @@index([startTime], name: "idx_sessions_start_time")
+  @@index([endTime], name: "idx_sessions_end_time")
+  @@index([appClass, startTime], name: "idx_sessions_app_time")
+  @@map("activity_sessions")
+}
+
+model ActivitySummary {
+  id                   Int      @id @default(autoincrement())
+  appClass             String   @map("app_class") @db.VarChar(255)
+  activityDetails      String?  @map("activity_details") @db.Text
+  totalDurationSeconds Int      @map("total_duration_seconds")
+  sessionCount         Int      @map("session_count")
+  firstSeen            DateTime @map("first_seen") @db.Timestamptz
+  lastSeen             DateTime @map("last_seen") @db.Timestamptz
+  submittedAt          DateTime @default(now()) @map("submitted_at") @db.Timestamptz
+
+  @@index([appClass], name: "idx_summaries_app_class")
+  @@index([firstSeen], name: "idx_summaries_first_seen")
+  @@index([lastSeen], name: "idx_summaries_last_seen")
+  @@index([submittedAt], name: "idx_summaries_submitted_at")
+  @@map("activity_summaries")
+}
+
+// Client management
+model Client {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  name      String
+  company   String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  
+  projects  Project[]
+  invoices  Invoice[]
+
+  @@map("clients")
+}
+
+// Project tracking
+model Project {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?   @db.Text
+  clientId    Int       @map("client_id")
+  status      String    @default("active") // active, completed, on-hold
+  startDate   DateTime? @map("start_date") @db.Timestamptz
+  endDate     DateTime? @map("end_date") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  
+  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  timeEntries TimeEntry[]
+  invoices    Invoice[]
+
+  @@index([clientId])
+  @@map("projects")
+}
+
+// Time tracking entries (linked to projects)
+model TimeEntry {
+  id              Int      @id @default(autoincrement())
+  projectId       Int      @map("project_id")
+  description     String?  @db.Text
+  startTime       DateTime @map("start_time") @db.Timestamptz
+  endTime         DateTime @map("end_time") @db.Timestamptz
+  durationMinutes Int      @map("duration_minutes")
+  billable        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([startTime])
+  @@index([endTime])
+  @@map("time_entries")
+}
+
+// Invoice management
+model Invoice {
+  id          Int      @id @default(autoincrement())
+  invoiceNumber String @unique @map("invoice_number")
+  clientId    Int      @map("client_id")
+  projectId   Int?     @map("project_id")
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("USD") @db.VarChar(3)
+  status      String   @default("draft") // draft, sent, paid, overdue, cancelled
+  issueDate   DateTime @map("issue_date") @db.Timestamptz
+  dueDate     DateTime @map("due_date") @db.Timestamptz
+  paidDate    DateTime? @map("paid_date") @db.Timestamptz
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([issueDate])
+  @@map("invoices")
+}

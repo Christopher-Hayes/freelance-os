@@ -1,0 +1,119 @@
+import { prisma } from './client';
+
+async function main() {
+  console.log('🌱 Seeding database...');
+
+  // Create sample clients
+  const client1 = await prisma.client.upsert({
+    where: { email: 'john@acmecorp.com' },
+    update: {},
+    create: {
+      email: 'john@acmecorp.com',
+      name: 'John Doe',
+      company: 'Acme Corp',
+    },
+  });
+
+  const client2 = await prisma.client.upsert({
+    where: { email: 'sarah@techstartup.io' },
+    update: {},
+    create: {
+      email: 'sarah@techstartup.io',
+      name: 'Sarah Johnson',
+      company: 'Tech Startup Inc',
+    },
+  });
+
+  console.log('✅ Created clients:', { client1, client2 });
+
+  // Create sample projects
+  const project1 = await prisma.project.create({
+    data: {
+      name: 'Website Redesign',
+      description: 'Complete overhaul of company website',
+      clientId: client1.id,
+      status: 'active',
+      startDate: new Date('2025-10-01'),
+    },
+  });
+
+  const project2 = await prisma.project.create({
+    data: {
+      name: 'Mobile App Development',
+      description: 'React Native mobile application',
+      clientId: client2.id,
+      status: 'active',
+      startDate: new Date('2025-10-15'),
+    },
+  });
+
+  console.log('✅ Created projects:', { project1, project2 });
+
+  // Create sample time entries
+  const timeEntry1 = await prisma.timeEntry.create({
+    data: {
+      projectId: project1.id,
+      description: 'Initial design mockups',
+      startTime: new Date('2025-10-31T09:00:00Z'),
+      endTime: new Date('2025-10-31T12:00:00Z'),
+      durationMinutes: 180,
+      billable: true,
+    },
+  });
+
+  const timeEntry2 = await prisma.timeEntry.create({
+    data: {
+      projectId: project2.id,
+      description: 'Set up project structure',
+      startTime: new Date('2025-10-31T14:00:00Z'),
+      endTime: new Date('2025-10-31T17:30:00Z'),
+      durationMinutes: 210,
+      billable: true,
+    },
+  });
+
+  console.log('✅ Created time entries:', { timeEntry1, timeEntry2 });
+
+  // Create sample invoices
+  const invoice1 = await prisma.invoice.create({
+    data: {
+      invoiceNumber: 'INV-2025-001',
+      clientId: client1.id,
+      projectId: project1.id,
+      amount: 5400.00,
+      currency: 'USD',
+      status: 'sent',
+      issueDate: new Date('2025-10-25'),
+      dueDate: new Date('2025-11-25'),
+      notes: 'October 2025 - Design work',
+    },
+  });
+
+  const invoice2 = await prisma.invoice.create({
+    data: {
+      invoiceNumber: 'INV-2025-002',
+      clientId: client2.id,
+      projectId: project2.id,
+      amount: 3200.00,
+      currency: 'USD',
+      status: 'paid',
+      issueDate: new Date('2025-10-20'),
+      dueDate: new Date('2025-11-20'),
+      paidDate: new Date('2025-10-28'),
+      notes: 'Initial development sprint',
+    },
+  });
+
+  console.log('✅ Created invoices:', { invoice1, invoice2 });
+
+  console.log('🎉 Database seeded successfully!');
+}
+
+main()
+  .catch((e) => {
+    console.error('❌ Seeding failed:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

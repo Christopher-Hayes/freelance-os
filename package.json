@@ -1,12 +1,16 @@
 {
-  "name": "with-tailwind",
+  "name": "freelance-os",
+  "version": "0.1.0",
+  "description": "A unified monorepo for managing freelance business operations including activity tracking, client portal, and admin dashboard",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:setup": "cd packages/database && pnpm run setup",
+    "db:migrate": "cd packages/database && pnpm run migrate"
   },
   "devDependencies": {
     "prettier": "^3.6.0",
@@ -15,6 +19,6 @@
   },
   "packageManager": "pnpm@10.19.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
