@@ -180,37 +180,37 @@ Complete checklist for building out the freelance-os features.
 ### Install Charting Library
 <!-- - [ ] Choose library (Recharts, Chart.js, or Tremor) -->
 <!-- - [ ] Install: `pnpm add recharts` (or alternative) -->
-- [ ] Use D3.js for charts.
+- [X] Use D3.js for charts.
 
 ### API Routes
-- [ ] Create `apps/admin-dashboard/app/api/analytics/activity/route.ts`
-  - [ ] GET (activity data with date range)
-- [ ] Create `apps/admin-dashboard/app/api/analytics/summary/route.ts`
-  - [ ] GET (aggregated stats)
+- [X] Create `apps/admin-dashboard/app/api/analytics/activity/route.ts`
+  - [X] GET (activity data with date range)
+- [X] Create `apps/admin-dashboard/app/api/analytics/summary/route.ts`
+  - [X] GET (aggregated stats)
 
 ### UI Pages
-- [ ] Create `apps/admin-dashboard/app/analytics/page.tsx`
-- [ ] Add navigation link to analytics
+- [X] Create `apps/admin-dashboard/app/analytics/page.tsx`
+- [X] Add navigation link to analytics
 
 ### Components & Charts
-- [ ] Daily activity bar chart
-- [ ] Top apps pie chart
-- [ ] Weekly trend line chart
-- [ ] Total hours card
-- [ ] Most used app card
-- [ ] Date range selector
+- [X] Daily activity bar chart
+- [X] Top apps pie chart (donut chart)
+- [X] Weekly trend line chart
+- [X] Total hours card
+- [X] Most used app card
+- [X] Date range selector
 
 ### Features
-- [ ] Query activity_sessions table
-- [ ] Aggregate by app_class
-- [ ] Calculate hours per day
-- [ ] Show top 10 apps
-- [ ] Filter by date range
+- [X] Query activity_sessions table
+- [X] Aggregate by app_class
+- [X] Calculate hours per day
+- [X] Show top 10 apps
+- [X] Filter by date range
 
 ### Testing
-- [ ] Test with activity data from utility
-- [ ] Test date range filtering
-- [ ] Verify calculations are correct
+- [X] Test with activity data from utility
+- [X] Test date range filtering
+- [X] Verify calculations are correct
 
 ## 🔐 Phase 7: Client Portal - Authentication
 
@@ -468,7 +468,7 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 5 (Complete) → Ready for Phase 6
+**Current Phase**: Phase 6 (Complete) → Ready for Phase 7
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
@@ -476,6 +476,7 @@ Complete checklist for building out the freelance-os features.
 - ✅ Phase 3: Admin Dashboard - Project Management
 - ✅ Phase 4: Admin Dashboard - Time Tracking
 - ✅ Phase 5: Admin Dashboard - Invoice Management
+- ✅ Phase 6: Admin Dashboard - Activity Analytics
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours
