@@ -22,6 +22,7 @@ interface TimeEntry {
   project: {
     id: number;
     name: string;
+    color: string; // Hex color code
     client: {
       name: string;
     };
@@ -37,6 +38,7 @@ interface DayTimelineProps {
 interface Project {
   id: number;
   name: string;
+  color: string; // Hex color code
   clientId: number;
   client: {
     name: string;
@@ -756,6 +758,7 @@ export default function DayTimeline({
         project: {
           id: 0,
           name: "New Entry",
+          color: "#9CA3AF", // Gray for ghost
           client: {
             name: "Click & Drag",
           },
@@ -791,16 +794,29 @@ export default function DayTimeline({
       // Add small gap between overlapping entries
       const gap = position.totalColumns > 1 ? 1 : 0; // 1% gap on each side
 
-      // Color variations for overlapping entries (4 different shades)
-      const colors = [
-        { bg: 'rgba(34, 197, 94, 0.15)', bgDark: 'rgba(34, 197, 94, 0.25)', border: 'rgb(34, 197, 94)' },
-        { bg: 'rgba(16, 185, 129, 0.15)', bgDark: 'rgba(16, 185, 129, 0.25)', border: 'rgb(16, 185, 129)' },
-        { bg: 'rgba(5, 150, 105, 0.15)', bgDark: 'rgba(5, 150, 105, 0.25)', border: 'rgb(5, 150, 105)' },
-        { bg: 'rgba(4, 120, 87, 0.15)', bgDark: 'rgba(4, 120, 87, 0.25)', border: 'rgb(4, 120, 87)' },
-      ] as const;
+      // Use project color with alpha for background
+      const projectColor = entry.project.color || '#22C55E';
+      
+      // Convert hex to RGB for alpha transparency
+      const hexToRgb = (hex: string) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1]!, 16),
+          g: parseInt(result[2]!, 16),
+          b: parseInt(result[3]!, 16)
+        } : { r: 34, g: 197, b: 94 }; // Default green
+      };
+
+      const rgb = hexToRgb(projectColor);
       const colorScheme = isGhost
-        ? { bg: 'rgba(156, 163, 175, 0.2)', bgDark: 'rgba(156, 163, 175, 0.3)', border: 'rgb(156, 163, 175)' }
-        : colors[position.column % 4]!;
+        ? { bg: 'rgba(156, 163, 175, 0.2)', bgDark: 'rgba(156, 163, 175, 0.3)', border: 'rgb(156, 163, 175)', text: 'rgb(75, 85, 99)', textDark: 'rgb(156, 163, 175)' }
+        : { 
+            bg: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`,
+            bgDark: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`,
+            border: projectColor,
+            text: projectColor,
+            textDark: projectColor
+          };
 
       const handleEntryClick = (e: React.MouseEvent) => {
         if (isGhost) return; // Don't allow clicking ghost entries
@@ -885,9 +901,9 @@ export default function DayTimeline({
             minHeight: "20px",
             left: `calc(${leftPercent}% + ${gap}px)`,
             right: `calc(${100 - leftPercent - widthPercent}% + ${gap}px)`,
-            backgroundColor: isDraggingThis
-              ? 'rgba(34, 197, 94, 0.2)'
-              : colorScheme.bg,
+            // backgroundColor: false
+              // ? `rgba(${colorScheme.bg} / 0.5)`
+            backgroundColor: colorScheme.bg,
             borderColor: colorScheme.border,
           }}
           onClick={isEditing ? undefined : handleEntryClick}
@@ -897,7 +913,11 @@ export default function DayTimeline({
             <>
               {/* Top resize handle */}
               <div
-                className="absolute top-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
+                className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10"
+                style={{ 
+                  backgroundColor: colorScheme.border,
+                  opacity: 1
+                }}
                 onMouseDown={(e) => handleDragStart(e, entry.id, "top", start)}
               />
 
@@ -995,22 +1015,22 @@ export default function DayTimeline({
                 </div>
               ) : (
                 <div className="py-2 text-xs">
-                  <div className="font-semibold text-green-900 dark:text-green-100 truncate">
+                  <div className="font-semibold truncate" style={{ color: isDraggingThis ? colorScheme.text : colorScheme.text }}>
                     {entry.project.name}
                   </div>
                   {height > 40 && (
-                    <div className="text-green-700 dark:text-green-200 text-[10px] truncate">
+                    <div className="text-[10px] truncate" style={{ color: colorScheme.text, opacity: 0.8 }}>
                       {entry.project.client.name}
                       {(height < 70 && entry.description) ? ` - ${entry.description}` : ""}
                     </div>
                   )}
                   {height >= 70 && entry.description && (
-                    <div className="text-green-600 dark:text-green-300 text-[10px] truncate mt-1">
+                    <div className="text-[10px] truncate mt-1" style={{ color: colorScheme.text, opacity: 0.7 }}>
                       {entry.description}
                     </div>
                   )}
                   {height > 100 && (
-                    <div className="text-green-600 dark:text-green-300 text-[10px] mt-1">
+                    <div className="text-[10px] mt-1" style={{ color: colorScheme.text, opacity: 0.7 }}>
                       {start.toLocaleTimeString("en-US", {
                         hour: "numeric",
                         minute: "2-digit",
@@ -1027,7 +1047,11 @@ export default function DayTimeline({
 
               {/* Bottom resize handle */}
               <div
-                className="absolute bottom-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
+                className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10"
+                style={{ 
+                  backgroundColor: colorScheme.border,
+                  opacity: 1
+                }}
                 onMouseDown={(e) => handleDragStart(e, entry.id, "bottom", end)}
               />
             </>

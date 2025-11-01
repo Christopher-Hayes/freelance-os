@@ -80,7 +80,7 @@ export async function PUT(
     const { id } = await params;
     const projectId = parseInt(id);
     const body = await request.json();
-    const { name, description, clientId, status, startDate, endDate } = body;
+    const { name, description, clientId, status, color, startDate, endDate } = body;
 
     // Check if project exists
     const existingProject = await prisma.project.findUnique({
@@ -113,6 +113,7 @@ export async function PUT(
     if (description !== undefined) updateData.description = description;
     if (clientId !== undefined) updateData.clientId = parseInt(clientId);
     if (status !== undefined) updateData.status = status;
+    if (color !== undefined) updateData.color = color;
     if (startDate !== undefined) {
       updateData.startDate = startDate ? new Date(startDate) : null;
     }

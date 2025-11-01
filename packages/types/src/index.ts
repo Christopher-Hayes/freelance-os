@@ -29,6 +29,7 @@ export interface Project {
   description?: string;
   clientId: number;
   status: ProjectStatus;
+  color: string; // Hex color code (e.g., "#22C55E")
   startDate?: Date;
   endDate?: Date;
   createdAt: Date;
@@ -40,6 +41,7 @@ export interface CreateProjectInput {
   description?: string;
   clientId: number;
   status?: ProjectStatus;
+  color?: string;
   startDate?: Date;
   endDate?: Date;
 }
@@ -48,6 +50,7 @@ export interface UpdateProjectInput {
   name?: string;
   description?: string;
   status?: ProjectStatus;
+  color?: string;
   startDate?: Date;
   endDate?: Date;
 }

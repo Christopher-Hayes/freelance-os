@@ -21,9 +21,24 @@ export default function NewProjectPage() {
     description: '',
     clientId: '',
     status: 'active',
+    color: '#22C55E', // Default green
     startDate: '',
     endDate: '',
   });
+
+  // Preset color options
+  const colorPresets = [
+    { name: 'Green', value: '#22C55E' },
+    { name: 'Blue', value: '#3B82F6' },
+    { name: 'Purple', value: '#A855F7' },
+    { name: 'Red', value: '#EF4444' },
+    { name: 'Orange', value: '#F97316' },
+    { name: 'Yellow', value: '#EAB308' },
+    { name: 'Pink', value: '#EC4899' },
+    { name: 'Teal', value: '#14B8A6' },
+    { name: 'Indigo', value: '#6366F1' },
+    { name: 'Cyan', value: '#06B6D4' },
+  ];
 
   useEffect(() => {
     fetchClients();
@@ -159,6 +174,46 @@ export default function NewProjectPage() {
             <option value="on-hold">On Hold</option>
             <option value="completed">Completed</option>
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium dark:text-gray-300 mb-2">
+            Project Color
+          </label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {colorPresets.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, color: preset.value }))}
+                className={`w-10 h-10 rounded-full border-2 transition-all ${
+                  formData.color === preset.value
+                    ? 'border-gray-900 dark:border-white scale-110'
+                    : 'border-gray-300 dark:border-gray-600 hover:scale-105'
+                }`}
+                style={{ backgroundColor: preset.value }}
+                title={preset.name}
+              />
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              id="color"
+              name="color"
+              value={formData.color}
+              onChange={handleChange}
+              className="h-10 w-20 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
+            />
+            <input
+              type="text"
+              value={formData.color}
+              onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))}
+              placeholder="#22C55E"
+              className="flex-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              pattern="^#[0-9A-Fa-f]{6}$"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
