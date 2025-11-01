@@ -258,6 +258,14 @@ export default function DayTimeline({
     fetchProjects();
   }, []);
 
+  //  Start the timelines partway zoomed down on mount
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (timeline) {
+      timeline.scrollTop = timeline.scrollHeight * 0.3;
+    }
+  }, []);
+
   // Handle escape key to close creation dialog
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -681,7 +689,8 @@ export default function DayTimeline({
       hours.push(
         <div
           key={i}
-          className="absolute left-0 right-0 border-t border-gray-200 dark:border-gray-800"
+          data-is-noon-midnight={i % 12 === 0 ? "true" : "false"}
+          className="absolute left-0 right-0 border-t border-gray-200 dark:border-gray-800 data-[is-noon-midnight=true]:border-t-3 even:border-dashed"
           style={{ top: `${i * HOUR_HEIGHT + TIMELINE_PADDING_TOP}px`, width: 'calc(100% + 1rem)' }}
         >
           <span className="absolute -top-2 left-1 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 px-1 select-none">
@@ -901,8 +910,6 @@ export default function DayTimeline({
             minHeight: "20px",
             left: `calc(${leftPercent}% + ${gap}px)`,
             right: `calc(${100 - leftPercent - widthPercent}% + ${gap}px)`,
-            // backgroundColor: false
-              // ? `rgba(${colorScheme.bg} / 0.5)`
             backgroundColor: colorScheme.bg,
             borderColor: colorScheme.border,
           }}
