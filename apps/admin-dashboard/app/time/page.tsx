@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import DayTimeline from "./components/DayTimeline";
-import QuickEntryModal from "./components/QuickEntryModal";
 
 interface TimeEntry {
   id: number;
@@ -56,11 +55,6 @@ export default function TimeEntriesPage() {
     today.setHours(0, 0, 0, 0); // Start at midnight local time
     return today;
   });
-  const [showQuickModal, setShowQuickModal] = useState(false);
-  const [quickModalTimes, setQuickModalTimes] = useState<{
-    start: Date;
-    end: Date;
-  } | null>(null);
 
   // Filters
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -156,48 +150,6 @@ export default function TimeEntriesPage() {
     ? projects.filter((p) => p.clientId === parseInt(selectedClientId))
     : projects;
 
-  // Handle creating entry from day timeline
-  const handleCreateFromTimeline = (startTime: Date, endTime: Date) => {
-    setQuickModalTimes({ start: startTime, end: endTime });
-    setShowQuickModal(true);
-  };
-
-  // Handle saving from quick modal
-  const handleQuickSave = async (data: {
-    projectId: number;
-    startTime: Date;
-    endTime: Date;
-    description: string;
-    billable: boolean;
-  }) => {
-    const durationMinutes = Math.round(
-      (data.endTime.getTime() - data.startTime.getTime()) / 1000 / 60
-    );
-
-    const response = await fetch("/api/time", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        projectId: data.projectId,
-        startTime: data.startTime.toISOString(),
-        endTime: data.endTime.toISOString(),
-        durationMinutes,
-        description: data.description,
-        billable: data.billable,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Failed to create time entry");
-    }
-
-    // Refresh data
-    fetchTimeEntries();
-  };
-
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
@@ -216,20 +168,8 @@ export default function TimeEntriesPage() {
           <DayTimeline
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
-            onCreateEntry={handleCreateFromTimeline}
           />
         </div>
-
-        {/* Quick Entry Modal */}
-        {showQuickModal && quickModalTimes && (
-          <QuickEntryModal
-            isOpen={showQuickModal}
-            onClose={() => setShowQuickModal(false)}
-            onSave={handleQuickSave}
-            initialStartTime={quickModalTimes.start}
-            initialEndTime={quickModalTimes.end}
-          />
-        )}
 
         {/* Summary Cards */}
         {summary && (

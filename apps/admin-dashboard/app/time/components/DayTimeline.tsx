@@ -31,7 +31,7 @@ interface TimeEntry {
 interface DayTimelineProps {
   selectedDate: Date;
   onDateChange: (date: Date) => void;
-  onCreateEntry: (startTime: Date, endTime: Date) => void;
+  onCreateEntry?: (startTime: Date, endTime: Date) => void; // Made optional since we'll handle creation internally
 }
 
 interface Project {
@@ -51,7 +51,6 @@ const TIMELINE_DRAG_OFFSET = -8;
 export default function DayTimeline({
   selectedDate,
   onDateChange,
-  onCreateEntry,
 }: DayTimelineProps) {
   const [sessions, setSessions] = useState<ActivitySession[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -68,6 +67,21 @@ export default function DayTimeline({
   }>({});
   const [justFinishedDragging, setJustFinishedDragging] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+
+  // New entry creation state
+  const [creatingEntry, setCreatingEntry] = useState<{
+    startTime: Date;
+    endTime: Date;
+    y: number; // Y position for the dialog
+  } | null>(null);
+  const [ghostEntry, setGhostEntry] = useState<{
+    startTime: Date;
+    endTime: Date;
+  } | null>(null);
+  const [draggingNewEntry, setDraggingNewEntry] = useState<{
+    startY: number;
+    startTime: Date;
+  } | null>(null);
 
   // Refs for syncing scroll
   const activityScrollRef = useRef<HTMLDivElement>(null);
@@ -242,6 +256,18 @@ export default function DayTimeline({
     fetchProjects();
   }, []);
 
+  // Handle escape key to close creation dialog
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && creatingEntry) {
+        setCreatingEntry(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [creatingEntry]);
+
   const fetchProjects = async () => {
     try {
       const response = await fetch("/api/projects");
@@ -343,7 +369,7 @@ export default function DayTimeline({
   };
 
   // Handle clicking on empty space to create new entry
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (dragging) return;
     if (justFinishedDragging) {
       setJustFinishedDragging(false);
@@ -352,21 +378,122 @@ export default function DayTimeline({
     if ((e.target as HTMLElement).closest(".timeline-entry")) return;
     if ((e.target as HTMLElement).closest(".timeline-session")) return;
 
+    // Check if clicking on scrollbar
+    const target = e.currentTarget;
+    const rect = target.getBoundingClientRect();
+    const clickX = e.clientX;
+    const isScrollbar = clickX > rect.right - 20; // Scrollbar is typically 15-20px wide
+    if (isScrollbar) return;
+
     // Close any open edit forms
     setEditingEntryId(null);
+
+    const scrollTop = timelineRef.current?.scrollTop || 0;
+    const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
+    const clickTime = yToTime(y, selectedDate);
+
+    // Snap to 15-minute intervals
+    const minutes = clickTime.getMinutes();
+    const snappedMinutes = Math.round(minutes / 15) * 15;
+    clickTime.setMinutes(snappedMinutes, 0, 0);
+
+    // Start dragging to create new entry
+    setDraggingNewEntry({
+      startY: y,
+      startTime: clickTime,
+    });
+  };
+
+  // Handle mouse move for ghost entry and new entry dragging
+  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (dragging) return; // Don't show ghost when resizing existing entry
+    if ((e.target as HTMLElement).closest(".timeline-entry")) {
+      setGhostEntry(null);
+      return;
+    }
 
     const rect = timelineRef.current?.getBoundingClientRect();
     if (!rect) return;
 
     const scrollTop = timelineRef.current?.scrollTop || 0;
     const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
-    const clickTime = yToTime(y, selectedDate);
+    const hoverTime = yToTime(y, selectedDate);
 
-    // Create a 1-hour block by default
-    const endTime = new Date(clickTime);
-    endTime.setHours(endTime.getHours() + 1);
+    // Snap to 15-minute intervals
+    const minutes = hoverTime.getMinutes();
+    const snappedMinutes = Math.round(minutes / 15) * 15;
+    hoverTime.setMinutes(snappedMinutes, 0, 0);
 
-    onCreateEntry(clickTime, endTime);
+    if (draggingNewEntry) {
+      // Update ghost entry while dragging
+      const startTime = draggingNewEntry.startTime;
+      const endTime = hoverTime;
+
+      // Ensure start is before end
+      if (endTime > startTime) {
+        setGhostEntry({ startTime, endTime });
+      } else if (endTime < startTime) {
+        setGhostEntry({ startTime: endTime, endTime: startTime });
+      }
+    } else {
+      // Show ghost entry with default 1-hour duration
+      const endTime = new Date(hoverTime);
+      endTime.setHours(endTime.getHours() + 1);
+      setGhostEntry({ startTime: hoverTime, endTime });
+    }
+  };
+
+  const handleTimelineMouseLeave = () => {
+    if (!draggingNewEntry) {
+      setGhostEntry(null);
+    }
+  };
+
+  const handleTimelineMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!draggingNewEntry) return;
+
+    const rect = timelineRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const scrollTop = timelineRef.current?.scrollTop || 0;
+    const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
+    const endTimeRaw = yToTime(y, selectedDate);
+
+    // Snap to 15-minute intervals
+    const minutes = endTimeRaw.getMinutes();
+    const snappedMinutes = Math.round(minutes / 15) * 15;
+    endTimeRaw.setMinutes(snappedMinutes, 0, 0);
+
+    let startTime = draggingNewEntry.startTime;
+    let endTime = endTimeRaw;
+
+    // Ensure start is before end
+    if (endTime < startTime) {
+      [startTime, endTime] = [endTime, startTime];
+    }
+
+    // Default to 1 hour duration if the drag was very small (less than 15 minutes)
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const minDuration = 15 * 60 * 1000; // 15 minutes
+    if (durationMs < minDuration) {
+      // Use 1 hour as default (matching the ghost entry)
+      endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+    }
+
+    // Calculate dialog position - center it on screen
+    const viewportHeight = window.innerHeight;
+    const dialogHeight = 500; // Approximate dialog height
+    const idealY = Math.max(20, Math.min(viewportHeight - dialogHeight - 20, (viewportHeight - dialogHeight) / 2));
+
+    // Open creation dialog
+    setCreatingEntry({
+      startTime,
+      endTime,
+      y: idealY,
+    });
+
+    setDraggingNewEntry(null);
+    setGhostEntry(null);
   };
 
   // Handle drag start
@@ -499,6 +626,47 @@ export default function DayTimeline({
     };
   }, [dragging, timeEntries, draggedTimes, selectedDate]);
 
+  // Handle creating a new entry from the dialog
+  const handleCreateEntry = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!creatingEntry) return;
+
+    const formData = new FormData(e.currentTarget);
+    const projectId = parseInt(formData.get('projectId') as string);
+    const description = formData.get('description') as string;
+    const billable = formData.get('billable') === 'on';
+
+    try {
+      const durationMinutes = Math.round(
+        (creatingEntry.endTime.getTime() - creatingEntry.startTime.getTime()) / 60000
+      );
+
+      const response = await fetch("/api/time", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId,
+          description: description || null,
+          startTime: creatingEntry.startTime.toISOString(),
+          endTime: creatingEntry.endTime.toISOString(),
+          durationMinutes,
+          billable,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to create");
+
+      // Refresh data
+      await fetchDayData();
+      setCreatingEntry(null);
+    } catch (error) {
+      console.error("Error creating entry:", error);
+      alert("Failed to create entry");
+    }
+  };
+
   const renderHourMarkers = () => {
     const hours = [];
     for (let i = 0; i <= 24; i++) {
@@ -512,9 +680,9 @@ export default function DayTimeline({
         <div
           key={i}
           className="absolute left-0 right-0 border-t border-gray-200 dark:border-gray-800"
-          style={{ top: `${i * HOUR_HEIGHT + TIMELINE_PADDING_TOP}px` }}
+          style={{ top: `${i * HOUR_HEIGHT + TIMELINE_PADDING_TOP}px`, width: 'calc(100% + 1rem)' }}
         >
-          <span className="absolute -top-2 left-1 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 px-1">
+          <span className="absolute -top-2 left-1 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 px-1 select-none">
             {label}
           </span>
         </div>
@@ -571,7 +739,33 @@ export default function DayTimeline({
   };
 
   const renderTimeEntries = () => {
-    return timeEntries.map((entry) => {
+    const entries = [...timeEntries];
+    
+    // Add ghost entry if present
+    if (ghostEntry) {
+      entries.push({
+        id: -1, // Temporary ID for ghost
+        projectId: 0,
+        description: null,
+        startTime: ghostEntry.startTime.toISOString(),
+        endTime: ghostEntry.endTime.toISOString(),
+        durationMinutes: Math.round(
+          (ghostEntry.endTime.getTime() - ghostEntry.startTime.getTime()) / 60000
+        ),
+        billable: true,
+        project: {
+          id: 0,
+          name: "New Entry",
+          client: {
+            name: "Click & Drag",
+          },
+        },
+      } as TimeEntry);
+    }
+
+    return entries.map((entry) => {
+      const isGhost = entry.id === -1;
+      
       // Use dragged times if this entry is being dragged, otherwise use original times
       const draggedEntry = draggedTimes[entry.id];
       const start = draggedEntry
@@ -587,8 +781,10 @@ export default function DayTimeline({
 
       const isDraggingThis = dragging?.entryId === entry.id;
 
-      // Get overlap position
-      const position = overlapPositions[entry.id] || { column: 0, totalColumns: 1 };
+      // Get overlap position (skip for ghost)
+      const position = isGhost 
+        ? { column: 0, totalColumns: 1 }
+        : (overlapPositions[entry.id] || { column: 0, totalColumns: 1 });
       const widthPercent = 100 / position.totalColumns;
       const leftPercent = (position.column / position.totalColumns) * 100;
 
@@ -602,9 +798,13 @@ export default function DayTimeline({
         { bg: 'rgba(5, 150, 105, 0.15)', bgDark: 'rgba(5, 150, 105, 0.25)', border: 'rgb(5, 150, 105)' },
         { bg: 'rgba(4, 120, 87, 0.15)', bgDark: 'rgba(4, 120, 87, 0.25)', border: 'rgb(4, 120, 87)' },
       ] as const;
-      const colorScheme = colors[position.column % 4]!;
+      const colorScheme = isGhost
+        ? { bg: 'rgba(156, 163, 175, 0.2)', bgDark: 'rgba(156, 163, 175, 0.3)', border: 'rgb(156, 163, 175)' }
+        : colors[position.column % 4]!;
 
       const handleEntryClick = (e: React.MouseEvent) => {
+        if (isGhost) return; // Don't allow clicking ghost entries
+        
         // Don't trigger if clicking on resize handles
         if ((e.target as HTMLElement).classList.contains('cursor-ns-resize')) {
           return;
@@ -677,8 +877,8 @@ export default function DayTimeline({
       return (
         <div
           key={entry.id}
-          className={`timeline-entry absolute border-2 rounded px-2 ${isDraggingThis ? "opacity-70" : ""
-            } ${isEditing ? "overflow-visible z-50" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"}`}
+          className={`timeline-entry absolute flex items-center border-2 rounded px-2 ${isDraggingThis ? "opacity-70" : ""
+            } ${isGhost ? "opacity-50 border-dashed pointer-events-none" : ""} ${isEditing ? "overflow-visible z-50" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"}`}
           style={{
             top: `${top}px`,
             height: `${height}px`,
@@ -692,121 +892,155 @@ export default function DayTimeline({
           }}
           onClick={isEditing ? undefined : handleEntryClick}
         >
-          {/* Top resize handle */}
-          <div
-            className="absolute top-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
-            onMouseDown={(e) => handleDragStart(e, entry.id, "top", start)}
-          />
+          {/* Don't render resize handles or content for ghost entries */}
+          {!isGhost && (
+            <>
+              {/* Top resize handle */}
+              <div
+                className="absolute top-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
+                onMouseDown={(e) => handleDragStart(e, entry.id, "top", start)}
+              />
 
-          {/* Content or Edit Form */}
-          {isEditing ? (
-            <div className="absolute z-20 top-0 left-0 right-0 bg-white dark:bg-gray-800 border-2 border-blue-500 rounded shadow-2xl p-3 max-w-full w-[340px]" style={{ minHeight: '200px' }}>
-              <form onSubmit={handleSaveEdit} className="space-y-2">
-                <div>
-                  <header className="flex justify-between gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    <label id="project-label">
-                      Project
-                    </label>
+              {/* Content or Edit Form */}
+              {isEditing ? (
+                <div className="absolute z-20 top-0 left-0 right-0 bg-white dark:bg-gray-800 border-2 border-blue-500 rounded shadow-2xl p-3 max-w-full w-[340px]" style={{ minHeight: '200px' }}>
+                  <form onSubmit={handleSaveEdit} className="space-y-2">
+                    <div>
+                      <header className="flex justify-between gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label id="project-label">
+                          Project
+                        </label>
 
-                    <div className="flex gap-2 items-center">
-                      <label htmlFor={`billable-${entry.id}`} className="text-xs text-gray-700 dark:text-gray-300">
-                        Billable
+                        <div className="flex gap-2 items-center">
+                          <label htmlFor={`billable-${entry.id}`} className="text-xs text-gray-700 dark:text-gray-300">
+                            Billable
+                          </label>
+                          <input
+                            type="checkbox"
+                            name="billable"
+                            id={`billable-${entry.id}`}
+                            defaultChecked={entry.billable}
+                          />
+                        </div>
+
+                      </header>
+                      <select
+                        name="projectId"
+                        defaultValue={entry.projectId}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.client.name} - {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Description
                       </label>
-                      <input
-                        type="checkbox"
-                        name="billable"
-                        id={`billable-${entry.id}`}
-                        defaultChecked={entry.billable}
+                      <textarea
+                        name="description"
+                        defaultValue={entry.description || ''}
+                        rows={2}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
-                  </header>
-                  <select
-                    name="projectId"
-                    defaultValue={entry.projectId}
-                    className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    {projects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.client.name} - {project.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-2">
+                      <span>
+                        {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                        {" - "}
+                        {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                      <span>
+                        ({Math.round((end.getTime() - start.getTime()) / 60000)} min)
+                      </span>
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    name="description"
-                    defaultValue={entry.description || ''}
-                    rows={2}
-                    className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <div className="grow flex gap-2 flex-wrap" >
+                        <button
+                          type="submit"
+                          className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingEntryId(null);
+                          }}
+                          className="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete();
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </form>
                 </div>
-
-                <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-2">
-                  <span>
-                    {start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                    {" - "}
-                    {end.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                  </span>
-                  <span>
-                    ({Math.round((end.getTime() - start.getTime()) / 60000)} min)
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <div className="grow flex gap-2 flex-wrap" >
-                    <button
-                      type="submit"
-                      className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingEntryId(null);
-                      }}
-                      className="px-3 py-1 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-500"
-                    >
-                      Cancel
-                    </button>
+              ) : (
+                <div className="py-2 text-xs">
+                  <div className="font-semibold text-green-900 dark:text-green-100 truncate">
+                    {entry.project.name}
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete();
-                    }}
-                    className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
+                  {height > 40 && (
+                    <div className="text-green-700 dark:text-green-200 text-[10px] truncate">
+                      {entry.project.client.name}
+                      {(height < 70 && entry.description) ? ` - ${entry.description}` : ""}
+                    </div>
+                  )}
+                  {height >= 70 && entry.description && (
+                    <div className="text-green-600 dark:text-green-300 text-[10px] truncate mt-1">
+                      {entry.description}
+                    </div>
+                  )}
+                  {height > 100 && (
+                    <div className="text-green-600 dark:text-green-300 text-[10px] mt-1">
+                      {start.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                      {" - "}
+                      {end.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  )}
                 </div>
-              </form>
-            </div>
-          ) : (
-            <div className="py-2 text-xs">
-              <div className="font-semibold text-green-900 dark:text-green-100 truncate">
-                {entry.project.name}
+              )}
+
+              {/* Bottom resize handle */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
+                onMouseDown={(e) => handleDragStart(e, entry.id, "bottom", end)}
+              />
+            </>
+          )}
+          
+          {/* Ghost entry content */}
+          {isGhost && (
+            <div className="py-2 text-xs text-center">
+              <div className="font-semibold text-gray-500 dark:text-gray-400">
+                {draggingNewEntry ? "Release to create" : "Click & drag to create"}
               </div>
               {height > 35 && (
-                <div className="text-green-700 dark:text-green-200 text-[10px] truncate">
-                  {entry.project.client.name}
-                </div>
-              )}
-              {height > 50 && entry.description && (
-                <div className="text-green-600 dark:text-green-300 text-[10px] truncate mt-1">
-                  {entry.description}
-                </div>
-              )}
-              {height > 65 && (
-                <div className="text-green-600 dark:text-green-300 text-[10px] mt-1">
+                <div className="text-gray-400 dark:text-gray-500 text-[10px] mt-1">
                   {start.toLocaleTimeString("en-US", {
                     hour: "numeric",
                     minute: "2-digit",
@@ -818,14 +1052,13 @@ export default function DayTimeline({
                   })}
                 </div>
               )}
+              {height > 50 && (
+                <div className="text-gray-400 dark:text-gray-500 text-[10px]">
+                  ({Math.round((end.getTime() - start.getTime()) / 60000)} min)
+                </div>
+              )}
             </div>
           )}
-
-          {/* Bottom resize handle */}
-          <div
-            className="absolute bottom-0 left-0 right-0 h-2 bg-green-600 dark:bg-green-500 cursor-ns-resize hover:bg-green-700 dark:hover:bg-green-400 z-10"
-            onMouseDown={(e) => handleDragStart(e, entry.id, "bottom", end)}
-          />
         </div>
       );
     });
@@ -879,14 +1112,14 @@ export default function DayTimeline({
         )}
         <div className="grid grid-cols-2 gap-4">
           {/* Activity Sessions Column */}
-          <div>
+          <div className="select-none">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               Activity Sessions
             </h3>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
                 ref={activityScrollRef}
-                className="relative overflow-y-auto"
+                className="relative pr-4 overflow-y-auto overflow-x-visible"
                 style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
                 onScroll={handleActivityScroll}
               >
@@ -906,15 +1139,18 @@ export default function DayTimeline({
 
           {/* Time Entries Column */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 select-none">
               Project Time Entries
             </h3>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
                 ref={timelineRef}
-                className="relative overflow-y-auto cursor-crosshair"
+                className="relative overflow-y-auto overflow-x-visible cursor-crosshair pr-4"
                 style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
-                onClick={handleTimelineClick}
+                onMouseDown={handleTimelineMouseDown}
+                onMouseMove={handleTimelineMouseMove}
+                onMouseUp={handleTimelineMouseUp}
+                onMouseLeave={handleTimelineMouseLeave}
                 onScroll={handleTimelineScroll}
               >
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
@@ -932,12 +1168,126 @@ export default function DayTimeline({
           </div>
         </div>
 
+        {/* Creation Dialog */}
+        {creatingEntry && (
+          <>
+            {/* Backdrop - subtle and allows clicking through */}
+            <div 
+              className="fixed inset-0 bg-black/30 z-40"
+              onClick={() => setCreatingEntry(null)}
+            />
+            
+            {/* Dialog */}
+            <div 
+              className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none" 
+              style={{ paddingTop: `${creatingEntry.y}px` }}
+            >
+              <div className="bg-white dark:bg-gray-800 border-2 border-green-500 rounded-lg shadow-2xl p-4 w-[400px] pointer-events-auto">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  Create Time Entry
+                </h3>
+                <form onSubmit={handleCreateEntry} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Project
+                  </label>
+                  <select
+                    name="projectId"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                    required
+                    autoFocus
+                  >
+                    <option value="">Select a project...</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.client.name} - {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    rows={3}
+                    placeholder="What did you work on?"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="billable"
+                    id="new-billable"
+                    defaultChecked={true}
+                  />
+                  <label htmlFor="new-billable" className="text-sm text-gray-700 dark:text-gray-300">
+                    Billable
+                  </label>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-900 rounded p-3 text-sm">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">Start:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {creatingEntry.startTime.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">End:</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {creatingEntry.endTime.toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
+                    <span className="text-gray-600 dark:text-gray-400">Duration:</span>
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      {Math.round(
+                        (creatingEntry.endTime.getTime() - creatingEntry.startTime.getTime()) /
+                          60000
+                      )}{" "}
+                      minutes
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium"
+                  >
+                    Create Entry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreatingEntry(null)}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 rounded hover:bg-gray-300 dark:hover:bg-gray-500"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          </>
+        )}
+
         <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
           <p>
             <strong>Activity Sessions:</strong> Hover to see details. Data from external tracking utility.
           </p>
           <p>
-            <strong>Project Entries:</strong> Click empty space to create. Click entry to edit. Drag top/bottom edges to resize.
+            <strong>Project Entries:</strong> Click & drag to create new entries. Click entry to edit. Drag top/bottom edges to resize.
           </p>
         </div>
       </div>
