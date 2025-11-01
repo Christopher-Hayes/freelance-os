@@ -84,6 +84,7 @@ export default function DayTimeline({
   }>({});
   const [justFinishedDragging, setJustFinishedDragging] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   // New entry creation state
   const [creatingEntry, setCreatingEntry] = useState<{
@@ -377,6 +378,11 @@ export default function DayTimeline({
   useEffect(() => {
     fetchDayData();
   }, [selectedDate]);
+
+  // Set client-side flag after mount
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Fetch projects on mount
   useEffect(() => {
@@ -828,11 +834,13 @@ export default function DayTimeline({
   };
 
   const renderCurrentTimeLine = () => {
+    // Only render on client side to avoid hydration mismatch
+    if (!isClient) return null;
     // Only show if viewing today
     if (!isToday(selectedDate)) return null;
 
     const now = new Date();
-    const topPosition = timeToY(now) + TIMELINE_PADDING_TOP;
+    const topPosition = Math.round(timeToY(now) + TIMELINE_PADDING_TOP);
 
     return (
       <div
