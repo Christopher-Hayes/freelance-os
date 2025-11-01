@@ -14,6 +14,7 @@ type Project = {
   name: string;
   description: string | null;
   status: string;
+  color: string;
   startDate: string | null;
   endDate: string | null;
   client: Client;
@@ -180,74 +181,88 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg p-6 hover:shadow-md dark:hover:shadow-gray-900 transition-shadow"
+              className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:shadow-md dark:hover:shadow-gray-900 transition-shadow"
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Link href={`/projects/${project.id}`}>
-                      <h2 className="text-xl font-semibold dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
-                        {project.name}
-                      </h2>
-                    </Link>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded ${
-                        statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {statusLabels[project.status as keyof typeof statusLabels] || project.status}
-                    </span>
-                  </div>
-                  {project.description && (
-                    <p className="text-gray-600 dark:text-gray-400 mb-3">{project.description}</p>
-                  )}
-                  <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
-                    <div>
-                      <span className="font-medium">Client:</span>{' '}
+              {/* Color accent bar on the left */}
+              <div className="flex">
+                <div 
+                  className="w-1.5 shrink-0" 
+                  style={{ backgroundColor: project.color || '#22C55E' }}
+                />
+                <div className="flex-1 p-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        {/* Color dot indicator */}
+                        <div 
+                          className="w-3 h-3 rounded-full shrink-0" 
+                          style={{ backgroundColor: project.color || '#22C55E' }}
+                        />
+                        <Link href={`/projects/${project.id}`}>
+                          <h2 className="text-xl font-semibold dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
+                            {project.name}
+                          </h2>
+                        </Link>
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded ${
+                            statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {statusLabels[project.status as keyof typeof statusLabels] || project.status}
+                        </span>
+                      </div>
+                      {project.description && (
+                        <p className="text-gray-600 dark:text-gray-400 mb-3">{project.description}</p>
+                      )}
+                      <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
+                        <div>
+                          <span className="font-medium">Client:</span>{' '}
+                          <Link
+                            href={`/clients/${project.client.id}`}
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            {project.client.name}
+                          </Link>
+                        </div>
+                        <div>
+                          <span className="font-medium">Time Entries:</span> {project._count.timeEntries}
+                        </div>
+                        <div>
+                          <span className="font-medium">Total Hours:</span> {project.totalHours}
+                        </div>
+                      </div>
+                      {(project.startDate || project.endDate) && (
+                        <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400 mt-2">
+                          {project.startDate && (
+                            <div>
+                              <span className="font-medium">Start:</span>{' '}
+                              {new Date(project.startDate).toLocaleDateString()}
+                            </div>
+                          )}
+                          {project.endDate && (
+                            <div>
+                              <span className="font-medium">End:</span>{' '}
+                              {new Date(project.endDate).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
                       <Link
-                        href={`/clients/${project.client.id}`}
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                        href={`/projects/${project.id}`}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 text-sm"
                       >
-                        {project.client.name}
+                        Edit
                       </Link>
-                    </div>
-                    <div>
-                      <span className="font-medium">Time Entries:</span> {project._count.timeEntries}
-                    </div>
-                    <div>
-                      <span className="font-medium">Total Hours:</span> {project.totalHours}
+                      <button
+                        onClick={() => handleDelete(project.id)}
+                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 px-3 py-1 text-sm"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
-                  {(project.startDate || project.endDate) && (
-                    <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      {project.startDate && (
-                        <div>
-                          <span className="font-medium">Start:</span>{' '}
-                          {new Date(project.startDate).toLocaleDateString()}
-                        </div>
-                      )}
-                      {project.endDate && (
-                        <div>
-                          <span className="font-medium">End:</span>{' '}
-                          {new Date(project.endDate).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 text-sm"
-                  >
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(project.id)}
-                    className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 px-3 py-1 text-sm"
-                  >
-                    Delete
-                  </button>
                 </div>
               </div>
             </div>

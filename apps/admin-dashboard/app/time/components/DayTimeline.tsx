@@ -115,7 +115,7 @@ export default function DayTimeline({
       // Merge if same app AND (overlapping OR gap is less than 5 minutes)
       if (
         lastSession.appClass === session.appClass &&
-        timeDiffMinutes <= 5 // Allow up to 5 minute gaps
+        timeDiffMinutes <= 10 // Allow up to 10 minute gaps
       ) {
         // Merge: extend the last session's end time
         lastSession.endTime = currentEnd > lastEnd ? session.endTime : lastSession.endTime;
@@ -131,10 +131,6 @@ export default function DayTimeline({
           // Only add if it's not already included and keep it reasonable
           if (!currentTitle.includes(newTitle)) {
             const combined = currentTitle ? `${currentTitle} / ${newTitle}` : newTitle;
-            // Limit combined title length to avoid clutter
-            // lastSession.windowTitle = combined.length > 100
-            //   ? combined.substring(0, 97) + '...'
-            //   : combined;
             lastSession.windowTitle = combined
           }
         }
@@ -702,6 +698,26 @@ export default function DayTimeline({
     return hours;
   };
 
+  const renderCurrentTimeLine = () => {
+    // Only show if viewing today
+    if (!isToday(selectedDate)) return null;
+
+    const now = new Date();
+    const topPosition = timeToY(now) + TIMELINE_PADDING_TOP;
+
+    return (
+      <div
+        className="absolute left-0 right-0 pointer-events-none z-0"
+        style={{ top: `${topPosition}px`, width: 'calc(100% + 1rem)' }}
+      >
+        {/* Line */}
+        <div className="h-0.5 bg-black/40 dark:bg-white/40 shadow-sm" />
+        {/* Circle indicator on the left */}
+        <div className="absolute -left-1 top-[-5px] w-3 h-3 bg-black dark:bg-white rounded-full border-2 border-white dark:border-gray-900" />
+      </div>
+    );
+  };
+
   const renderSessions = () => {
     return mergedSessions.map((session) => {
       const start = new Date(session.startTime);
@@ -713,7 +729,7 @@ export default function DayTimeline({
       return (
         <div
           key={session.id}
-          className="timeline-session absolute left-0 right-0 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded px-1 overflow-hidden cursor-help"
+          className="timeline-session absolute z-10 left-0 right-0 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded px-1 overflow-hidden cursor-help"
           style={{
             top: `${top}px`,
             height: `${height}px`,
@@ -902,7 +918,7 @@ export default function DayTimeline({
       return (
         <div
           key={entry.id}
-          className={`timeline-entry absolute flex items-center border-2 rounded px-2 ${isDraggingThis ? "opacity-70" : ""
+          className={`timeline-entry group absolute flex items-center border-2 rounded px-2 ${isDraggingThis ? "opacity-70" : ""
             } ${isGhost ? "opacity-50 border-dashed pointer-events-none" : ""} ${isEditing ? "overflow-visible z-50" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"}`}
           style={{
             top: `${top}px`,
@@ -920,10 +936,9 @@ export default function DayTimeline({
             <>
               {/* Top resize handle */}
               <div
-                className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10"
+                className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                 style={{ 
                   backgroundColor: colorScheme.border,
-                  opacity: 1
                 }}
                 onMouseDown={(e) => handleDragStart(e, entry.id, "top", start)}
               />
@@ -1021,23 +1036,18 @@ export default function DayTimeline({
                   </form>
                 </div>
               ) : (
-                <div className="py-2 text-xs">
-                  <div className="font-semibold truncate" style={{ color: isDraggingThis ? colorScheme.text : colorScheme.text }}>
-                    {entry.project.name}
+                <div className="py-2 text-xs flex flex-col gap-0.5">
+                  <div className="truncate flex gap-1" style={{ color: isDraggingThis ? colorScheme.text : colorScheme.text }}>
+                    <span className="font-semibold">{entry.project.name}</span>
+                    <span className="opacity-60">({entry.project.client.name})</span>
                   </div>
-                  {height > 40 && (
-                    <div className="text-[10px] truncate" style={{ color: colorScheme.text, opacity: 0.8 }}>
-                      {entry.project.client.name}
-                      {(height < 70 && entry.description) ? ` - ${entry.description}` : ""}
-                    </div>
-                  )}
-                  {height >= 70 && entry.description && (
-                    <div className="text-[10px] truncate mt-1" style={{ color: colorScheme.text, opacity: 0.7 }}>
+                  {height >= 40 && entry.description && (
+                    <div className="text-xs truncate" style={{ color: colorScheme.text, opacity: 0.7 }}>
                       {entry.description}
                     </div>
                   )}
                   {height > 100 && (
-                    <div className="text-[10px] mt-1" style={{ color: colorScheme.text, opacity: 0.7 }}>
+                    <div className="text-[9px]" style={{ color: colorScheme.text, opacity: 0.7 }}>
                       {start.toLocaleTimeString("en-US", {
                         hour: "numeric",
                         minute: "2-digit",
@@ -1054,10 +1064,9 @@ export default function DayTimeline({
 
               {/* Bottom resize handle */}
               <div
-                className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10"
+                className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                 style={{ 
                   backgroundColor: colorScheme.border,
-                  opacity: 1
                 }}
                 onMouseDown={(e) => handleDragStart(e, entry.id, "bottom", end)}
               />
@@ -1163,6 +1172,7 @@ export default function DayTimeline({
                   ) : (
                     <div className="relative ml-12">{renderSessions()}</div>
                   )}
+                  {renderCurrentTimeLine()}
                 </div>
               </div>
             </div>
@@ -1193,6 +1203,7 @@ export default function DayTimeline({
                   ) : (
                     <div className="relative ml-12">{renderTimeEntries()}</div>
                   )}
+                  {renderCurrentTimeLine()}
                 </div>
               </div>
             </div>

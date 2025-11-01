@@ -406,6 +406,11 @@ export default function ProjectDetailPage({
           <div className="flex justify-between items-start mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
+                {/* Color dot indicator */}
+                <div 
+                  className="w-4 h-4 rounded-full shrink-0" 
+                  style={{ backgroundColor: project.color || '#22C55E' }}
+                />
                 <h1 className="text-3xl font-bold dark:text-white">{project.name}</h1>
                 <span
                   className={`px-3 py-1 text-sm font-medium rounded ${
@@ -450,7 +455,9 @@ export default function ProjectDetailPage({
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
+            <div 
+              className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800" 
+            >
               <div className="text-sm text-gray-600 dark:text-gray-400">Total Hours</div>
               <div className="text-2xl font-bold dark:text-white">{project.totalHours}</div>
             </div>

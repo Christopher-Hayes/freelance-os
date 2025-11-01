@@ -111,7 +111,6 @@ export async function PUT(
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
-    if (clientId !== undefined) updateData.clientId = parseInt(clientId);
     if (status !== undefined) updateData.status = status;
     if (color !== undefined) updateData.color = color;
     if (startDate !== undefined) {
@@ -119,6 +118,13 @@ export async function PUT(
     }
     if (endDate !== undefined) {
       updateData.endDate = endDate ? new Date(endDate) : null;
+    }
+    
+    // Handle client relationship update separately
+    if (clientId !== undefined) {
+      updateData.client = {
+        connect: { id: parseInt(clientId) },
+      };
     }
 
     const project = await prisma.project.update({
