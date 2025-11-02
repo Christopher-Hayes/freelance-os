@@ -92,11 +92,49 @@ export function getAppColor(appClass: string): string {
 }
 
 /**
+ * Clamp sessions to not extend past midnight (end of day boundary)
+ * This prevents rendering issues in the 24-hour timeline view
+ */
+function clampSessionsToDay(sessions: ActivitySession[]): ActivitySession[] {
+  return sessions.map(session => {
+    const start = Temporal.Instant.from(session.startTime);
+    const end = Temporal.Instant.from(session.endTime);
+    
+    // Get the start of the day for this session
+    const tz = Temporal.Now.timeZoneId();
+    const startZoned = start.toZonedDateTimeISO(tz);
+    const endZoned = end.toZonedDateTimeISO(tz);
+    
+    // Calculate end of day (23:59:59.999)
+    const endOfDay = startZoned
+      .withPlainTime(Temporal.PlainTime.from("23:59:59.999"));
+    
+    // If the session extends past midnight, clamp it to end of day
+    if (Temporal.ZonedDateTime.compare(endZoned, endOfDay) > 0) {
+      const clampedEnd = endOfDay.toInstant();
+      const newDurationNs = clampedEnd.epochNanoseconds - start.epochNanoseconds;
+      const newDurationSeconds = Math.floor(Number(newDurationNs) / 1_000_000_000);
+      
+      return {
+        ...session,
+        endTime: clampedEnd.toString(),
+        durationSeconds: newDurationSeconds,
+      };
+    }
+    
+    return session;
+  });
+}
+
+/**
  * Merge adjacent sessions for the same app within a time gap
  */
 export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySession[] {
+  // Step 0: Clamp sessions to day boundaries to prevent rendering issues
+  const clampedSessions = clampSessionsToDay(sessions);
+  
   // Step 1: Apply minimum display duration
-  const sessionsWithMinDuration = sessions.map(session => {
+  const sessionsWithMinDuration = clampedSessions.map(session => {
     const start = Temporal.Instant.from(session.startTime);
     const end = Temporal.Instant.from(session.endTime);
     const durationNs = end.epochNanoseconds - start.epochNanoseconds;
@@ -128,17 +166,23 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
     const currentStart = Temporal.Instant.from(session.startTime);
     const currentEnd = Temporal.Instant.from(session.endTime);
     
-    const existingIndex = merged.findIndex(m => {
-      if (m.appClass !== session.appClass) return false;
+    // Find the most recent session of the same app to merge with
+    // Search backwards to find the closest match in time
+    let existingIndex = -1;
+    for (let i = merged.length - 1; i >= 0; i--) {
+      const m = merged[i]!;
+      if (m.appClass !== session.appClass) continue;
       
-      const mStart = Temporal.Instant.from(m.startTime);
       const mEnd = Temporal.Instant.from(m.endTime);
-      
       const gapNs = currentStart.epochNanoseconds - mEnd.epochNanoseconds;
       const gapMinutes = Number(gapNs) / (1_000_000_000 * 60);
       
-      return gapMinutes <= MERGE_GAP_MINUTES && Temporal.Instant.compare(currentStart, mEnd) <= 0;
-    });
+      // Merge if gap is within threshold (handles both overlaps and small gaps)
+      if (gapMinutes <= MERGE_GAP_MINUTES) {
+        existingIndex = i;
+        break; // Found the most recent matching session
+      }
+    }
     
     if (existingIndex >= 0) {
       const existing = merged[existingIndex]!;

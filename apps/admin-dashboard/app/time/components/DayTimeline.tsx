@@ -51,13 +51,15 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
         </div>
       ) : (
         <div className="relative ml-12">
-          {mergedSessions.map((session) => (
-            <ActivitySession
-              key={session.id}
-              session={session}
-              position={activityOverlapPositions[session.id] || { column: 0, totalColumns: 1 }}
-            />
-          ))}
+          {mergedSessions
+            .filter((session) => activityOverlapPositions[session.id] !== undefined)
+            .map((session) => (
+              <ActivitySession
+                key={session.id}
+                session={session}
+                position={activityOverlapPositions[session.id]!}
+              />
+            ))}
         </div>
       )}
     </>
@@ -141,10 +143,22 @@ export default function DayTimeline({
 
   useEffect(() => {
     const timeline = timelineRef.current;
+    const today = Temporal.Now.plainDateISO();
+
     if (timeline) {
-      timeline.scrollTop = timeline.scrollHeight * 0.3;
+      // If it's the current day, scroll to current time
+      if (Temporal.PlainDate.compare(selectedDate, today) === 0) {
+        const now = Temporal.Now.zonedDateTimeISO();
+        const hours = now.hour + now.minute / 60;
+        const scrollPosition = hours * HOUR_HEIGHT - timeline.clientHeight / 2;
+
+        timeline.scrollTop = Math.max(0, scrollPosition);
+      } else {
+        // Otherwise, scroll to ~30% down the timeline
+        timeline.scrollTop = timeline.scrollHeight * 0.3;
+      }
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

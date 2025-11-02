@@ -1,6 +1,76 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 
+// ============================================================================
+// Types
+// ============================================================================
+
+export type TimeEntryCreateRequest = {
+  projectId: number;
+  startTime: string; // ISO 8601 datetime string (e.g., "2025-11-02T00:00:00-04:00[America/New_York]")
+  endTime: string; // ISO 8601 datetime string
+  durationMinutes: number;
+  description?: string;
+  billable?: boolean;
+};
+
+export type TimeEntryListParams = {
+  projectId?: string;
+  clientId?: string;
+  startDate?: string; // YYYY-MM-DD format
+  endDate?: string; // YYYY-MM-DD format
+};
+
+export type TimeEntryListResponse = {
+  timeEntries: Array<{
+    id: number;
+    projectId: number;
+    startTime: string; // UTC ISO string
+    endTime: string; // UTC ISO string
+    durationMinutes: number;
+    description: string;
+    billable: boolean;
+    project: {
+      id: number;
+      name: string;
+      client: {
+        id: number;
+        name: string;
+        email: string;
+        company: string | null;
+      };
+    };
+  }>;
+  summary: {
+    totalMinutes: number;
+    totalHours: number;
+    count: number;
+  };
+};
+
+export type TimeEntryCreateResponse = {
+  id: number;
+  projectId: number;
+  startTime: string; // UTC ISO string
+  endTime: string; // UTC ISO string
+  durationMinutes: number;
+  description: string;
+  billable: boolean;
+  project: {
+    id: number;
+    name: string;
+    client: {
+      id: number;
+      name: string;
+      email: string;
+    };
+  };
+};
+
+// ============================================================================
+// Route Handlers
+// ============================================================================
+
 // GET /api/time - List time entries with optional filters
 export async function GET(request: Request) {
   try {
@@ -109,9 +179,9 @@ export async function GET(request: Request) {
 }
 
 // POST /api/time - Create a new time entry
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse<TimeEntryCreateResponse | { error: string }>> {
   try {
-    const body = await request.json();
+    const body: TimeEntryCreateRequest = await request.json();
     const { projectId, startTime, endTime, durationMinutes, description, billable } = body;
 
     // Validate required fields
@@ -124,7 +194,7 @@ export async function POST(request: Request) {
 
     // Validate project exists
     const project = await prisma.project.findUnique({
-      where: { id: parseInt(projectId) },
+      where: { id: projectId },
     });
 
     if (!project) {
@@ -134,25 +204,78 @@ export async function POST(request: Request) {
       );
     }
 
+    // Parse Temporal datetime strings to UTC
+    // Client sends: "2025-11-02T00:00:00-04:00[America/New_York]"
+    // We need to extract the ISO string and convert to UTC
+    let startTimeUTC: Date;
+    let endTimeUTC: Date;
+
+    try {
+      // Remove the timezone annotation if present (e.g., "[America/New_York]")
+      const startTimeClean = startTime.replace(/\[.*?\]$/, '');
+      const endTimeClean = endTime.replace(/\[.*?\]$/, '');
+      
+      // Parse as ISO string - JavaScript Date will handle timezone offsets
+      startTimeUTC = new Date(startTimeClean);
+      endTimeUTC = new Date(endTimeClean);
+
+      // Validate dates are valid
+      if (isNaN(startTimeUTC.getTime()) || isNaN(endTimeUTC.getTime())) {
+        throw new Error("Invalid date format");
+      }
+    } catch (parseError) {
+      console.error("Error parsing datetime:", parseError);
+      return NextResponse.json(
+        { error: "Invalid datetime format. Expected ISO 8601 string." },
+        { status: 400 }
+      );
+    }
+
     const timeEntry = await prisma.timeEntry.create({
       data: {
-        projectId: parseInt(projectId),
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
-        durationMinutes: parseInt(durationMinutes),
+        projectId,
+        startTime: startTimeUTC,
+        endTime: endTimeUTC,
+        durationMinutes,
         description: description || "",
         billable: billable ?? true, // Default to billable
       },
       include: {
         project: {
           include: {
-            client: true,
+            client: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
       },
     });
 
-    return NextResponse.json(timeEntry, { status: 201 });
+    // Convert Date objects to UTC ISO strings for response
+    const response: TimeEntryCreateResponse = {
+      id: timeEntry.id,
+      projectId: timeEntry.projectId,
+      startTime: timeEntry.startTime.toISOString(),
+      endTime: timeEntry.endTime.toISOString(),
+      durationMinutes: timeEntry.durationMinutes,
+      description: timeEntry.description || "",
+      billable: timeEntry.billable,
+      project: {
+        id: timeEntry.project.id,
+        name: timeEntry.project.name,
+        client: {
+          id: timeEntry.project.client.id,
+          name: timeEntry.project.client.name,
+          email: timeEntry.project.client.email,
+        },
+      },
+    };
+
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     console.error("Error creating time entry:", error);
     return NextResponse.json(

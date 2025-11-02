@@ -40,7 +40,15 @@ const ActivitySession = memo(function ActivitySession({ session, position }: Act
 
   const tz = Temporal.Now.timeZoneId();
   const start = Temporal.Instant.from(session.startTime).toZonedDateTimeISO(tz);
-  const end = Temporal.Instant.from(session.endTime).toZonedDateTimeISO(tz);
+  let end = Temporal.Instant.from(session.endTime).toZonedDateTimeISO(tz);
+  
+  // Clamp end time to same day as start to prevent cross-midnight rendering issues
+  // Timeline only shows 24 hours per day (00:00 - 23:59:59.999)
+  const endOfDay = start.withPlainTime(Temporal.PlainTime.from("23:59:59.999"));
+  if (Temporal.ZonedDateTime.compare(end, endOfDay) > 0) {
+    end = endOfDay;
+  }
+  
   const top = timeToY(start);
   const bottom = timeToY(end);
   const height = bottom - top;

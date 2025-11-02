@@ -164,7 +164,7 @@ export function calculateActivityOverlaps(
       totalColumns,
     };
   }
-
+  
   // Third pass: expand rightmost activities into unused columns to their right
   for (const session of sessionsWithTimes) {
     const position = positions[session.id];
@@ -205,6 +205,60 @@ export function calculateActivityOverlaps(
       totalColumns,
       columnSpan: columnsToSpan,
     };
+  }
+
+  // Fourth pass: Remove overlapping sessions by keeping the longer duration one
+  // This runs AFTER column expansion to catch any overlaps that occur due to spanning
+  const sessionsToRemove = new Set<number>();
+  
+  for (const session of sessionsWithTimes) {
+    if (sessionsToRemove.has(session.id)) continue;
+    
+    const sessionPosition = positions[session.id];
+    if (!sessionPosition) continue;
+    
+    // Find all sessions that overlap with this one in both time AND position
+    const overlappingInPosition = sessionsWithTimes.filter((other) => {
+      if (other.id === session.id) return false;
+      if (sessionsToRemove.has(other.id)) return false;
+      
+      const otherPosition = positions[other.id];
+      if (!otherPosition) return false;
+      
+      // Check if they overlap in time
+      const timeOverlap = session.start < other.end && session.end > other.start;
+      if (!timeOverlap) return false;
+      
+      // Check if they overlap in position (same column or overlapping column spans)
+      const sessionEnd = sessionPosition.column + (sessionPosition.columnSpan ?? 1);
+      const otherEnd = otherPosition.column + (otherPosition.columnSpan ?? 1);
+      
+      const positionOverlap = sessionPosition.column < otherEnd && sessionEnd > otherPosition.column;
+      
+      return positionOverlap;
+    });
+    
+    // If there are overlapping sessions, remove the shorter ones
+    if (overlappingInPosition.length > 0) {
+      const sessionDuration = session.end.getTime() - session.start.getTime();
+      
+      for (const other of overlappingInPosition) {
+        const otherDuration = other.end.getTime() - other.start.getTime();
+        
+        // Remove the shorter session
+        if (otherDuration < sessionDuration) {
+          sessionsToRemove.add(other.id);
+        } else if (otherDuration === sessionDuration && other.id > session.id) {
+          // If durations are equal, remove the one with higher ID for consistency
+          sessionsToRemove.add(other.id);
+        }
+      }
+    }
+  }
+  
+  // Remove the positions for sessions we're hiding
+  for (const sessionId of sessionsToRemove) {
+    delete positions[sessionId];
   }
 
   return positions;
