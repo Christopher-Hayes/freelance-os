@@ -1,11 +1,48 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 
+// ============================================================================
+// Types
+// ============================================================================
+
+export type TimeEntryUpdateRequest = {
+  projectId?: number;
+  startTime?: string; // ISO 8601 datetime string
+  endTime?: string; // ISO 8601 datetime string
+  durationMinutes?: number;
+  description?: string;
+  billable?: boolean;
+};
+
+export type TimeEntryResponse = {
+  id: number;
+  projectId: number;
+  startTime: string; // UTC ISO string
+  endTime: string; // UTC ISO string
+  durationMinutes: number;
+  description: string;
+  billable: boolean;
+  project: {
+    id: number;
+    name: string;
+    client: {
+      id: number;
+      name: string;
+      email: string;
+      company: string | null;
+    };
+  };
+};
+
+// ============================================================================
+// Route Handlers
+// ============================================================================
+
 // GET /api/time/[id] - Get a single time entry
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
     const { id } = await params;
 
@@ -27,7 +64,28 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(timeEntry);
+    // Convert Date objects to UTC ISO strings for response
+    const response: TimeEntryResponse = {
+      id: timeEntry.id,
+      projectId: timeEntry.projectId,
+      startTime: timeEntry.startTime.toISOString(),
+      endTime: timeEntry.endTime.toISOString(),
+      durationMinutes: timeEntry.durationMinutes,
+      description: timeEntry.description || "",
+      billable: timeEntry.billable,
+      project: {
+        id: timeEntry.project.id,
+        name: timeEntry.project.name,
+        client: {
+          id: timeEntry.project.client.id,
+          name: timeEntry.project.client.name,
+          email: timeEntry.project.client.email,
+          company: timeEntry.project.client.company,
+        },
+      },
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching time entry:", error);
     return NextResponse.json(
@@ -41,10 +99,10 @@ export async function GET(
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
     const { id } = await params;
-    const body = await request.json();
+    const body: TimeEntryUpdateRequest = await request.json();
     const { projectId, startTime, endTime, durationMinutes, description, billable } = body;
 
     // Check if time entry exists
@@ -60,9 +118,9 @@ export async function PUT(
     }
 
     // If projectId is changing, validate new project exists
-    if (projectId && parseInt(projectId) !== existingEntry.projectId) {
+    if (projectId && parseInt(projectId.toString()) !== existingEntry.projectId) {
       const project = await prisma.project.findUnique({
-        where: { id: parseInt(projectId) },
+        where: { id: projectId },
       });
 
       if (!project) {
@@ -74,13 +132,51 @@ export async function PUT(
     }
 
     const updateData: any = {};
-    if (projectId !== undefined) updateData.projectId = parseInt(projectId);
-    if (startTime !== undefined) updateData.startTime = new Date(startTime);
-    if (endTime !== undefined) updateData.endTime = new Date(endTime);
-    if (durationMinutes !== undefined)
-      updateData.durationMinutes = parseInt(durationMinutes);
+    if (projectId !== undefined) updateData.projectId = projectId;
+    if (durationMinutes !== undefined) updateData.durationMinutes = durationMinutes;
     if (description !== undefined) updateData.description = description;
     if (billable !== undefined) updateData.billable = billable;
+
+    // Parse datetime strings to UTC (same logic as POST route)
+    if (startTime !== undefined) {
+      try {
+        const startTimeClean = startTime.replace(/\[.*?\]$/, '');
+        const startTimeUTC = new Date(startTimeClean);
+        if (isNaN(startTimeUTC.getTime())) {
+          return NextResponse.json(
+            { error: "Invalid startTime format. Expected ISO 8601 string." },
+            { status: 400 }
+          );
+        }
+        updateData.startTime = startTimeUTC;
+      } catch (parseError) {
+        console.error("Error parsing startTime:", parseError);
+        return NextResponse.json(
+          { error: "Invalid startTime format. Expected ISO 8601 string." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (endTime !== undefined) {
+      try {
+        const endTimeClean = endTime.replace(/\[.*?\]$/, '');
+        const endTimeUTC = new Date(endTimeClean);
+        if (isNaN(endTimeUTC.getTime())) {
+          return NextResponse.json(
+            { error: "Invalid endTime format. Expected ISO 8601 string." },
+            { status: 400 }
+          );
+        }
+        updateData.endTime = endTimeUTC;
+      } catch (parseError) {
+        console.error("Error parsing endTime:", parseError);
+        return NextResponse.json(
+          { error: "Invalid endTime format. Expected ISO 8601 string." },
+          { status: 400 }
+        );
+      }
+    }
 
     const timeEntry = await prisma.timeEntry.update({
       where: { id: parseInt(id) },
@@ -94,7 +190,28 @@ export async function PUT(
       },
     });
 
-    return NextResponse.json(timeEntry);
+    // Convert Date objects to UTC ISO strings for response
+    const response: TimeEntryResponse = {
+      id: timeEntry.id,
+      projectId: timeEntry.projectId,
+      startTime: timeEntry.startTime.toISOString(),
+      endTime: timeEntry.endTime.toISOString(),
+      durationMinutes: timeEntry.durationMinutes,
+      description: timeEntry.description || "",
+      billable: timeEntry.billable,
+      project: {
+        id: timeEntry.project.id,
+        name: timeEntry.project.name,
+        client: {
+          id: timeEntry.project.client.id,
+          name: timeEntry.project.client.name,
+          email: timeEntry.project.client.email,
+          company: timeEntry.project.client.company,
+        },
+      },
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error updating time entry:", error);
     return NextResponse.json(
@@ -108,7 +225,7 @@ export async function PUT(
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse<{ success: boolean } | { error: string }>> {
   try {
     const { id } = await params;
 
