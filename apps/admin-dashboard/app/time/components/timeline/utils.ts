@@ -5,7 +5,7 @@ export const HOUR_HEIGHT = PIXELS_PER_HOUR;
 export const TIMELINE_PADDING_TOP = 16;
 export const TIMELINE_DRAG_OFFSET = -8;
 export const MIN_DISPLAY_DURATION_MINUTES = 15;
-export const MERGE_GAP_MINUTES = 60;
+export const MERGE_GAP_MINUTES = 10;
 
 export const APP_COLORS = [
   '#3B82F6', // blue
@@ -211,4 +211,40 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
   }
   
   return merged;
+}
+
+const REMOVE_TITLE_PREFIXES = ['org.gnome.', 'com.microsoft.'];
+const APP_NAME_OVERRIDES: Record<string, string> = {
+  'code': 'VS Code',
+  'code-oss': 'VS Code',
+  'google-chrome': 'Google Chrome',
+  'nautilus': 'Files',
+  'systemmonitor': 'System Monitor',
+};
+
+export function formatAppTitle(session: ActivitySession): string {
+  let appName = session.appClass || "Unknown App";
+
+  // Remove common prefixes
+  for (const prefix of REMOVE_TITLE_PREFIXES) {
+    if (appName.startsWith(prefix)) {
+      appName = appName.slice(prefix.length);
+      break;
+    }
+  }
+
+  // If it's in "firefox_firefox" format, take first part
+  if (appName.includes('_')) {
+    appName = appName.split('_')[0]!;
+  }
+
+  // If there are any hyphens, replace them with spaces and capitalize words
+  if (appName.includes('-')) {
+    appName = appName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  }
+
+  // Apply name overrides
+  appName = APP_NAME_OVERRIDES[appName.toLowerCase()] || appName;
+
+  return `${appName?.[0]?.toUpperCase() ?? ''}${appName.slice(1)}`;
 }

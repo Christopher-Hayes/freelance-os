@@ -21,15 +21,19 @@ export function calculateActivityOverlaps(
     appClass: session.appClass,
     start: new Date(session.startTime),
     end: new Date(session.endTime),
+    duration: new Date(session.endTime).getTime() - new Date(session.startTime).getTime(),
   }));
 
-  // Sort sessions by start time, then by end time (longer sessions first)
+  // Sort sessions by start time, then by duration (longer sessions first)
+  // This helps ensure longer sessions get preferential left-most positions
   const sortedSessions = [...sessionsWithTimes].sort((a, b) => {
-    if (a.start.getTime() !== b.start.getTime()) {
-      return a.start.getTime() - b.start.getTime();
+    const timeDiff = a.start.getTime() - b.start.getTime();
+    // If start times are within 5 minutes of each other, prioritize longer sessions
+    if (Math.abs(timeDiff) <= 5 * 60 * 1000) {
+      return b.duration - a.duration;
     }
-    // If start times are equal, longer sessions come first
-    return b.end.getTime() - a.end.getTime();
+    // Otherwise sort by start time
+    return timeDiff;
   });
 
   const positions: { [key: number]: OverlapPosition } = {};
@@ -67,7 +71,7 @@ export function calculateActivityOverlaps(
     columnAssignments[session.id] = assignedColumn;
   }
 
-  // Calculate the true maximum concurrent sessions during each session's time period
+  // Second pass: Calculate the true maximum concurrent sessions during each session's time period
   const maxColumnMap: { [sessionId: number]: number } = {};
   
   // Debugging: collect all calculation details
