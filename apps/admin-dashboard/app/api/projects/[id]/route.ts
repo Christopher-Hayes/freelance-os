@@ -120,7 +120,7 @@ export async function PUT(
       updateData.endDate = endDate ? new Date(endDate) : null;
     }
     
-    // Handle client relationship update separately
+    // Handle client relationship update using Prisma's connect syntax
     if (clientId !== undefined) {
       updateData.client = {
         connect: { id: parseInt(clientId) },

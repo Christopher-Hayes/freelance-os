@@ -8,6 +8,35 @@ The admin dashboard is the internal management interface for the freelance busin
 **Auth**: NextAuth.js with admin provider (not yet implemented)  
 **Access**: Full database access (no client filtering)
 
+## DateTime Handling ⚠️ CRITICAL
+
+**We use Temporal API for all datetime operations. See `DATETIME_GUIDE.md` for full details.**
+
+### Quick Rules:
+- ✅ Server sends UTC ISO strings (`"2025-11-01T14:30:00Z"`)
+- ✅ Use `<ClientDateTime value={utcString} />` for display
+- ✅ Use `import { formatDateTime, parseUTC } from '@/lib/datetime'` for calculations
+- ❌ NEVER use `new Date()` in components (causes hydration errors)
+- ❌ NEVER format dates in Server Components
+- ❌ NEVER SSR current time or timezone-dependent values
+
+### Example:
+```tsx
+// ✅ Good
+import { ClientDateTime } from '@/components/ClientDateTime';
+<ClientDateTime value={entry.startTime} />
+
+// ❌ Bad - causes hydration mismatch
+<div>{new Date(entry.startTime).toLocaleString()}</div>
+```
+
+See:
+- `DATETIME_GUIDE.md` - Complete guide
+- `DATETIME_MIGRATION.md` - Migration examples
+- `lib/datetime.ts` - Utility functions
+- `components/ClientDateTime.tsx` - Display components
+- `hooks/useTemporal.ts` - React hooks
+
 ## Key Features to Implement
 
 ### 1. Client Management (`/clients`)

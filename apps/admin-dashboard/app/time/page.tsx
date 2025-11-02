@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
 
 interface TimeEntry {
@@ -49,11 +50,9 @@ export default function TimeEntriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Day view state
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Start at midnight local time
-    return today;
+  // Day view state - use Temporal.PlainDate
+  const [selectedDate, setSelectedDate] = useState<Temporal.PlainDate>(() => {
+    return Temporal.Now.plainDateISO();
   });
 
   // Filters

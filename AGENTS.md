@@ -20,6 +20,19 @@ Freelance-OS is a **Turborepo monorepo** for managing freelance business operati
 - Prefer Server Components (default in Next.js 15+)
 - Use shared components from `@freelance-os/ui` package when it makes sense
 
+### DateTime Handling (Temporal API)
+
+**CRITICAL**: Use the Temporal API for all datetime operations to prevent hydration errors.
+
+- **Never** use `new Date()` or `Date.now()` in components
+- **Server**: Always store/send UTC timestamps (ISO strings ending in 'Z')
+- **Client**: Convert to local timezone only for display
+- **Components**: Use `ClientDateTime`, `ClientDate`, `ClientTime` for rendering
+- **Utilities**: Import from `@/lib/datetime` (parseUTC, formatDateTime, etc.)
+- **Live updates**: Use `useNow()` hook for current time
+
+See `apps/admin-dashboard/DATETIME_GUIDE.md` for complete documentation.
+
 ### Packages
 - **`packages/database`** - Prisma schema + singleton client ⚠️ **Use this, never create new PrismaClient**
 - **`packages/types`** - Shared TypeScript types ⚠️ **Use these, not Prisma-generated types**
@@ -164,3 +177,4 @@ cd packages/database && pnpm db:generate
 - ✅ Client portal: ALWAYS filter by `session.user.clientId`
 - ✅ Durations: minutes (time_entries), seconds (activity_sessions)
 - ✅ UTC timestamps everywhere
+- ✅ **DateTime handling**: Use Temporal API (see `apps/admin-dashboard/DATETIME_GUIDE.md`)

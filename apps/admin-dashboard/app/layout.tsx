@@ -3,6 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import Link from "next/link";
+// Initialize Temporal API polyfill
+import "@/lib/temporal-polyfill";
 
 const geist = Geist({ subsets: ["latin"] });
 
