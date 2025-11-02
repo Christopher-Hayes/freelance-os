@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
@@ -67,6 +67,22 @@ export default function AnalyticsPage() {
       setLoading(false);
     }
   }
+
+  // Memoize chart data to prevent unnecessary re-renders
+  const dailyChartData = useMemo(
+    () => activity?.dailyData || [],
+    [activity?.dailyData]
+  );
+
+  const topAppsData = useMemo(
+    () => activity?.topApps || [],
+    [activity?.topApps]
+  );
+
+  const weeklyData = useMemo(
+    () => summary?.weeklyData || [],
+    [summary?.weeklyData]
+  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 p-8">
@@ -147,13 +163,13 @@ export default function AnalyticsPage() {
                 <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
                   Daily Activity
                 </h2>
-                {activity && <DailyActivityChart data={activity.dailyData} />}
+                <DailyActivityChart data={dailyChartData} />
               </div>
               <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
                 <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
                   Top 10 Apps
                 </h2>
-                {activity && <TopAppsChart data={activity.topApps} />}
+                <TopAppsChart data={topAppsData} />
               </div>
             </div>
 
@@ -161,7 +177,7 @@ export default function AnalyticsPage() {
               <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
                 Weekly Trends
               </h2>
-              {summary && <WeeklyTrendChart data={summary.weeklyData} />}
+              <WeeklyTrendChart data={weeklyData} />
             </div>
           </>
         )}

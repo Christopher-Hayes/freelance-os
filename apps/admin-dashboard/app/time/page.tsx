@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
 import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
@@ -41,6 +41,110 @@ interface Project {
   name: string;
   clientId: number;
 }
+
+// Helper functions moved outside component
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const formatTime = (dateString: string) => {
+  return new Date(dateString).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatDuration = (minutes: number) => {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+};
+
+// Memoized TimeEntryRow component
+const TimeEntryRow = memo(function TimeEntryRow({
+  entry,
+  onDelete,
+}: {
+  entry: TimeEntry;
+  onDelete: (id: number) => void;
+}) {
+  const formattedDate = useMemo(
+    () => formatDate(entry.startTime),
+    [entry.startTime]
+  );
+
+  const formattedTimes = useMemo(() => ({
+    start: formatTime(entry.startTime),
+    end: formatTime(entry.endTime),
+  }), [entry.startTime, entry.endTime]);
+
+  const formattedDuration = useMemo(
+    () => formatDuration(entry.durationMinutes),
+    [entry.durationMinutes]
+  );
+
+  const handleDeleteClick = useCallback(() => {
+    onDelete(entry.id);
+  }, [entry.id, onDelete]);
+
+  return (
+    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+        {formattedDate}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+        {formattedTimes.start} - {formattedTimes.end}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+        {entry.project.client.name}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+        {entry.project.name}
+      </td>
+      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+        {entry.description || (
+          <span className="italic text-gray-400 dark:text-gray-500">
+            No description
+          </span>
+        )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+        {formattedDuration}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap">
+        <span
+          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            entry.billable
+              ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+              : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
+          }`}
+        >
+          {entry.billable ? "Yes" : "No"}
+        </span>
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+        <Link
+          href={`/time/${entry.id}`}
+          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+        >
+          Edit
+        </Link>
+        <button
+          onClick={handleDeleteClick}
+          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  );
+});
 
 export default function TimeEntriesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -105,7 +209,7 @@ export default function TimeEntriesPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     if (!confirm("Are you sure you want to delete this time entry?")) return;
 
     try {
@@ -120,29 +224,16 @@ export default function TimeEntriesPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete time entry");
     }
+  }, []);
+
+  // Navigate to previous day
+  const previousDay = () => {
+    setSelectedDate(selectedDate.subtract({ days: 1 }));
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours === 0) return `${mins}m`;
-    if (mins === 0) return `${hours}h`;
-    return `${hours}h ${mins}m`;
+  // Navigate to next day
+  const nextDay = () => {
+    setSelectedDate(selectedDate.add({ days: 1 }));
   };
 
   const filteredProjects = selectedClientId
@@ -323,56 +414,11 @@ export default function TimeEntriesPage() {
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {timeEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {formatDate(entry.startTime)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {formatTime(entry.startTime)} -{" "}
-                        {formatTime(entry.endTime)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {entry.project.client.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {entry.project.name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {entry.description || (
-                          <span className="italic text-gray-400 dark:text-gray-500">
-                            No description
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {formatDuration(entry.durationMinutes)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            entry.billable
-                              ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-                              : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
-                          }`}
-                        >
-                          {entry.billable ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <Link
-                          href={`/time/${entry.id}`}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
-                        >
-                          Edit
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(entry.id)}
-                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
+                    <TimeEntryRow
+                      key={entry.id}
+                      entry={entry}
+                      onDelete={handleDelete}
+                    />
                   ))}
                 </tbody>
               </table>

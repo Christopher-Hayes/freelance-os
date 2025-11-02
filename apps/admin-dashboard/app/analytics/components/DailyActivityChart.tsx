@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import * as d3 from 'd3';
 
 interface DailyData {
@@ -13,7 +13,7 @@ interface Props {
   data: DailyData[];
 }
 
-export default function DailyActivityChart({ data }: Props) {
+const DailyActivityChart = memo(function DailyActivityChart({ data }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -129,4 +129,6 @@ export default function DailyActivityChart({ data }: Props) {
       <svg ref={svgRef} className="mx-auto"></svg>
     </div>
   );
-}
+});
+
+export default DailyActivityChart;

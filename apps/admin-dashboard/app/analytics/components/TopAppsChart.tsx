@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import * as d3 from 'd3';
 
 interface AppData {
@@ -12,7 +12,7 @@ interface Props {
   data: AppData[];
 }
 
-export default function TopAppsChart({ data }: Props) {
+const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -143,4 +143,6 @@ export default function TopAppsChart({ data }: Props) {
       <svg ref={svgRef} className="overflow-visible"></svg>
     </div>
   );
-}
+});
+
+export default TopAppsChart;

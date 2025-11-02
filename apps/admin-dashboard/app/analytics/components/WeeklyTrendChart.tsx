@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import * as d3 from 'd3';
 
 interface WeekData {
@@ -12,7 +12,7 @@ interface Props {
   data: WeekData[];
 }
 
-export default function WeeklyTrendChart({ data }: Props) {
+const WeeklyTrendChart = memo(function WeeklyTrendChart({ data }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
@@ -147,4 +147,6 @@ export default function WeeklyTrendChart({ data }: Props) {
       <svg ref={svgRef} className="mx-auto"></svg>
     </div>
   );
-}
+});
+
+export default WeeklyTrendChart;

@@ -90,6 +90,9 @@ export default function DayTimeline({
   const [justFinishedDragging, setJustFinishedDragging] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Temporal.ZonedDateTime>(() => 
+    Temporal.Now.zonedDateTimeISO()
+  );
   const [creatingEntry, setCreatingEntry] = useState<{
     startTime: Temporal.ZonedDateTime;
     endTime: Temporal.ZonedDateTime;
@@ -121,6 +124,15 @@ export default function DayTimeline({
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  // Update current time every minute for the current time line
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Temporal.Now.zonedDateTimeISO());
+    }, 60000); // Update every 60 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -598,7 +610,11 @@ export default function DayTimeline({
               >
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
                   <ActivitySessionsTimeline sessions={sessions} loading={loading} />
-                  <CurrentTimeLine selectedDate={selectedDate} isClient={isClient} />
+                  <CurrentTimeLine 
+                    selectedDate={selectedDate} 
+                    isClient={isClient} 
+                    currentTime={currentTime}
+                  />
                 </div>
               </div>
             </div>
@@ -629,7 +645,11 @@ export default function DayTimeline({
                   ) : (
                     <div className="relative ml-12">{renderTimeEntries()}</div>
                   )}
-                  <CurrentTimeLine selectedDate={selectedDate} isClient={isClient} />
+                  <CurrentTimeLine 
+                    selectedDate={selectedDate} 
+                    isClient={isClient} 
+                    currentTime={currentTime}
+                  />
                 </div>
               </div>
             </div>

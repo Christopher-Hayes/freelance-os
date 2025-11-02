@@ -1,8 +1,10 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { HOUR_HEIGHT, TIMELINE_PADDING_TOP } from "./utils";
 
-export default function TimelineHourMarkers() {
+// Generate hours array outside component (static content)
+const generateHourMarkers = () => {
   const hours = [];
   for (let i = 0; i <= 24; i++) {
     const label = i === 0 ? "12 AM"
@@ -24,5 +26,15 @@ export default function TimelineHourMarkers() {
       </div>
     );
   }
+  return hours;
+};
+
+// Memoized component - static content that never changes
+const TimelineHourMarkers = memo(function TimelineHourMarkers() {
+  // Memoize the hours array generation (empty deps = only calculate once)
+  const hours = useMemo(() => generateHourMarkers(), []);
+  
   return <>{hours}</>;
-}
+});
+
+export default TimelineHourMarkers;

@@ -1,8 +1,38 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import TimeEntryEditForm from "./TimeEntryEditForm";
 import { HOUR_HEIGHT } from "./utils";
+
+// Move utility functions outside component to prevent recreation on every render
+const timeToY = (time: Temporal.ZonedDateTime): number => {
+  const startOfDay = time.withPlainTime(Temporal.PlainTime.from("00:00"));
+  const diffNs = time.epochNanoseconds - startOfDay.epochNanoseconds;
+  const diffMs = Number(diffNs / 1_000_000n);
+  const totalHours = diffMs / (1000 * 60 * 60);
+  return totalHours * HOUR_HEIGHT;
+};
+
+const formatTime = (time: Temporal.ZonedDateTime): string => {
+  return time.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+const durationInMinutes = (start: Temporal.ZonedDateTime, end: Temporal.ZonedDateTime): number => {
+  return Math.round(Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n));
+};
+
+const hexToRgb = (hex: string) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1]!, 16),
+    g: parseInt(result[2]!, 16),
+    b: parseInt(result[3]!, 16)
+  } : { r: 34, g: 197, b: 94 };
+};
 
 interface TimeEntry {
   id: number;
@@ -46,7 +76,7 @@ interface TimeEntryBarProps {
   onDelete: () => void;
 }
 
-export default function TimeEntryBar({
+const TimeEntryBar = memo(function TimeEntryBar({
   entry,
   position,
   isGhost = false,
@@ -60,68 +90,59 @@ export default function TimeEntryBar({
   onCancelEdit,
   onDelete,
 }: TimeEntryBarProps) {
-  const timeToY = (time: Temporal.ZonedDateTime): number => {
-    const startOfDay = time.withPlainTime(Temporal.PlainTime.from("00:00"));
-    const diffNs = time.epochNanoseconds - startOfDay.epochNanoseconds;
-    const diffMs = Number(diffNs / 1_000_000n);
-    const totalHours = diffMs / (1000 * 60 * 60);
-    return totalHours * HOUR_HEIGHT;
-  };
+  // Memoize start/end times calculation
+  const { start, end } = useMemo(() => {
+    const tz = Temporal.Now.timeZoneId();
+    return {
+      start: draggedTimes
+        ? draggedTimes.startTime
+        : Temporal.Instant.from(entry.startTime).toZonedDateTimeISO(tz),
+      end: draggedTimes
+        ? draggedTimes.endTime
+        : Temporal.Instant.from(entry.endTime).toZonedDateTimeISO(tz),
+    };
+  }, [entry.startTime, entry.endTime, draggedTimes]);
 
-  const formatTime = (time: Temporal.ZonedDateTime): string => {
-    return time.toLocaleString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
+  // Memoize position calculations
+  const { top, height } = useMemo(() => {
+    const topPos = timeToY(start);
+    const bottom = timeToY(end);
+    return {
+      top: topPos,
+      height: bottom - topPos,
+    };
+  }, [start, end]);
 
-  const durationInMinutes = (start: Temporal.ZonedDateTime, end: Temporal.ZonedDateTime): number => {
-    return Math.round(Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n));
-  };
+  // Memoize layout calculations
+  const layout = useMemo(() => ({
+    widthPercent: 100 / position.totalColumns,
+    leftPercent: (position.column / position.totalColumns) * 100,
+    gap: position.totalColumns > 1 ? 1 : 0,
+  }), [position.column, position.totalColumns]);
 
-  const tz = Temporal.Now.timeZoneId();
-  const start = draggedTimes
-    ? draggedTimes.startTime
-    : Temporal.Instant.from(entry.startTime).toZonedDateTimeISO(tz);
-  const end = draggedTimes
-    ? draggedTimes.endTime
-    : Temporal.Instant.from(entry.endTime).toZonedDateTimeISO(tz);
-
-  const top = timeToY(start);
-  const bottom = timeToY(end);
-  const height = bottom - top;
-
-  const widthPercent = 100 / position.totalColumns;
-  const leftPercent = (position.column / position.totalColumns) * 100;
-  const gap = position.totalColumns > 1 ? 1 : 0;
-
-  const projectColor = entry.project.color || '#22C55E';
-  
-  const hexToRgb = (hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1]!, 16),
-      g: parseInt(result[2]!, 16),
-      b: parseInt(result[3]!, 16)
-    } : { r: 34, g: 197, b: 94 };
-  };
-
-  const rgb = hexToRgb(projectColor);
-  const colorScheme = isGhost
-    ? { 
+  // Memoize color scheme
+  const colorScheme = useMemo(() => {
+    const projectColor = entry.project.color || '#22C55E';
+    
+    if (isGhost) {
+      return { 
         bg: 'rgba(156, 163, 175, 0.2)', 
         bgDark: 'rgba(156, 163, 175, 0.3)', 
         border: 'rgb(156, 163, 175)', 
         text: 'rgb(75, 85, 99)', 
         textDark: 'rgb(156, 163, 175)' 
-      }
-    : { 
-        bg: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`,
-        bgDark: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`,
-        border: projectColor,
-        text: projectColor,
-        textDark: projectColor
       };
+    }
+    
+    const rgb = hexToRgb(projectColor);
+    return { 
+      bg: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`,
+      bgDark: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.25)`,
+      border: projectColor,
+      text: projectColor,
+      textDark: projectColor
+    };
+  }, [entry.project.color, isGhost]);
 
   return (
     <div
@@ -136,8 +157,8 @@ export default function TimeEntryBar({
         top: `${top}px`,
         height: `${height}px`,
         minHeight: "20px",
-        left: `calc(${leftPercent}% + ${gap}px)`,
-        right: `calc(${100 - leftPercent - widthPercent}% + ${gap}px)`,
+        left: `calc(${layout.leftPercent}% + ${layout.gap}px)`,
+        right: `calc(${100 - layout.leftPercent - layout.widthPercent}% + ${layout.gap}px)`,
         backgroundColor: colorScheme.bg,
         borderColor: colorScheme.border,
       }}
@@ -218,4 +239,6 @@ export default function TimeEntryBar({
       )}
     </div>
   );
-}
+});
+
+export default TimeEntryBar;
