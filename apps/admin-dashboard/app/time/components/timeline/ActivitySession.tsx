@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { APP_COLORS } from "./utils";
 
@@ -19,7 +20,8 @@ interface ActivitySessionProps {
   position: { column: number; totalColumns: number; columnSpan?: number };
 }
 
-export default function ActivitySession({ session, position }: ActivitySessionProps) {
+// Memoized component - only re-renders if session or position changes
+const ActivitySession = memo(function ActivitySession({ session, position }: ActivitySessionProps) {
   const getAppColor = (appClass: string): string => {
     let hash = 0;
     for (let i = 0; i < appClass.length; i++) {
@@ -90,4 +92,6 @@ export default function ActivitySession({ session, position }: ActivitySessionPr
       )}
     </div>
   );
-}
+});
+
+export default ActivitySession;

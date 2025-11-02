@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, memo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
 import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
@@ -21,8 +21,48 @@ import {
 import {
   calculateActivityOverlaps,
   calculateTimeEntryOverlaps,
+  type OverlapPosition,
 } from "./timeline/overlapCalculations";
 import { debounce, throttle } from "@/lib/util";
+
+// Memoized component for activity sessions timeline - only re-renders when sessions change
+const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
+  sessions,
+  loading,
+}: {
+  sessions: ActivitySessionType[];
+  loading: boolean;
+}) {
+  // Memoize the merged sessions calculation
+  const mergedSessions = useMemo(() => mergeAdjacentSessions(sessions), [sessions]);
+  
+  // Memoize the overlap calculations
+  const activityOverlapPositions = useMemo(
+    () => calculateActivityOverlaps(mergedSessions),
+    [mergedSessions]
+  );
+
+  return (
+    <>
+      <TimelineHourMarkers />
+      {loading ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
+          <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
+        </div>
+      ) : (
+        <div className="relative ml-12">
+          {mergedSessions.map((session) => (
+            <ActivitySession
+              key={session.id}
+              session={session}
+              position={activityOverlapPositions[session.id] || { column: 0, totalColumns: 1 }}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+});
 
 interface DayTimelineProps {
   selectedDate: Temporal.PlainDate;
@@ -68,10 +108,11 @@ export default function DayTimeline({
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
-  // Computed values
-  const mergedSessions = mergeAdjacentSessions(sessions);
-  const activityOverlapPositions = calculateActivityOverlaps(mergedSessions);
-  const overlapPositions = calculateTimeEntryOverlaps(timeEntries, draggedTimes);
+  // Memoized calculations for time entries (these change with dragging)
+  const overlapPositions = useMemo(
+    () => calculateTimeEntryOverlaps(timeEntries, draggedTimes),
+    [timeEntries, draggedTimes]
+  );
 
   // Effects
   useEffect(() => {
@@ -556,22 +597,7 @@ export default function DayTimeline({
                 onScroll={handleActivityScroll}
               >
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
-                  <TimelineHourMarkers />
-                  {loading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-                    </div>
-                  ) : (
-                    <div className="relative ml-12">
-                      {mergedSessions.map((session) => (
-                        <ActivitySession
-                          key={session.id}
-                          session={session}
-                          position={activityOverlapPositions[session.id] || { column: 0, totalColumns: 1 }}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  <ActivitySessionsTimeline sessions={sessions} loading={loading} />
                   <CurrentTimeLine selectedDate={selectedDate} isClient={isClient} />
                 </div>
               </div>
