@@ -1,5 +1,9 @@
 # Admin Dashboard - Agent Instructions
 
+## CRITICAL RULES
+
+⚠️ **DO NOT CREATE DOCUMENTATION FILES** - Just implement the features. No GUIDE.md, SUMMARY.md, STATUS.md files unless explicitly requested by the user.
+
 ## App Overview
 
 The admin dashboard is the internal management interface for the freelance business. It provides full access to all data without client-based filtering.

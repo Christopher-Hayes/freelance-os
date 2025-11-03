@@ -260,8 +260,8 @@ pnpm db:generate
 
 ```bash
 # Change ports in app package.json files
-# admin-dashboard: "dev": "next dev --port 3000"
-# client-portal: "dev": "next dev --port 3001"
+# admin-dashboard: "dev": "next dev"
+# client-portal: "dev": "next dev --port 3010"
 ```
 
 ## 🚧 Roadmap
@@ -274,8 +274,3 @@ pnpm db:generate
 - [ ] Client project reports
 - [ ] Revenue forecasting
 - [ ] API endpoints for mobile apps
-
----
-
-Built with ❤️ for freelancers, by freelancers.
-

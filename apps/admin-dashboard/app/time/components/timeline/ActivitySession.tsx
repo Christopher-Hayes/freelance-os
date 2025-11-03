@@ -16,16 +16,14 @@ interface ActivitySession {
 interface ActivitySessionProps {
   session: ActivitySession;
   position: { column: number; totalColumns: number; columnSpan?: number };
+  colorMap: Map<string, string>;
 }
 
 // Memoized component - only re-renders if session or position changes
-const ActivitySession = memo(function ActivitySession({ session, position }: ActivitySessionProps) {
+const ActivitySession = memo(function ActivitySession({ session, position, colorMap }: ActivitySessionProps) {
   const getAppColor = (appClass: string): string => {
-    let hash = 0;
-    for (let i = 0; i < appClass.length; i++) {
-      hash = appClass.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return APP_COLORS[Math.abs(hash) % APP_COLORS.length]!;
+    // Use the color map if available, otherwise fall back to hash-based color
+    return colorMap.get(appClass) || APP_COLORS[0]!;
   };
 
   const timeToY = (time: Temporal.ZonedDateTime): number => {

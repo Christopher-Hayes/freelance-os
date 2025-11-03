@@ -172,11 +172,25 @@ export default function TimeEntriesPage() {
       fetch("/api/projects").then((res) => res.json()),
     ])
       .then(([clientsData, projectsData]) => {
-        setClients(clientsData);
-        setProjects(projectsData);
+        // Ensure we only set arrays, handle error responses
+        if (Array.isArray(clientsData)) {
+          setClients(clientsData);
+        } else {
+          console.error("Clients API returned non-array:", clientsData);
+          setClients([]);
+        }
+        
+        if (Array.isArray(projectsData)) {
+          setProjects(projectsData);
+        } else {
+          console.error("Projects API returned non-array:", projectsData);
+          setProjects([]);
+        }
       })
       .catch((err) => {
         console.error("Error fetching filter data:", err);
+        setClients([]);
+        setProjects([]);
       });
   }, []);
 

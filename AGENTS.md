@@ -1,5 +1,9 @@
 # Freelance-OS - Agent Instructions
 
+## CRITICAL RULES
+
+⚠️ **DO NOT CREATE DOCUMENTATION FILES** - Just implement the features. No GUIDE.md, SUMMARY.md, STATUS.md files unless explicitly requested by the user.
+
 > **Note**: This file contains high-level project architecture. For app/package-specific details, see:
 > - `apps/admin-dashboard/AGENTS.md` - Admin dashboard patterns
 > - `apps/client-portal/AGENTS.md` - Client portal patterns with security
@@ -166,9 +170,6 @@ DATABASE_URL=postgresql://user:pass@100.x.x.x:5432/freelance_os
 # Database issues
 psql "postgresql://freelance_user:password@localhost:5432/freelance_os"
 cd packages/database && pnpm db:generate
-
-# Port conflicts
-# Edit package.json: "dev": "next dev --port 3002"
 ```
 
 ### Conventions

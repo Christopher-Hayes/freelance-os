@@ -17,6 +17,7 @@ import {
   TIMELINE_DRAG_OFFSET,
   yToTime,
   mergeAdjacentSessions,
+  buildAppColorMap,
 } from "./timeline/utils";
 import {
   calculateActivityOverlaps,
@@ -35,6 +36,9 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
 }) {
   // Memoize the merged sessions calculation
   const mergedSessions = useMemo(() => mergeAdjacentSessions(sessions), [sessions]);
+  
+  // Build color map based on app usage frequency
+  const appColorMap = useMemo(() => buildAppColorMap(mergedSessions), [mergedSessions]);
   
   // Memoize the overlap calculations
   const activityOverlapPositions = useMemo(
@@ -58,6 +62,7 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
                 key={session.id}
                 session={session}
                 position={activityOverlapPositions[session.id]!}
+                colorMap={appColorMap}
               />
             ))}
         </div>
@@ -80,6 +85,8 @@ export default function DayTimeline({
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
+  const [timeAgo, setTimeAgo] = useState<string>("");
   const [dragging, setDragging] = useState<{
     entryId: number;
     edge: "top" | "bottom";
@@ -137,6 +144,27 @@ export default function DayTimeline({
     return () => clearInterval(interval);
   }, []);
 
+  // Update "time ago" display every 30 seconds
+  useEffect(() => {
+    const updateTimeAgo = () => {
+      const secondsAgo = Math.floor((Date.now() - lastRefreshTime) / 1000);
+      if (secondsAgo < 60) {
+        setTimeAgo("just now");
+      } else if (secondsAgo < 3600) {
+        const minutes = Math.floor(secondsAgo / 60);
+        setTimeAgo(`${minutes}m ago`);
+      } else {
+        const hours = Math.floor(secondsAgo / 3600);
+        setTimeAgo(`${hours}h ago`);
+      }
+    };
+
+    updateTimeAgo();
+    const interval = setInterval(updateTimeAgo, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [lastRefreshTime]);
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -169,6 +197,24 @@ export default function DayTimeline({
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [creatingEntry]);
+
+  // Auto-refresh when returning to tab (if 5+ minutes have passed)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const timeSinceLastRefresh = Date.now() - lastRefreshTime;
+        const fiveMinutesInMs = 5 * 60 * 1000;
+        
+        if (timeSinceLastRefresh >= fiveMinutesInMs) {
+          console.log('Auto-refreshing activity data after being away for', Math.round(timeSinceLastRefresh / 1000 / 60), 'minutes');
+          fetchDayData();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [lastRefreshTime, selectedDate]);
 
   // Drag and drop effect
   useEffect(() => {
@@ -298,11 +344,17 @@ export default function DayTimeline({
 
       setSessions(sessionsData.sessions || []);
       setTimeEntries(entriesData.timeEntries || []);
+      setLastRefreshTime(Date.now());
     } catch (error) {
       console.error("Error fetching day data:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Manual refresh handler
+  const handleManualRefresh = async () => {
+    await fetchDayData();
   };
 
   // Navigation handlers
@@ -612,9 +664,37 @@ export default function DayTimeline({
         <div className="grid grid-cols-5 gap-4">
           {/* Activity Sessions Column */}
           <div className="col-span-3 select-none">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              App Activity
-            </h3>
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                App Activity
+              </h3>
+              <button
+                onClick={handleManualRefresh}
+                disabled={loading}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Refresh activity data"
+              >
+                <svg
+                  className={`w-4 h-4 text-gray-600 dark:text-gray-400 ${loading ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+              {timeAgo && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Updated {timeAgo}
+                </span>
+              )}
+            </div>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
                 ref={activityScrollRef}

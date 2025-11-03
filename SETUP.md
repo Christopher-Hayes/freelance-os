@@ -317,19 +317,6 @@ cd ../..
 pnpm install
 ```
 
-### Issue: Port already in use
-
-**Error**: `Port 3000 is already in use`
-
-**Solution**:
-```bash
-# Find what's using the port
-lsof -i :3000
-
-# Kill the process or change the port in package.json:
-# "dev": "next dev --port 3002"
-```
-
 ### Issue: Database tables not created
 
 **Error**: Tables don't exist after `pnpm db:push`

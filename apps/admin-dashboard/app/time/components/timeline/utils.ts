@@ -9,7 +9,7 @@ export const MERGE_GAP_MINUTES = 10;
 
 export const APP_COLORS = [
   '#3B82F6', // blue
-  '#10B981', // green
+  '#10B981', // emerald
   '#F59E0B', // amber
   '#EF4444', // red
   '#8B5CF6', // purple
@@ -18,6 +18,12 @@ export const APP_COLORS = [
   '#F97316', // orange
   '#6366F1', // indigo
   '#06B6D4', // cyan
+  '#84CC16', // lime
+  '#A855F7', // violet
+  '#F43F5E', // rose
+  '#22C55E', // green
+  '#FBBF24', // yellow
+  '#0EA5E9', // sky
 ];
 
 export interface ActivitySession {
@@ -81,7 +87,36 @@ export function yToTime(y: number, baseDate: Temporal.PlainDate): Temporal.Zoned
 }
 
 /**
- * Get consistent color for an app based on its name
+ * Build a color mapping for apps based on their total usage duration.
+ * Most used apps get assigned colors first (linearly through the color list).
+ * This prevents adjacent high-usage apps from having similar colors.
+ */
+export function buildAppColorMap(sessions: ActivitySession[]): Map<string, string> {
+  // Calculate total duration for each app
+  const appDurations = new Map<string, number>();
+  
+  for (const session of sessions) {
+    const current = appDurations.get(session.appClass) || 0;
+    appDurations.set(session.appClass, current + session.durationSeconds);
+  }
+  
+  // Sort apps by total duration (descending - most used first)
+  const sortedApps = Array.from(appDurations.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([appClass]) => appClass);
+  
+  // Assign colors linearly through the list
+  const colorMap = new Map<string, string>();
+  sortedApps.forEach((appClass, index) => {
+    colorMap.set(appClass, APP_COLORS[index % APP_COLORS.length]!);
+  });
+  
+  return colorMap;
+}
+
+/**
+ * Get consistent color for an app based on its name (legacy hash-based method)
+ * @deprecated Use buildAppColorMap and pass the map to components instead
  */
 export function getAppColor(appClass: string): string {
   let hash = 0;
@@ -236,6 +271,12 @@ export function formatAppTitle(session: ActivitySession): string {
   // If it's in "firefox_firefox" format, take first part
   if (appName.includes('_')) {
     appName = appName.split('_')[0]!;
+  }
+
+  // If it's in org.example.example format, take last part
+  if (appName.includes('.')) {
+    const parts = appName.split('.');
+    appName = parts[parts.length - 1]!;
   }
 
   // If there are any hyphens, replace them with spaces and capitalize words
