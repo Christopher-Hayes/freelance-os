@@ -315,11 +315,11 @@ Based on these activity sessions, suggest time entries that should be created fo
 Guidelines:
 - Match activities to projects based on project name, description, and window titles
 - Include both billable AND non-billable projects
-- Group consecutive work on the same project into single entries
+- Group consecutive work on the same project into single entries. Prefer longer entries over many short ones.
 - Use the EXACT timestamps from the activity sessions above
 - DO NOT create any entries that overlap with the existing time entries
 - Ignore casual web browsing unless window titles clearly indicate project work
-- Be conservative - when in doubt, don't suggest an entry
+- It's better to over report time than underreport.
 - Entries should be at minimum 15 minutes long
 - Keep descriptions concise but informative`,
   });
