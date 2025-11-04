@@ -869,6 +869,7 @@ export default function DayTimeline({
         onPrevDay={() => changeDay(-1)}
         onNextDay={() => changeDay(1)}
         onToday={goToToday}
+        onDateSelect={onDateChange}
       />
 
       <div
