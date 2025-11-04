@@ -68,13 +68,17 @@ export function formatAppTitle(appClass: string): string {
 
   // If it's in "firefox_firefox" format, take first part
   if (appName.includes('_')) {
-    appName = appName.split('_')[0]!;
+    if (appName.split('_').length === 2 && appName.split('_')[0] === appName.split('_')[1]) {
+      appName = appName.split('_')[0]!;
+    }
   }
 
   // If it's in org.example.example format, take last part
   if (appName.includes('.')) {
     const parts = appName.split('.');
-    appName = parts[parts.length - 1]!;
+    if (parts.length >= 2 && parts[parts.length - 1] === parts[parts.length - 2]) {
+      appName = parts[parts.length - 1]!;
+    }
   }
 
   // If there are any hyphens, replace them with spaces and capitalize words

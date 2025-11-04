@@ -24,3 +24,7 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+
+button {
+  cursor: pointer;
+}
