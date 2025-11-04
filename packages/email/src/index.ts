@@ -4,6 +4,7 @@
  */
 
 export { sendEmail } from './jmap-client';
+export type { JMAPConfig } from './jmap-client';
 export {
   generateInvoiceSentEmail,
   generatePaymentReminderEmail,

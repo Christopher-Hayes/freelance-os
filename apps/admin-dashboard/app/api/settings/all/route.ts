@@ -26,6 +26,9 @@ export async function GET() {
       openaiKey: setting.openaiKey || "",
       googleApiKey: setting.googleApiKey || "",
       aiProvider: setting.aiProvider || "openai",
+      jmapToken: setting.jmapToken || "",
+      jmapUsername: setting.jmapUsername || "",
+      jmapHostname: setting.jmapHostname || "",
     });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -40,7 +43,7 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { rescuetimeKey, openaiKey, googleApiKey, aiProvider } = body;
+    const { rescuetimeKey, openaiKey, googleApiKey, aiProvider, jmapToken, jmapUsername, jmapHostname } = body;
 
     // Validate AI provider if provided
     if (aiProvider !== undefined && !["openai", "gemini"].includes(aiProvider)) {
@@ -56,6 +59,9 @@ export async function PUT(request: Request) {
     if (openaiKey !== undefined) updateData.openaiKey = openaiKey || null;
     if (googleApiKey !== undefined) updateData.googleApiKey = googleApiKey || null;
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
+    if (jmapToken !== undefined) updateData.jmapToken = jmapToken || null;
+    if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
+    if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
 
     // Upsert the settings
     const setting = await prisma.setting.upsert({
@@ -68,6 +74,9 @@ export async function PUT(request: Request) {
         openaiKey: openaiKey || null,
         googleApiKey: googleApiKey || null,
         aiProvider: (aiProvider as AiProvider) || "openai",
+        jmapToken: jmapToken || null,
+        jmapUsername: jmapUsername || null,
+        jmapHostname: jmapHostname || null,
       },
     });
 
@@ -76,6 +85,9 @@ export async function PUT(request: Request) {
       openaiKey: setting.openaiKey || "",
       googleApiKey: setting.googleApiKey || "",
       aiProvider: setting.aiProvider || "openai",
+      jmapToken: setting.jmapToken || "",
+      jmapUsername: setting.jmapUsername || "",
+      jmapHostname: setting.jmapHostname || "",
     });
   } catch (error) {
     console.error("Error updating settings:", error);

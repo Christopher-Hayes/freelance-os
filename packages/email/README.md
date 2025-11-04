@@ -13,9 +13,14 @@ Email notification service using JMAP (compatible with Fastmail and other JMAP p
 
 ## Setup
 
-### Environment Variables
+### Configuration
 
-Add to your `.env` file:
+JMAP email settings can be configured in two ways:
+
+1. **Settings Page (Recommended)**: Configure email settings through the admin dashboard Settings page
+2. **Environment Variables (Legacy)**: Add to your `.env` file for backward compatibility
+
+#### Environment Variables (Optional)
 
 ```bash
 JMAP_TOKEN=your_jmap_api_token
@@ -28,14 +33,20 @@ JMAP_HOSTNAME=api.fastmail.com  # Optional, defaults to Fastmail
 1. Log in to Fastmail
 2. Go to Settings → Password & Security
 3. Create an "App Password" with Mail permissions
-4. Use that token as `JMAP_TOKEN`
+4. Use that token as `JMAP_TOKEN` or enter it in the Settings page
 
 ## Usage
 
 ### Send Invoice Notification
 
 ```typescript
-import { sendEmail, generateInvoiceSentEmail } from '@freelance-os/email';
+import { sendEmail, generateInvoiceSentEmail, type JMAPConfig } from '@freelance-os/email';
+
+const jmapConfig: JMAPConfig = {
+  token: 'your_token',
+  username: 'sender@example.com',
+  hostname: 'api.fastmail.com', // Optional
+};
 
 const emailContent = generateInvoiceSentEmail({
   invoice: invoiceWithClient,
@@ -43,7 +54,7 @@ const emailContent = generateInvoiceSentEmail({
   portalUrl: 'https://portal.example.com',
 });
 
-await sendEmail({
+await sendEmail(jmapConfig, {
   to: invoice.client.email,
   ...emailContent,
 });
@@ -52,7 +63,12 @@ await sendEmail({
 ### Send Welcome Email
 
 ```typescript
-import { sendEmail, generateWelcomeEmail } from '@freelance-os/email';
+import { sendEmail, generateWelcomeEmail, type JMAPConfig } from '@freelance-os/email';
+
+const jmapConfig: JMAPConfig = {
+  token: 'your_token',
+  username: 'sender@example.com',
+};
 
 const emailContent = generateWelcomeEmail({
   client: { name: 'John Doe', email: 'john@example.com' },
@@ -60,7 +76,7 @@ const emailContent = generateWelcomeEmail({
   portalUrl: 'https://portal.example.com',
 });
 
-await sendEmail({
+await sendEmail(jmapConfig, {
   to: client.email,
   ...emailContent,
 });

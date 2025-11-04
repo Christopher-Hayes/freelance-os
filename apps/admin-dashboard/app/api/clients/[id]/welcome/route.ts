@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { sendEmail, generateWelcomeEmail } from '@freelance-os/email';
+import { getJMAPConfig } from '@/lib/email';
 
 // POST /api/clients/[id]/welcome - Send welcome email to client
 export async function POST(
@@ -37,9 +38,12 @@ export async function POST(
     }
 
     // Check if JMAP is configured
-    if (!process.env.JMAP_TOKEN || !process.env.JMAP_USERNAME) {
+    let jmapConfig;
+    try {
+      jmapConfig = await getJMAPConfig();
+    } catch (error) {
       return NextResponse.json(
-        { error: 'Email service not configured. Please set JMAP_TOKEN and JMAP_USERNAME environment variables.' },
+        { error: 'Email service not configured. Please configure email settings in Settings page.' },
         { status: 503 }
       );
     }
@@ -55,7 +59,7 @@ export async function POST(
     });
 
     // Send email
-    await sendEmail({
+    await sendEmail(jmapConfig, {
       to: client.email,
       ...emailContent,
     });

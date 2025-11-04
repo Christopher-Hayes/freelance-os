@@ -4,14 +4,17 @@
  * Compatible with Edge runtime (no Node.js dependencies)
  */
 
-const hostname = process.env.JMAP_HOSTNAME || "api.fastmail.com";
-const authUrl = `https://${hostname}/.well-known/jmap`;
-
 interface JMAPSession {
   apiUrl: string;
   primaryAccounts: {
     "urn:ietf:params:jmap:mail": string;
   };
+}
+
+export interface JMAPConfig {
+  token: string;
+  username: string;
+  hostname?: string;
 }
 
 interface EmailOptions {
@@ -22,7 +25,9 @@ interface EmailOptions {
   from?: string;
 }
 
-async function getSession(token: string): Promise<JMAPSession> {
+async function getSession(token: string, hostname: string): Promise<JMAPSession> {
+  const authUrl = `https://${hostname}/.well-known/jmap`;
+  
   const response = await fetch(authUrl, {
     method: "GET",
     headers: {
@@ -105,21 +110,21 @@ async function getIdentityId(
 
 /**
  * Send an email via JMAP
+ * @param config - JMAP configuration (token, username, hostname)
+ * @param options - Email content and recipients
  */
-export async function sendEmail(options: EmailOptions): Promise<void> {
+export async function sendEmail(config: JMAPConfig, options: EmailOptions): Promise<void> {
   const { to, subject, text, html, from } = options;
-  
-  const token = process.env.JMAP_TOKEN;
-  const username = process.env.JMAP_USERNAME;
+  const { token, username, hostname = "api.fastmail.com" } = config;
 
   if (!token || !username) {
-    throw new Error("JMAP_TOKEN and JMAP_USERNAME environment variables must be set");
+    throw new Error("JMAP token and username are required");
   }
 
   try {
     console.log(`[JMAP] Sending email to: ${to}, subject: "${subject}"`);
     
-    const session = await getSession(token);
+    const session = await getSession(token, hostname);
     const accountId = session.primaryAccounts["urn:ietf:params:jmap:mail"];
     const draftId = await getDraftMailboxId(session.apiUrl, accountId, token);
     const identityId = await getIdentityId(session.apiUrl, accountId, token, username);

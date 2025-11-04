@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { sendEmail, generateInvoiceSentEmail } from '@freelance-os/email';
+import { getJMAPConfig } from '@/lib/email';
 
 // GET /api/invoices/[id] - Get a single invoice
 export async function GET(
@@ -131,8 +132,9 @@ export async function PUT(
 
     // Send email notification if status changed to 'sent' OR if explicitly requested
     const statusChangedToSent = status === 'sent' && existingInvoice.status !== 'sent';
-    if ((statusChangedToSent || shouldSendEmail) && process.env.JMAP_TOKEN && process.env.JMAP_USERNAME) {
+    if (statusChangedToSent || shouldSendEmail) {
       try {
+        const jmapConfig = await getJMAPConfig();
         const companyName = process.env.COMPANY_NAME || 'Freelance-OS';
         const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
@@ -146,7 +148,7 @@ export async function PUT(
           portalUrl,
         });
 
-        await sendEmail({
+        await sendEmail(jmapConfig, {
           to: invoice.client.email,
           ...emailContent,
         });

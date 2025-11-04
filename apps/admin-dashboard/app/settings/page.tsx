@@ -9,12 +9,18 @@ export default function SettingsPage() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
+  const [jmapToken, setJmapToken] = useState("");
+  const [jmapUsername, setJmapUsername] = useState("");
+  const [jmapHostname, setJmapHostname] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Debounce timers for each field
   const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const openaiTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const googleTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     fetchSettings();
@@ -29,6 +35,9 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
+        setJmapToken(data.jmapToken || "");
+        setJmapUsername(data.jmapUsername || "");
+        setJmapHostname(data.jmapHostname || "");
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -97,6 +106,42 @@ export default function SettingsPage() {
   const handleAiProviderChange = (value: AiProvider) => {
     setAiProvider(value);
     saveSetting("aiProvider", value);
+  };
+
+  const handleJmapTokenChange = (value: string) => {
+    setJmapToken(value);
+    
+    if (jmapTokenTimerRef.current) {
+      clearTimeout(jmapTokenTimerRef.current);
+    }
+
+    jmapTokenTimerRef.current = setTimeout(() => {
+      saveSetting("jmapToken", value);
+    }, 1000);
+  };
+
+  const handleJmapUsernameChange = (value: string) => {
+    setJmapUsername(value);
+    
+    if (jmapUsernameTimerRef.current) {
+      clearTimeout(jmapUsernameTimerRef.current);
+    }
+
+    jmapUsernameTimerRef.current = setTimeout(() => {
+      saveSetting("jmapUsername", value);
+    }, 1000);
+  };
+
+  const handleJmapHostnameChange = (value: string) => {
+    setJmapHostname(value);
+    
+    if (jmapHostnameTimerRef.current) {
+      clearTimeout(jmapHostnameTimerRef.current);
+    }
+
+    jmapHostnameTimerRef.current = setTimeout(() => {
+      saveSetting("jmapHostname", value);
+    }, 1000);
   };
 
   if (loading) {
@@ -239,6 +284,82 @@ export default function SettingsPage() {
                 >
                   RescueTime API Management
                 </a>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Email Configuration (JMAP)
+          </h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="jmap_token"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                JMAP API Token
+              </label>
+              <input
+                type="password"
+                id="jmap_token"
+                value={jmapToken}
+                onChange={(e) => handleJmapTokenChange(e.target.value)}
+                placeholder="Enter your JMAP API token or app password"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                For Fastmail, create an app-specific password from your{" "}
+                <a
+                  href="https://www.fastmail.com/settings/security/devicekeys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  security settings
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="jmap_username"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                JMAP Username (Email)
+              </label>
+              <input
+                type="email"
+                id="jmap_username"
+                value={jmapUsername}
+                onChange={(e) => handleJmapUsernameChange(e.target.value)}
+                placeholder="sender@example.com"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                The email address to send from
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="jmap_hostname"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                JMAP Hostname
+              </label>
+              <input
+                type="text"
+                id="jmap_hostname"
+                value={jmapHostname}
+                onChange={(e) => handleJmapHostnameChange(e.target.value)}
+                placeholder="api.fastmail.com"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                JMAP server hostname (defaults to api.fastmail.com)
               </p>
             </div>
           </div>
