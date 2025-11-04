@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, clientId, status, color, startDate, endDate } = body;
+    const { name, description, clientId, status, color, billable, startDate, endDate } = body;
 
     // Validation
     if (!name || !clientId) {
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
         clientId: parseInt(clientId),
         status: status || 'active',
         color: color || '#22C55E', // Default green if not provided
+        billable: billable ?? true, // Default true if not provided
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
       },

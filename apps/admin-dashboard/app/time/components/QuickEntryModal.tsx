@@ -6,6 +6,7 @@ interface Project {
   id: number;
   name: string;
   clientId: number;
+  billable: boolean;
   client: {
     name: string;
   };
@@ -38,6 +39,10 @@ export default function QuickEntryModal({
   const [billable, setBillable] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Get the selected project to check if it tracks billable
+  const selectedProject = projects.find((p) => p.id === parseInt(projectId));
+  const showBillableToggle = selectedProject?.billable ?? true;
 
   useEffect(() => {
     if (isOpen) {
@@ -148,19 +153,21 @@ export default function QuickEntryModal({
               />
             </div>
 
-            <div className="mb-6">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={billable}
-                  onChange={(e) => setBillable(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  This time is billable
-                </span>
-              </label>
-            </div>
+            {showBillableToggle && (
+              <div className="mb-6">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={billable}
+                    onChange={(e) => setBillable(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
+                  />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    This time is billable
+                  </span>
+                </label>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button

@@ -1,11 +1,13 @@
 "use client";
 
 import { Temporal } from "@/lib/temporal-polyfill";
+import { useState } from "react";
 
 interface Project {
   id: number;
   name: string;
   color: string;
+  billable: boolean;
   client: {
     name: string;
   };
@@ -36,6 +38,8 @@ export default function TimeEntryEditForm({
   onCancel,
   onDelete,
 }: TimeEntryEditFormProps) {
+  const [selectedProjectId, setSelectedProjectId] = useState<number>(projectId);
+
   const formatTime = (time: Temporal.ZonedDateTime): string => {
     return time.toLocaleString('en-US', {
       hour: 'numeric',
@@ -47,6 +51,10 @@ export default function TimeEntryEditForm({
     return Math.round(Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n));
   };
 
+  // Get the selected project to check if it tracks billable
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const showBillableToggle = selectedProject?.billable ?? true;
+
   return (
     <div className="absolute z-20 top-0 left-0 right-0 bg-white dark:bg-gray-800 border-2 border-blue-500 rounded shadow-2xl p-3 max-w-full w-[340px]" style={{ minHeight: '200px' }}>
       <form onSubmit={onSubmit} className="space-y-2">
@@ -56,21 +64,24 @@ export default function TimeEntryEditForm({
               Project
             </label>
 
-            <div className="flex gap-2 items-center">
-              <label htmlFor={`billable-${entryId}`} className="text-xs text-gray-700 dark:text-gray-300">
-                Billable
-              </label>
-              <input
-                type="checkbox"
-                name="billable"
-                id={`billable-${entryId}`}
-                defaultChecked={billable}
-              />
-            </div>
+            {showBillableToggle && (
+              <div className="flex gap-2 items-center">
+                <label htmlFor={`billable-${entryId}`} className="text-xs text-gray-700 dark:text-gray-300">
+                  Billable
+                </label>
+                <input
+                  type="checkbox"
+                  name="billable"
+                  id={`billable-${entryId}`}
+                  defaultChecked={billable}
+                />
+              </div>
+            )}
           </header>
           <select
             name="projectId"
-            defaultValue={projectId}
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(parseInt(e.target.value))}
             className="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
             required
           >

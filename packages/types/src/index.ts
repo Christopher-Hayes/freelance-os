@@ -30,6 +30,7 @@ export interface Project {
   clientId: number;
   status: ProjectStatus;
   color: string; // Hex color code (e.g., "#22C55E")
+  billable: boolean; // General billable setting for the project
   startDate?: Date;
   endDate?: Date;
   createdAt: Date;
@@ -42,6 +43,7 @@ export interface CreateProjectInput {
   clientId: number;
   status?: ProjectStatus;
   color?: string;
+  billable?: boolean;
   startDate?: Date;
   endDate?: Date;
 }
@@ -51,6 +53,7 @@ export interface UpdateProjectInput {
   description?: string;
   status?: ProjectStatus;
   color?: string;
+  billable?: boolean;
   startDate?: Date;
   endDate?: Date;
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { Temporal } from "@/lib/temporal-polyfill";
+import { useState } from "react";
 
 interface Project {
   id: number;
   name: string;
   color: string;
+  billable: boolean;
   client: {
     name: string;
   };
@@ -28,6 +30,8 @@ export default function TimeEntryCreationDialog({
   onSubmit,
   onCancel,
 }: TimeEntryCreationDialogProps) {
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+
   const formatTime = (time: Temporal.ZonedDateTime): string => {
     return time.toLocaleString('en-US', {
       hour: 'numeric',
@@ -38,6 +42,10 @@ export default function TimeEntryCreationDialog({
   const durationInMinutes = (start: Temporal.ZonedDateTime, end: Temporal.ZonedDateTime): number => {
     return Math.round(Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n));
   };
+
+  // Get the selected project to check if it tracks billable
+  const selectedProject = projects.find((p) => p.id === parseInt(selectedProjectId));
+  const showBillableToggle = selectedProject?.billable ?? true;
 
   return (
     <>
@@ -63,6 +71,8 @@ export default function TimeEntryCreationDialog({
               </label>
               <select
                 name="projectId"
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
                 required
                 autoFocus
@@ -88,17 +98,19 @@ export default function TimeEntryCreationDialog({
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="billable"
-                id="new-billable"
-                defaultChecked={true}
-              />
-              <label htmlFor="new-billable" className="text-sm text-gray-700 dark:text-gray-300">
-                Billable
-              </label>
-            </div>
+            {showBillableToggle && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  name="billable"
+                  id="new-billable"
+                  defaultChecked={true}
+                />
+                <label htmlFor="new-billable" className="text-sm text-gray-700 dark:text-gray-300">
+                  Billable
+                </label>
+              </div>
+            )}
 
             <div className="bg-gray-50 dark:bg-gray-900 rounded p-3 text-sm">
               <div className="flex justify-between mb-1">

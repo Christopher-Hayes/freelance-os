@@ -66,6 +66,7 @@ export default function ProjectDetailPage({
     clientId: '',
     status: 'active',
     color: '#22C55E', // Default green
+    billable: true, // Default billable
     startDate: '',
     endDate: '',
   });
@@ -105,6 +106,7 @@ export default function ProjectDetailPage({
         clientId: data.client.id.toString(),
         status: data.status,
         color: data.color || '#22C55E',
+        billable: data.billable ?? true,
         startDate: data.startDate ? data.startDate.split('T')[0] : '',
         endDate: data.endDate ? data.endDate.split('T')[0] : '',
       });
@@ -301,6 +303,24 @@ export default function ProjectDetailPage({
           </div>
 
           <div>
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                name="billable"
+                checked={formData.billable}
+                onChange={(e) => setFormData((prev) => ({ ...prev, billable: e.target.checked }))}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
+              />
+              <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                Billable Project
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              When enabled, time entries will default to billable and show billable tracking options
+            </p>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium dark:text-gray-300 mb-2">
               Project Color
             </label>
@@ -390,6 +410,7 @@ export default function ProjectDetailPage({
                     clientId: project.client.id.toString(),
                     status: project.status,
                     color: project.color || '#22C55E',
+                    billable: (project as any).billable ?? true,
                     startDate: project.startDate ? (project.startDate.split('T')[0] ?? '') : '',
                     endDate: project.endDate ? (project.endDate.split('T')[0] ?? '') : '',
                   });

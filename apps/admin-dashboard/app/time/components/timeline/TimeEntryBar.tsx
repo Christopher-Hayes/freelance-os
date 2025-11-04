@@ -56,6 +56,7 @@ interface Project {
   id: number;
   name: string;
   color: string;
+  billable: boolean;
   client: {
     name: string;
   };

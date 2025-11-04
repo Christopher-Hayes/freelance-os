@@ -22,6 +22,7 @@ export default function NewProjectPage() {
     clientId: '',
     status: 'active',
     color: '#22C55E', // Default green
+    billable: true, // Default billable
     startDate: '',
     endDate: '',
   });
@@ -174,6 +175,24 @@ export default function NewProjectPage() {
             <option value="on-hold">On Hold</option>
             <option value="completed">Completed</option>
           </select>
+        </div>
+
+        <div>
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              name="billable"
+              checked={formData.billable}
+              onChange={(e) => setFormData((prev) => ({ ...prev, billable: e.target.checked }))}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
+            />
+            <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              Billable Project
+            </span>
+          </label>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            When enabled, time entries will default to billable and show billable tracking options
+          </p>
         </div>
 
         <div>
