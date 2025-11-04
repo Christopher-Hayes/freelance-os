@@ -154,6 +154,10 @@ export default function TimeEntriesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Pagination state
+  const [displayCount, setDisplayCount] = useState(10);
+  const [hasMore, setHasMore] = useState(false);
+
   // Day view state - use Temporal.PlainDate
   const [selectedDate, setSelectedDate] = useState<Temporal.PlainDate>(() => {
     return Temporal.Now.plainDateISO();
@@ -202,6 +206,7 @@ export default function TimeEntriesPage() {
   const fetchTimeEntries = async () => {
     setLoading(true);
     setError("");
+    setDisplayCount(10); // Reset display count when filters change
 
     try {
       const params = new URLSearchParams();
@@ -216,6 +221,7 @@ export default function TimeEntriesPage() {
       const data = await response.json();
       setTimeEntries(data.timeEntries);
       setSummary(data.summary);
+      setHasMore(data.timeEntries.length > 10);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -240,6 +246,14 @@ export default function TimeEntriesPage() {
     }
   }, []);
 
+  const loadMore = useCallback(() => {
+    setDisplayCount(prev => {
+      const newCount = prev + 10;
+      setHasMore(newCount < timeEntries.length);
+      return newCount;
+    });
+  }, [timeEntries.length]);
+
   // Navigate to previous day
   const previousDay = () => {
     setSelectedDate(selectedDate.subtract({ days: 1 }));
@@ -253,6 +267,9 @@ export default function TimeEntriesPage() {
   const filteredProjects = selectedClientId
     ? projects.filter((p) => p.clientId === parseInt(selectedClientId))
     : projects;
+
+  // Get visible entries
+  const visibleEntries = timeEntries.slice(0, displayCount);
 
   return (
     <div className="min-h-screen p-8">
@@ -427,7 +444,7 @@ export default function TimeEntriesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {timeEntries.map((entry) => (
+                  {visibleEntries.map((entry) => (
                     <TimeEntryRow
                       key={entry.id}
                       entry={entry}
@@ -436,6 +453,18 @@ export default function TimeEntriesPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          
+          {/* Load More Button */}
+          {!loading && !error && timeEntries.length > 0 && hasMore && (
+            <div className="p-6 text-center border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={loadMore}
+                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                Load More ({timeEntries.length - displayCount} remaining)
+              </button>
             </div>
           )}
         </div>
