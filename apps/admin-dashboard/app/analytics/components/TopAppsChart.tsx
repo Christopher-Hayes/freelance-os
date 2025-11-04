@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, memo } from 'react';
 import * as d3 from 'd3';
+import { formatAppTitle } from '@/lib/util';
 
 interface AppData {
   app: string;
@@ -83,8 +84,9 @@ const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
       .attr('class', 'fill-white text-xs font-medium')
       .each(function(d) {
         const text = d3.select(this);
-        const appName = d.data.app.length > 12 ? d.data.app.substring(0, 12) + '...' : d.data.app;
-        const hours = `${d.data.hours.toFixed(1)}h`;
+        const friendlyName = formatAppTitle(d.data.app);
+        const appName = friendlyName.length > 12 ? friendlyName.substring(0, 12) + '...' : friendlyName;
+        const hours = `${d.data.hours.toFixed(1)} hrs`;
         
         // Add app name
         text.append('tspan')
@@ -126,7 +128,8 @@ const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
       .attr('class', 'text-gray-700 dark:text-gray-300')
       .text((d) => {
         const maxLen = 15;
-        return d.app.length > maxLen ? d.app.substring(0, maxLen) + '...' : d.app;
+        const friendlyName = formatAppTitle(d.app);
+        return friendlyName.length > maxLen ? friendlyName.substring(0, maxLen) + '...' : friendlyName;
       });
   }, [data]);
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
+import { formatAppTitle } from '@/lib/util';
 
 interface SummaryData {
   totalHours: number;
@@ -56,8 +57,8 @@ export default function AnalyticsPage() {
         fetch(`/api/analytics/activity?${params}`),
       ]);
 
-      const summaryData = await summaryRes.json();
-      const activityData = await activityRes.json();
+      const summaryData = await summaryRes.json() as SummaryData;
+      const activityData = await activityRes.json() as ActivityData;
 
       setSummary(summaryData);
       setActivity(activityData);
@@ -149,7 +150,7 @@ export default function AnalyticsPage() {
               <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Most Used App</p>
                 <p className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                  {summary?.mostUsedApp?.name || 'N/A'}
+                  {formatAppTitle(summary?.mostUsedApp?.name ?? '') || 'N/A'}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {summary?.mostUsedApp?.hours.toFixed(1) || '0'}h

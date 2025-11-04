@@ -172,15 +172,33 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
   const sessionsWithMinDuration = clampedSessions.map(session => {
     const start = Temporal.Instant.from(session.startTime);
     const end = Temporal.Instant.from(session.endTime);
+    let newEnd = end;
     const durationNs = end.epochNanoseconds - start.epochNanoseconds;
     const durationMinutes = Number(durationNs) / (1_000_000_000 * 60);
     
     if (durationMinutes < MIN_DISPLAY_DURATION_MINUTES) {
-      const newEnd = start.add({ minutes: MIN_DISPLAY_DURATION_MINUTES });
+      newEnd = start.add({ minutes: MIN_DISPLAY_DURATION_MINUTES });
+    }
+
+    // If newEnd goes past current time or end of day, clamp it
+    const now = Temporal.Now.instant();
+    const tz = Temporal.Now.timeZoneId();
+    const startZoned = start.toZonedDateTimeISO(tz);
+    const endOfDay = startZoned.withPlainTime(Temporal.PlainTime.from("23:59:59.999")).toInstant();
+    
+    if (Temporal.Instant.compare(newEnd, now) > 0) {
+      newEnd = now;
+    }
+    
+    if (Temporal.Instant.compare(newEnd, endOfDay) > 0) {
+      newEnd = endOfDay;
+    }
+
+    if (Temporal.Instant.compare(newEnd, end) > 0) {
       return {
         ...session,
         endTime: newEnd.toString(),
-        durationSeconds: MIN_DISPLAY_DURATION_MINUTES * 60,
+        durationSeconds: Math.floor(Number(newEnd.epochNanoseconds - start.epochNanoseconds) / 1_000_000_000),
       };
     }
     
@@ -246,46 +264,4 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
   }
   
   return merged;
-}
-
-const REMOVE_TITLE_PREFIXES = ['org.gnome.', 'com.microsoft.'];
-const APP_NAME_OVERRIDES: Record<string, string> = {
-  'code': 'VS Code',
-  'code-oss': 'VS Code',
-  'google-chrome': 'Google Chrome',
-  'nautilus': 'Files',
-  'systemmonitor': 'System Monitor',
-};
-
-export function formatAppTitle(session: ActivitySession): string {
-  let appName = session.appClass || "Unknown App";
-
-  // Remove common prefixes
-  for (const prefix of REMOVE_TITLE_PREFIXES) {
-    if (appName.startsWith(prefix)) {
-      appName = appName.slice(prefix.length);
-      break;
-    }
-  }
-
-  // If it's in "firefox_firefox" format, take first part
-  if (appName.includes('_')) {
-    appName = appName.split('_')[0]!;
-  }
-
-  // If it's in org.example.example format, take last part
-  if (appName.includes('.')) {
-    const parts = appName.split('.');
-    appName = parts[parts.length - 1]!;
-  }
-
-  // If there are any hyphens, replace them with spaces and capitalize words
-  if (appName.includes('-')) {
-    appName = appName.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  }
-
-  // Apply name overrides
-  appName = APP_NAME_OVERRIDES[appName.toLowerCase()] || appName;
-
-  return `${appName?.[0]?.toUpperCase() ?? ''}${appName.slice(1)}`;
 }

@@ -2,7 +2,8 @@
 
 import { memo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { APP_COLORS, formatAppTitle, HOUR_HEIGHT } from "./utils";
+import { APP_COLORS, HOUR_HEIGHT } from "./utils";
+import { formatAppTitle } from "@/lib/util";
 
 interface ActivitySession {
   id: number;
@@ -75,7 +76,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
         <div className="flex flex-wrap text-xs truncate" style={{ color: appColor }}>
           {(height > 35 && session.windowTitle) ? (
             <>
-              <div className="font-semibold truncate mb-0.5">{formatAppTitle(session)}</div>
+              <div className="font-semibold truncate mb-0.5">{formatAppTitle(session.appClass)}</div>
               <div className="w-full text-[10px] opacity-80">
                 {session.windowTitle.split(' / ').map((title, index) => (
                   <div key={index} className="truncate">
@@ -86,7 +87,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
             </>
           ) : (
             <div className="truncate">
-              <span className="font-semibold">{formatAppTitle(session)}</span>
+              <span className="font-semibold">{formatAppTitle(session.appClass)}</span>
               <span className="text-[10px] opacity-70">
                 {session.windowTitle ? ` - ${session.windowTitle.split(' / ').map(title => title.slice(0, title.indexOf(' - ') > 0 ? title.indexOf(' - ') : title.length)).join(' - ')}` : ''}
               </span>
