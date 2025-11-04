@@ -381,24 +381,24 @@ Complete checklist for building out the freelance-os features.
 ## 📄 Phase 12: PDF Generation
 
 ### Install PDF Library
-- [ ] Choose library (react-pdf, pdfkit, or @react-pdf/renderer)
-- [ ] Install in both apps
+- [X] Choose library (react-pdf, pdfkit, or @react-pdf/renderer)
+- [X] Install in both apps
 
 ### Admin Dashboard
-- [ ] Create invoice PDF template
-- [ ] Add download button to invoice view
-- [ ] Create `api/invoices/[id]/pdf/route.ts`
+- [X] Create invoice PDF template
+- [X] Add download button to invoice view
+- [X] Create `api/invoices/[id]/pdf/route.tsx`
 
 ### Client Portal
-- [ ] Add download button to invoice view
-- [ ] Create `api/invoices/[id]/pdf/route.ts`
+- [X] Add download button to invoice view
+- [X] Create `api/invoices/[id]/pdf/route.tsx`
 
 ### Features
-- [ ] Professional invoice layout
-- [ ] Include all invoice details
-- [ ] Company branding
-- [ ] Line items
-- [ ] Payment terms
+- [X] Professional invoice layout
+- [X] Include all invoice details
+- [X] Company branding
+- [X] Line items
+- [X] Payment terms
 
 ## 📧 Phase 13: Email Notifications
 
@@ -506,7 +506,7 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 11 (Complete) → Ready for Phase 12
+**Current Phase**: Phase 12 (Complete) → Ready for Phase 13
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
@@ -520,6 +520,7 @@ Complete checklist for building out the freelance-os features.
 - ✅ Phase 9: Client Portal - Projects View
 - ✅ Phase 10: Client Portal - Time Tracking View
 - ✅ Phase 11: Client Portal - Invoice View
+- ✅ Phase 12: PDF Generation
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours
