@@ -5,17 +5,20 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3010",
+    "dev": "next dev --port 3011",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.1",
     "@freelance-os/database": "workspace:*",
     "@freelance-os/types": "workspace:*",
     "@repo/ui": "workspace:*",
     "next": "^16.0.0",
+    "next-auth": "5.0.0-beta.30",
+    "nodemailer": "^7.0.10",
     "react": "^19.2.0",
     "react-dom": "^19.1.0"
   },
