@@ -403,19 +403,34 @@ Complete checklist for building out the freelance-os features.
 ## 📧 Phase 13: Email Notifications
 
 ### Email Provider Setup
-- [ ] Choose provider (SMTP, SendGrid, Resend, etc.)
-- [ ] Configure credentials in .env
-- [ ] Install email library
+- [X] Choose provider (JMAP with Fastmail or compatible provider)
+- [X] Configure credentials in .env
+- [X] Create shared email package (@freelance-os/email)
 
 ### Email Templates
-- [ ] Invoice sent notification
-- [ ] Invoice payment reminder
-- [ ] Welcome email for new clients
+- [X] Invoice sent notification
+- [X] Invoice payment reminder
+- [X] Overdue invoice notification
+- [X] Welcome email for new clients
 
 ### Features
-- [ ] Send email when invoice is marked "sent"
-- [ ] Send reminder X days before due date
-- [ ] Send reminder for overdue invoices
+- [X] Send email when invoice is marked "sent" (automatic)
+- [X] Manual "Send Invoice" button on invoice detail page
+- [X] Send welcome email to new clients (manual button)
+- [X] API endpoint for payment reminders (upcoming & overdue)
+- [X] Auto-update invoice status to 'overdue' when sending overdue notices
+
+### API Routes
+- [X] `/api/invoices/[id]/send` - Send invoice email
+- [X] `/api/clients/[id]/welcome` - Send welcome email
+- [X] `/api/notifications/reminders` - Send payment reminders (batch)
+
+### Testing
+- [ ] Email magic link flow (client portal - already tested in Phase 7)
+- [ ] Test sending invoice email
+- [ ] Test welcome email
+- [ ] Test payment reminder emails
+- [ ] Test overdue notices
 
 ## 🎨 Phase 14: UI Polish
 
@@ -506,7 +521,7 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 12 (Complete) → Ready for Phase 13
+**Current Phase**: Phase 13 (Complete) → Ready for Phase 14
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
@@ -521,6 +536,7 @@ Complete checklist for building out the freelance-os features.
 - ✅ Phase 10: Client Portal - Time Tracking View
 - ✅ Phase 11: Client Portal - Invoice View
 - ✅ Phase 12: PDF Generation
+- ✅ Phase 13: Email Notifications
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours

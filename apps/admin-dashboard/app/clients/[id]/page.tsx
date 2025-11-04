@@ -34,6 +34,8 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -125,6 +127,39 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     }
   };
 
+  const handleSendWelcomeEmail = async () => {
+    if (!client) return;
+    
+    if (!confirm(`Send welcome email to ${client.email}?`)) {
+      return;
+    }
+
+    setSendingEmail(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}/welcome`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.details || data.error || 'Failed to send welcome email');
+      }
+
+      const result = await response.json();
+      setSuccessMessage(result.message || 'Welcome email sent successfully!');
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
@@ -184,6 +219,29 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
             {!editing && (
               <>
                 <button
+                  onClick={handleSendWelcomeEmail}
+                  disabled={sendingEmail}
+                  className="bg-indigo-600 dark:bg-indigo-500 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  title="Send welcome email to client"
+                >
+                  {sendingEmail ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Welcome Email
+                    </>
+                  )}
+                </button>
+                <button
                   onClick={() => setEditing(true)}
                   className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
                 >
@@ -205,6 +263,12 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded mb-4">
+          {successMessage}
         </div>
       )}
 

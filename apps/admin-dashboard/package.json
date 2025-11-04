@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@freelance-os/database": "workspace:*",
+    "@freelance-os/email": "workspace:*",
     "@freelance-os/types": "workspace:*",
     "@js-temporal/polyfill": "^0.5.1",
     "@react-pdf/renderer": "^4.3.1",

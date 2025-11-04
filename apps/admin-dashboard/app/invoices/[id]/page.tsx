@@ -23,7 +23,9 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<InvoiceWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
 
   // Edit form fields
@@ -170,6 +172,45 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleSendEmail = async () => {
+    if (!invoice) return;
+    
+    if (!confirm(`Send invoice ${invoice.invoiceNumber} to ${invoice.client.email}?`)) {
+      return;
+    }
+
+    setSending(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch(`/api/invoices/${id}/send`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.details || data.error || 'Failed to send invoice');
+      }
+
+      const result = await response.json();
+      setSuccessMessage(result.message || 'Invoice sent successfully!');
+      
+      // Update invoice if status changed
+      if (result.invoice) {
+        setInvoice(result.invoice);
+        setStatus(result.invoice.status);
+      }
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send email');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: InvoiceStatus) => {
     const baseClass = 'px-3 py-1 rounded-full text-sm font-medium';
     switch (status) {
@@ -254,6 +295,29 @@ export default function InvoiceDetailPage() {
           <div className="flex gap-2">
             {!editing && (
               <>
+                <button
+                  onClick={handleSendEmail}
+                  disabled={sending || saving}
+                  className="bg-indigo-500 dark:bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-600 dark:hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition flex items-center gap-2"
+                  title="Send invoice email to client"
+                >
+                  {sending ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Send Invoice
+                    </>
+                  )}
+                </button>
                 {invoice.status === 'draft' && (
                   <button
                     onClick={handleMarkAsSent}
@@ -303,6 +367,12 @@ export default function InvoiceDetailPage() {
       {error && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-6">
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded mb-6">
+          {successMessage}
         </div>
       )}
 
