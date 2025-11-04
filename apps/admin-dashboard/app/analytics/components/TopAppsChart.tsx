@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, memo } from 'react';
+import { useEffect, useRef, memo, useState } from 'react';
 import * as d3 from 'd3';
 import { formatAppTitle } from '@/lib/util';
 
@@ -15,12 +15,41 @@ interface Props {
 
 const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const [hiddenApps, setHiddenApps] = useState<Set<string>>(new Set());
+
+  const toggleApp = (app: string) => {
+    setHiddenApps((prev) => {
+      const next = new Set(prev);
+      if (next.has(app)) {
+        next.delete(app);
+      } else {
+        next.add(app);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!svgRef.current || !data.length) return;
 
     // Clear previous chart
     d3.select(svgRef.current).selectAll('*').remove();
+
+    // Filter data based on hidden apps
+    const visibleData = data.filter((d) => !hiddenApps.has(d.app));
+
+    // If all apps are hidden, show a message
+    if (visibleData.length === 0) {
+      const svg = d3.select(svgRef.current);
+      svg
+        .append('text')
+        .attr('x', 200)
+        .attr('y', 200)
+        .attr('text-anchor', 'middle')
+        .attr('class', 'fill-gray-500 dark:fill-gray-400 text-sm')
+        .text('All apps filtered out');
+      return;
+    }
 
     // Set dimensions
     const width = 400;
@@ -56,10 +85,10 @@ const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
       .innerRadius(radius * 0.7)
       .outerRadius(radius * 0.7);
 
-    // Draw slices
+    // Draw slices with visible data
     const slices = svg
       .selectAll('.arc')
-      .data(pie(data))
+      .data(pie(visibleData))
       .enter()
       .append('g')
       .attr('class', 'arc');
@@ -109,14 +138,20 @@ const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
       .enter()
       .append('g')
       .attr('class', 'legend')
-      .attr('transform', (_, i) => `translate(${radius + 20},${-radius + i * 25})`);
+      .attr('transform', (_, i) => `translate(${radius + 20},${-radius + i * 25})`)
+      .style('cursor', 'pointer')
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        toggleApp(d.app);
+      });
 
     legend
       .append('rect')
       .attr('width', 18)
       .attr('height', 18)
       .attr('fill', (_, i) => color(i.toString()))
-      .attr('rx', 4);
+      .attr('rx', 4)
+      .style('opacity', (d) => hiddenApps.has(d.app) ? 0.3 : 1);
 
     legend
       .append('text')
@@ -126,12 +161,13 @@ const TopAppsChart = memo(function TopAppsChart({ data }: Props) {
       .style('fill', 'currentColor')
       .style('font-size', '12px')
       .attr('class', 'text-gray-700 dark:text-gray-300')
+      .style('opacity', (d) => hiddenApps.has(d.app) ? 0.4 : 1)
       .text((d) => {
         const maxLen = 15;
         const friendlyName = formatAppTitle(d.app);
         return friendlyName.length > maxLen ? friendlyName.substring(0, maxLen) + '...' : friendlyName;
       });
-  }, [data]);
+  }, [data, hiddenApps]);
 
   if (!data.length) {
     return (
