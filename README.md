@@ -7,8 +7,8 @@ A unified monorepo for managing your freelance business operations - from activi
 This monorepo contains:
 
 ### Apps
-- **`apps/admin-dashboard`** - Admin dashboard for analytics, charts, and business management (port 3000)
-- **`apps/client-portal`** - Client-facing portal for viewing time tracking, invoices, and project status (port 3001)
+- **`apps/admin-dashboard`** - Admin dashboard for analytics, charts, and business management (port 3010)
+- **`apps/client-portal`** - Client-facing portal for viewing time tracking, invoices, and project status (port 3011)
 
 ### Packages
 - **`packages/database`** - Shared PostgreSQL database schema and Prisma client
