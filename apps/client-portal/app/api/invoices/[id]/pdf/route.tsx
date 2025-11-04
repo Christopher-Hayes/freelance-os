@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { renderToStream } from '@react-pdf/renderer';
-import { InvoicePDF } from '@repo/ui/InvoicePDF';
-import type { InvoicePDFData } from '@repo/ui/InvoicePDF';
+import { InvoicePDF } from '@/components/InvoicePDF';
+import type { InvoicePDFData } from '@/components/InvoicePDF';
 import { auth } from '@/lib/auth';
 
 export async function GET(
@@ -58,6 +58,17 @@ export async function GET(
       );
     }
 
+    // Fetch company/freelancer settings
+    const settings = await prisma.setting.findFirst();
+    const companyInfo = {
+      name: settings?.companyName || 'Your Company',
+      freelancerName: settings?.freelancerName,
+      email: settings?.freelancerEmail,
+      address: settings?.address,
+      phone: settings?.phone,
+      website: settings?.website,
+    };
+
     // Transform data to match PDF component expectations
     const invoiceData: InvoicePDFData = {
       invoiceNumber: invoice.invoiceNumber,
@@ -74,6 +85,7 @@ export async function GET(
         company: invoice.client.company,
       },
       project: invoice.project,
+      companyInfo,
     };
 
     // Generate PDF stream

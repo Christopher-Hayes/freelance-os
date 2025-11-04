@@ -29,6 +29,12 @@ export async function GET() {
       jmapToken: setting.jmapToken || "",
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
+      companyName: setting.companyName || "",
+      freelancerName: setting.freelancerName || "",
+      freelancerEmail: setting.freelancerEmail || "",
+      address: setting.address || "",
+      phone: setting.phone || "",
+      website: setting.website || "",
     });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -43,7 +49,21 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { rescuetimeKey, openaiKey, googleApiKey, aiProvider, jmapToken, jmapUsername, jmapHostname } = body;
+    const { 
+      rescuetimeKey, 
+      openaiKey, 
+      googleApiKey, 
+      aiProvider, 
+      jmapToken, 
+      jmapUsername, 
+      jmapHostname,
+      companyName,
+      freelancerName,
+      freelancerEmail,
+      address,
+      phone,
+      website,
+    } = body;
 
     // Validate AI provider if provided
     if (aiProvider !== undefined && !["openai", "gemini"].includes(aiProvider)) {
@@ -62,6 +82,12 @@ export async function PUT(request: Request) {
     if (jmapToken !== undefined) updateData.jmapToken = jmapToken || null;
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
+    if (companyName !== undefined) updateData.companyName = companyName || null;
+    if (freelancerName !== undefined) updateData.freelancerName = freelancerName || null;
+    if (freelancerEmail !== undefined) updateData.freelancerEmail = freelancerEmail || null;
+    if (address !== undefined) updateData.address = address || null;
+    if (phone !== undefined) updateData.phone = phone || null;
+    if (website !== undefined) updateData.website = website || null;
 
     // Upsert the settings
     const setting = await prisma.setting.upsert({
@@ -77,6 +103,12 @@ export async function PUT(request: Request) {
         jmapToken: jmapToken || null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
+        companyName: companyName || null,
+        freelancerName: freelancerName || null,
+        freelancerEmail: freelancerEmail || null,
+        address: address || null,
+        phone: phone || null,
+        website: website || null,
       },
     });
 
@@ -88,6 +120,12 @@ export async function PUT(request: Request) {
       jmapToken: setting.jmapToken || "",
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
+      companyName: setting.companyName || "",
+      freelancerName: setting.freelancerName || "",
+      freelancerEmail: setting.freelancerEmail || "",
+      address: setting.address || "",
+      phone: setting.phone || "",
+      website: setting.website || "",
     });
   } catch (error) {
     console.error("Error updating settings:", error);

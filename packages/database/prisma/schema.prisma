@@ -244,6 +244,12 @@ model Setting {
   jmapToken       String?     @map("jmap_token") @db.Text
   jmapUsername    String?     @map("jmap_username") @db.Text
   jmapHostname    String?     @map("jmap_hostname") @db.Text
+  companyName     String?     @map("company_name") @db.Text
+  freelancerName  String?     @map("freelancer_name") @db.Text
+  freelancerEmail String?     @map("freelancer_email") @db.Text
+  address         String?     @db.Text
+  phone           String?     @db.Text
+  website         String?     @db.Text
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 

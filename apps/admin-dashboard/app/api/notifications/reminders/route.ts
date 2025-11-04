@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { sendEmail, generatePaymentReminderEmail, generateOverdueInvoiceEmail } from '@freelance-os/email';
-import { getJMAPConfig } from '@/lib/email';
+import { getJMAPConfig, getCompanyName } from '@/lib/email';
 
 // POST /api/notifications/reminders - Send payment reminders for invoices
 export async function POST(request: NextRequest) {
@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const results = [];
+    const companyName = await getCompanyName();
+    const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
     if (type === 'upcoming') {
       // Find invoices due in the next X days (unpaid/sent status)
@@ -53,9 +55,6 @@ export async function POST(request: NextRequest) {
         const daysUntilDue = Math.ceil(
           (new Date(invoice.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
         );
-
-        const companyName = process.env.COMPANY_NAME || 'Freelance-OS';
-        const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
         const emailContent = generatePaymentReminderEmail({
           invoice: {
@@ -115,9 +114,6 @@ export async function POST(request: NextRequest) {
         const daysOverdue = Math.ceil(
           (now.getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24)
         );
-
-        const companyName = process.env.COMPANY_NAME || 'Freelance-OS';
-        const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
         const emailContent = generateOverdueInvoiceEmail({
           invoice: {

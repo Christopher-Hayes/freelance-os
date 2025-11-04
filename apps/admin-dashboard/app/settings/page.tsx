@@ -12,6 +12,12 @@ export default function SettingsPage() {
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [freelancerName, setFreelancerName] = useState("");
+  const [freelancerEmail, setFreelancerEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Debounce timers for each field
@@ -21,6 +27,12 @@ export default function SettingsPage() {
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const companyNameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const freelancerNameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const freelancerEmailTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const addressTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const phoneTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const websiteTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     fetchSettings();
@@ -38,6 +50,12 @@ export default function SettingsPage() {
         setJmapToken(data.jmapToken || "");
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
+        setCompanyName(data.companyName || "");
+        setFreelancerName(data.freelancerName || "");
+        setFreelancerEmail(data.freelancerEmail || "");
+        setAddress(data.address || "");
+        setPhone(data.phone || "");
+        setWebsite(data.website || "");
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -144,6 +162,78 @@ export default function SettingsPage() {
     }, 1000);
   };
 
+  const handleCompanyNameChange = (value: string) => {
+    setCompanyName(value);
+    
+    if (companyNameTimerRef.current) {
+      clearTimeout(companyNameTimerRef.current);
+    }
+
+    companyNameTimerRef.current = setTimeout(() => {
+      saveSetting("companyName", value);
+    }, 1000);
+  };
+
+  const handleFreelancerNameChange = (value: string) => {
+    setFreelancerName(value);
+    
+    if (freelancerNameTimerRef.current) {
+      clearTimeout(freelancerNameTimerRef.current);
+    }
+
+    freelancerNameTimerRef.current = setTimeout(() => {
+      saveSetting("freelancerName", value);
+    }, 1000);
+  };
+
+  const handleFreelancerEmailChange = (value: string) => {
+    setFreelancerEmail(value);
+    
+    if (freelancerEmailTimerRef.current) {
+      clearTimeout(freelancerEmailTimerRef.current);
+    }
+
+    freelancerEmailTimerRef.current = setTimeout(() => {
+      saveSetting("freelancerEmail", value);
+    }, 1000);
+  };
+
+  const handleAddressChange = (value: string) => {
+    setAddress(value);
+    
+    if (addressTimerRef.current) {
+      clearTimeout(addressTimerRef.current);
+    }
+
+    addressTimerRef.current = setTimeout(() => {
+      saveSetting("address", value);
+    }, 1000);
+  };
+
+  const handlePhoneChange = (value: string) => {
+    setPhone(value);
+    
+    if (phoneTimerRef.current) {
+      clearTimeout(phoneTimerRef.current);
+    }
+
+    phoneTimerRef.current = setTimeout(() => {
+      saveSetting("phone", value);
+    }, 1000);
+  };
+
+  const handleWebsiteChange = (value: string) => {
+    setWebsite(value);
+    
+    if (websiteTimerRef.current) {
+      clearTimeout(websiteTimerRef.current);
+    }
+
+    websiteTimerRef.current = setTimeout(() => {
+      saveSetting("website", value);
+    }, 1000);
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -165,6 +255,122 @@ export default function SettingsPage() {
 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-8">
         <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Freelancer Information
+          </h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="company_name"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Company/Business Name
+              </label>
+              <input
+                type="text"
+                id="company_name"
+                value={companyName}
+                onChange={(e) => handleCompanyNameChange(e.target.value)}
+                placeholder="Your Company Name"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Used in invoices and email communications
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="freelancer_name"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Your Name
+              </label>
+              <input
+                type="text"
+                id="freelancer_name"
+                value={freelancerName}
+                onChange={(e) => handleFreelancerNameChange(e.target.value)}
+                placeholder="John Doe"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="freelancer_email"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Business Email
+              </label>
+              <input
+                type="email"
+                id="freelancer_email"
+                value={freelancerEmail}
+                onChange={(e) => handleFreelancerEmailChange(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="address"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Business Address
+              </label>
+              <textarea
+                id="address"
+                value={address}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                placeholder="123 Main St&#10;City, State 12345&#10;Country"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Appears on invoices and official documents
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="phone"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                placeholder="+1 (555) 123-4567"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="website"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Website
+              </label>
+              <input
+                type="url"
+                id="website"
+                value={website}
+                onChange={(e) => handleWebsiteChange(e.target.value)}
+                placeholder="https://yourwebsite.com"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             AI Provider Configuration
           </h2>

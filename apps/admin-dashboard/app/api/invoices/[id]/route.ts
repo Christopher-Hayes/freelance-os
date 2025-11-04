@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { sendEmail, generateInvoiceSentEmail } from '@freelance-os/email';
-import { getJMAPConfig } from '@/lib/email';
+import { getJMAPConfig, getCompanyName } from '@/lib/email';
 
 // GET /api/invoices/[id] - Get a single invoice
 export async function GET(
@@ -135,7 +135,7 @@ export async function PUT(
     if (statusChangedToSent || shouldSendEmail) {
       try {
         const jmapConfig = await getJMAPConfig();
-        const companyName = process.env.COMPANY_NAME || 'Freelance-OS';
+        const companyName = await getCompanyName();
         const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
         const emailContent = generateInvoiceSentEmail({

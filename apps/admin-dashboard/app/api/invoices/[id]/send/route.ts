@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { sendEmail, generateInvoiceSentEmail } from '@freelance-os/email';
-import { getJMAPConfig } from '@/lib/email';
+import { getJMAPConfig, getCompanyName } from '@/lib/email';
 
 // POST /api/invoices/[id]/send - Send invoice email to client
 export async function POST(
@@ -59,7 +59,7 @@ export async function POST(
     }
 
     // Generate email content
-    const companyName = process.env.COMPANY_NAME || 'Freelance-OS';
+    const companyName = await getCompanyName();
     const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
 
     const emailContent = generateInvoiceSentEmail({

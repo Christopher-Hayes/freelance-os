@@ -40,7 +40,7 @@ importers:
         version: 0.5.1
       '@react-pdf/renderer':
         specifier: ^4.3.1
-        version: 4.3.1(react@18.3.1)
+        version: 4.3.1(react@19.2.0)
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -55,16 +55,16 @@ importers:
         version: 7.9.0
       lucide-react:
         specifier: ^0.552.0
-        version: 0.552.0(react@18.3.1)
+        version: 0.552.0(react@19.2.0)
       next:
         specifier: ^15.1.6
-        version: 15.5.6(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.6(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react:
-        specifier: ^18.3.1
-        version: 18.3.1
+        specifier: ^19.2.0
+        version: 19.2.0
       react-dom:
-        specifier: ^18.3.1
-        version: 18.3.1(react@18.3.1)
+        specifier: ^19.2.0
+        version: 19.2.0(react@19.2.0)
       zod:
         specifier: ^4.1.12
         version: 4.1.12
@@ -145,7 +145,7 @@ importers:
         specifier: ^19.2.0
         version: 19.2.0
       react-dom:
-        specifier: ^19.1.0
+        specifier: ^19.2.0
         version: 19.2.0(react@19.2.0)
     devDependencies:
       '@next/eslint-plugin-next':
@@ -281,9 +281,6 @@ importers:
 
   packages/ui:
     dependencies:
-      '@react-pdf/renderer':
-        specifier: ^4.3.1
-        version: 4.3.1(react@19.2.0)
       react:
         specifier: ^19
         version: 19.2.0
@@ -2605,11 +2602,6 @@ packages:
   rc9@2.1.2:
     resolution: {integrity: sha512-btXCnMmRIBINM2LDZoEmOogIZU7Qe7zn4BpomSKZ/ykbLObuBdvG+mFq11DL6fjH1DRwHhrlgtYWG96bJiC7Cg==}
 
-  react-dom@18.3.1:
-    resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
-    peerDependencies:
-      react: ^18.3.1
-
   react-dom@19.2.0:
     resolution: {integrity: sha512-UlbRu4cAiGaIewkPyiRGJk0imDN2T3JjieT6spoL2UeSf5od4n5LB/mQ4ejmxhCFT1tYe8IvaFulzynWovsEFQ==}
     peerDependencies:
@@ -2617,10 +2609,6 @@ packages:
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
-
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
 
   react@19.2.0:
     resolution: {integrity: sha512-tmbWg6W31tQLeB5cdIBOicJDJRR2KzXsV7uSK9iNfLWQ5bIZfxuPEHp7M8wiHyHnn0DD1i7w3Zmin0FtkrwoCQ==}
@@ -2686,9 +2674,6 @@ packages:
 
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
-
-  scheduler@0.23.2:
-    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
 
   scheduler@0.25.0-rc-603e6108-20241029:
     resolution: {integrity: sha512-pFwF6H1XrSdYYNLfOcGlM28/j8CGLu8IvdrxqhjWULe2bPcKiKW4CV+OWqR/9fT52mywx65l7ysNkjLKBda7eA==}
@@ -3500,12 +3485,6 @@ snapshots:
 
   '@react-pdf/primitives@4.1.1': {}
 
-  '@react-pdf/reconciler@1.1.4(react@18.3.1)':
-    dependencies:
-      object-assign: 4.1.1
-      react: 18.3.1
-      scheduler: 0.25.0-rc-603e6108-20241029
-
   '@react-pdf/reconciler@1.1.4(react@19.2.0)':
     dependencies:
       object-assign: 4.1.1
@@ -3524,23 +3503,6 @@ snapshots:
       normalize-svg-path: 1.1.0
       parse-svg-path: 0.1.2
       svg-arc-to-cubic-bezier: 3.2.0
-
-  '@react-pdf/renderer@4.3.1(react@18.3.1)':
-    dependencies:
-      '@babel/runtime': 7.28.4
-      '@react-pdf/fns': 3.1.2
-      '@react-pdf/font': 4.0.3
-      '@react-pdf/layout': 4.4.1
-      '@react-pdf/pdfkit': 4.0.4
-      '@react-pdf/primitives': 4.1.1
-      '@react-pdf/reconciler': 1.1.4(react@18.3.1)
-      '@react-pdf/render': 4.3.1
-      '@react-pdf/types': 2.9.1
-      events: 3.3.0
-      object-assign: 4.1.1
-      prop-types: 15.8.1
-      queue: 6.0.2
-      react: 18.3.1
 
   '@react-pdf/renderer@4.3.1(react@19.2.0)':
     dependencies:
@@ -5035,9 +4997,9 @@ snapshots:
     dependencies:
       js-tokens: 4.0.0
 
-  lucide-react@0.552.0(react@18.3.1):
+  lucide-react@0.552.0(react@19.2.0):
     dependencies:
-      react: 18.3.1
+      react: 19.2.0
 
   magic-string@0.30.21:
     dependencies:
@@ -5078,15 +5040,15 @@ snapshots:
     optionalDependencies:
       nodemailer: 7.0.10
 
-  next@15.5.6(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@15.5.6(@opentelemetry/api@1.9.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@next/env': 15.5.6
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001751
       postcss: 8.4.31
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.6(react@18.3.1)
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+      styled-jsx: 5.1.6(react@19.2.0)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.6
       '@next/swc-darwin-x64': 15.5.6
@@ -5301,22 +5263,12 @@ snapshots:
       defu: 6.1.4
       destr: 2.0.5
 
-  react-dom@18.3.1(react@18.3.1):
-    dependencies:
-      loose-envify: 1.4.0
-      react: 18.3.1
-      scheduler: 0.23.2
-
   react-dom@19.2.0(react@19.2.0):
     dependencies:
       react: 19.2.0
       scheduler: 0.27.0
 
   react-is@16.13.1: {}
-
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
 
   react@19.2.0: {}
 
@@ -5388,10 +5340,6 @@ snapshots:
       is-regex: 1.2.1
 
   safer-buffer@2.1.2: {}
-
-  scheduler@0.23.2:
-    dependencies:
-      loose-envify: 1.4.0
 
   scheduler@0.25.0-rc-603e6108-20241029: {}
 
@@ -5552,11 +5500,6 @@ snapshots:
       safe-buffer: 5.2.1
 
   strip-json-comments@3.1.1: {}
-
-  styled-jsx@5.1.6(react@18.3.1):
-    dependencies:
-      client-only: 0.0.1
-      react: 18.3.1
 
   styled-jsx@5.1.6(react@19.2.0):
     dependencies:

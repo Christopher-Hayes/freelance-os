@@ -41,3 +41,15 @@ export async function getJMAPConfig(): Promise<JMAPConfig> {
     'JMAP email service is not configured. Please configure email settings in Settings page or set JMAP environment variables.'
   );
 }
+
+/**
+ * Get company name from database settings
+ * Falls back to environment variable if not configured in database
+ */
+export async function getCompanyName(): Promise<string> {
+  const setting = await prisma.setting.findUnique({
+    where: { key: 'main' },
+  });
+
+  return setting?.companyName || process.env.COMPANY_NAME || 'Freelance-OS';
+}

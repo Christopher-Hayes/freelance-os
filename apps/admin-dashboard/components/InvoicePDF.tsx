@@ -19,17 +19,16 @@ export interface InvoicePDFData {
   project?: {
     name: string;
   } | null;
+  // Freelancer/company information
+  companyInfo: {
+    name: string;
+    freelancerName?: string | null;
+    email?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    website?: string | null;
+  };
 }
-
-// Company information (could be moved to config/env)
-const COMPANY_INFO = {
-  name: 'Your Company Name',
-  address: '123 Business Street',
-  city: 'City, State 12345',
-  email: 'billing@yourcompany.com',
-  phone: '+1 (555) 123-4567',
-  website: 'www.yourcompany.com',
-};
 
 // Create styles
 const styles = StyleSheet.create({
@@ -171,15 +170,9 @@ const styles = StyleSheet.create({
   },
 });
 
-interface InvoicePDFProps {
-  invoice: InvoicePDFData;
-  companyInfo?: typeof COMPANY_INFO;
-}
-
-export const InvoicePDF: React.FC<InvoicePDFProps> = ({ 
-  invoice, 
-  companyInfo = COMPANY_INFO 
-}) => {
+export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) => {
+  const companyInfo = invoice.companyInfo;
+  
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -215,10 +208,12 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
         <View style={styles.header}>
           <Text style={styles.companyName}>{companyInfo.name}</Text>
           <Text style={styles.companyDetails}>
-            {companyInfo.address}{'\n'}
-            {companyInfo.city}{'\n'}
-            {companyInfo.email} | {companyInfo.phone}{'\n'}
-            {companyInfo.website}
+            {companyInfo.freelancerName && `${companyInfo.freelancerName}\n`}
+            {companyInfo.address && `${companyInfo.address}\n`}
+            {companyInfo.email && companyInfo.phone && `${companyInfo.email} | ${companyInfo.phone}\n`}
+            {!companyInfo.phone && companyInfo.email && `${companyInfo.email}\n`}
+            {companyInfo.phone && !companyInfo.email && `${companyInfo.phone}\n`}
+            {companyInfo.website || ''}
           </Text>
         </View>
 
@@ -307,7 +302,9 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             Thank you for your business!{'\n'}
-            {companyInfo.name} | {companyInfo.email} | {companyInfo.phone}
+            {companyInfo.name}
+            {companyInfo.email && ` | ${companyInfo.email}`}
+            {companyInfo.phone && ` | ${companyInfo.phone}`}
           </Text>
         </View>
       </Page>
