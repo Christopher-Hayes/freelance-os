@@ -23,6 +23,7 @@ Freelance-OS is a **Turborepo monorepo** for managing freelance business operati
 - Always support dark mode
 - Prefer Server Components (default in Next.js 15+)
 - Use shared components from `@freelance-os/ui` package when it makes sense
+- **Avoid modals** - Prefer inline editing, side panels, or page-based flows instead
 
 ### DateTime Handling (Temporal API)
 

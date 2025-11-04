@@ -12,15 +12,14 @@ const timeEntrySuggestionSchema = z.object({
   startTime: z.string().describe("ISO 8601 UTC timestamp for when this work started"),
   endTime: z.string().describe("ISO 8601 UTC timestamp for when this work ended"),
   billable: z.boolean().describe("Whether this work is billable to the client"),
-  confidence: z.enum(["high", "medium", "low"]).describe("How confident you are in this suggestion"),
-  reasoning: z.string().describe("Brief explanation of why you suggested this project and time range"),
 });
 
 const autofillResponseSchema = z.object({
   suggestions: z.array(timeEntrySuggestionSchema).describe(
     "Array of suggested time entries based on the activity sessions. Group related activities together. " +
     "Only suggest entries for apps/activities that clearly relate to work projects. " +
-    "Ignore web browsing, email, chat apps unless the window titles indicate specific project work."
+    "Ignore web browsing, email, chat apps unless the window titles indicate specific project work. " +
+    "DO NOT create entries that overlap with existing time entries."
   ),
 });
 
@@ -99,7 +98,7 @@ function mergeSessionsForAI(sessions: any[]): any[] {
 
 export async function POST(request: NextRequest) {
   try {
-    const { date } = await request.json();
+    const { date, existingEntries } = await request.json();
 
     if (!date) {
       return NextResponse.json(
@@ -216,6 +215,14 @@ export async function POST(request: NextRequest) {
       .sort((a, b) => b.durationSeconds - a.durationSeconds)
       .slice(0, 50); // Limit to top 50 sessions
 
+    // Format existing entries for AI context
+    const existingEntriesInfo = (existingEntries || []).map((entry: any) => ({
+      projectId: entry.projectId,
+      startTime: entry.startTime,
+      endTime: entry.endTime,
+      description: entry.description,
+    }));
+
     // Generate suggestions using AI
     const { object } = await generateObject({
       model: openai("gpt-5-mini"),
@@ -231,7 +238,13 @@ Do NOT create timestamps like ${date}T00:00:00Z - use the actual session times w
 Available Projects:
 ${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.description ? `\n  Description: ${p.description}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
-Activity Sessions (merged, top by duration):
+${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
+${existingEntriesInfo.map((e: any) => {
+  const project = projects.find((p) => p.id === e.projectId);
+  return `- ${project?.name || `Project ${e.projectId}`}: ${e.startTime} to ${e.endTime}${e.description ? ` - ${e.description}` : ''}`;
+}).join("\n")}
+
+` : ''}Activity Sessions (merged, top by duration):
 ${sortedByDuration
   .map(
     (s) => {
@@ -249,17 +262,46 @@ Guidelines:
 - Include both billable AND non-billable projects - suggest for any project that matches the activity
 - Group consecutive work on the same project into single entries
 - Use the EXACT timestamps from the activity sessions above - do not modify the date portion
+- DO NOT create any entries that overlap with the existing time entries listed above
 - Ignore casual web browsing, social media, email checking unless window titles clearly indicate project work
 - Be conservative - when in doubt, don't suggest an entry
 - Provide realistic time ranges based on the activity data
 - Entries should be at minimum 15 minutes long
 - Keep descriptions concise but informative
-- Mark entries as billable based on the project's billable status
-- Consider the confidence level based on how clearly the activities match a project`,
+- Mark entries as billable based on the project's billable status`,
     });
 
+    // Automatically create the suggested time entries
+    const createdEntries = [];
+    for (const suggestion of object.suggestions) {
+      try {
+        const startInstant = Temporal.Instant.from(suggestion.startTime);
+        const endInstant = Temporal.Instant.from(suggestion.endTime);
+        const durationMinutes = Math.round(
+          Number((endInstant.epochNanoseconds - startInstant.epochNanoseconds) / 60_000_000_000n)
+        );
+
+        const entry = await prisma.timeEntry.create({
+          data: {
+            projectId: suggestion.projectId,
+            description: suggestion.description || null,
+            startTime: new Date(suggestion.startTime),
+            endTime: new Date(suggestion.endTime),
+            durationMinutes,
+            billable: suggestion.billable,
+          },
+        });
+
+        createdEntries.push(entry);
+      } catch (error) {
+        console.error("Error creating time entry:", error);
+        // Continue with other suggestions even if one fails
+      }
+    }
+
     return NextResponse.json({
-      suggestions: object.suggestions,
+      success: true,
+      entriesCreated: createdEntries.length,
       activityCount: sessions.length,
       mergedCount: sortedByDuration.length,
     });

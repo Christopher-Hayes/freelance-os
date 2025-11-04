@@ -9,7 +9,6 @@ import CurrentTimeLine from "./timeline/CurrentTimeLine";
 import ActivitySession from "./timeline/ActivitySession";
 import TimeEntryBar from "./timeline/TimeEntryBar";
 import TimeEntryCreationDialog from "./timeline/TimeEntryCreationDialog";
-import AutofillDialog from "./timeline/AutofillDialog";
 import {
   type ActivitySession as ActivitySessionType,
   type TimeEntry,
@@ -120,11 +119,6 @@ export default function DayTimeline({
   const [draggingNewEntry, setDraggingNewEntry] = useState<{
     startY: number;
     startTime: Temporal.ZonedDateTime;
-  } | null>(null);
-  const [autofillDialog, setAutofillDialog] = useState<{
-    suggestions: any[];
-    activityCount?: number;
-    mergedCount?: number;
   } | null>(null);
   const [loadingAutofill, setLoadingAutofill] = useState(false);
   const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
@@ -603,12 +597,21 @@ export default function DayTimeline({
       console.log('=== CLIENT AUTOFILL ===');
       console.log('Selected date object:', selectedDate.toString());
       console.log('Sending date string:', dateStr);
+      console.log('Existing entries:', timeEntries.length);
       console.log('======================');
       
       const response = await fetch("/api/time/autofill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: dateStr }),
+        body: JSON.stringify({ 
+          date: dateStr,
+          existingEntries: timeEntries.map((entry) => ({
+            projectId: entry.projectId,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            description: entry.description,
+          })),
+        }),
       });
 
       if (!response.ok) {
@@ -623,62 +626,19 @@ export default function DayTimeline({
         return;
       }
 
-      setAutofillDialog({
-        suggestions: data.suggestions || [],
-        activityCount: data.activityCount,
-        mergedCount: data.mergedCount,
-      });
+      // Show success message and refresh
+      const count = data.entriesCreated || 0;
+      if (count > 0) {
+        toast.success(`Successfully created ${count} time ${count === 1 ? 'entry' : 'entries'}!`);
+        await fetchDayData();
+      } else {
+        toast.info("No new time entries were suggested based on your activity.");
+      }
     } catch (error: any) {
       console.error("Error generating autofill:", error);
       toast.error(error.message || "Failed to generate suggestions. Make sure you have set OPENAI_API_KEY in your .env file.");
     } finally {
       setLoadingAutofill(false);
-    }
-  };
-
-  const handleApplySuggestions = async (suggestions: any[]) => {
-    try {
-      const localTz = Temporal.Now.timeZoneId();
-      
-      // Create time entries in parallel
-      const promises = suggestions.map((suggestion) => {
-        // Convert UTC timestamps to local timezone
-        const startInstant = Temporal.Instant.from(suggestion.startTime);
-        const endInstant = Temporal.Instant.from(suggestion.endTime);
-        const startLocal = startInstant.toZonedDateTimeISO(localTz);
-        const endLocal = endInstant.toZonedDateTimeISO(localTz);
-        
-        const durationMinutes = Math.round(
-          Number((endInstant.epochNanoseconds - startInstant.epochNanoseconds) / 60_000_000_000n)
-        );
-
-        return fetch("/api/time", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId: suggestion.projectId,
-            description: suggestion.description,
-            startTime: startLocal.toString(),
-            endTime: endLocal.toString(),
-            durationMinutes,
-            billable: suggestion.billable,
-          }),
-        });
-      });
-
-      const results = await Promise.all(promises);
-      const failed = results.filter((r) => !r.ok);
-
-      if (failed.length > 0) {
-        throw new Error(`Failed to create ${failed.length} entries`);
-      }
-
-      await fetchDayData();
-      setAutofillDialog(null);
-      toast.success(`Successfully created ${suggestions.length} time ${suggestions.length === 1 ? 'entry' : 'entries'}!`);
-    } catch (error) {
-      console.error("Error applying suggestions:", error);
-      toast.error("Failed to create some entries. Please try again.");
     }
   };
 
@@ -959,17 +919,6 @@ export default function DayTimeline({
             projects={projects}
             onSubmit={handleCreateEntry}
             onCancel={() => setCreatingEntry(null)}
-          />
-        )}
-
-        {autofillDialog && (
-          <AutofillDialog
-            suggestions={autofillDialog.suggestions}
-            projects={projects}
-            onApply={handleApplySuggestions}
-            onCancel={() => setAutofillDialog(null)}
-            activityCount={autofillDialog.activityCount}
-            mergedCount={autofillDialog.mergedCount}
           />
         )}
 
