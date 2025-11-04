@@ -12,6 +12,7 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.62",
     "@freelance-os/database": "workspace:*",
     "@freelance-os/email": "workspace:*",
     "@freelance-os/types": "workspace:*",
@@ -19,10 +20,12 @@
     "@react-pdf/renderer": "^4.3.1",
     "@repo/ui": "workspace:*",
     "@types/d3": "^7.4.3",
+    "ai": "^5.0.87",
     "d3": "^7.9.0",
     "next": "^15.1.6",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^15.4.6",

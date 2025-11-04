@@ -1,0 +1,281 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@freelance-os/database";
+import { generateObject } from "ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
+import { Temporal } from "@/lib/temporal-polyfill";
+
+// Schema for time entry suggestions
+const timeEntrySuggestionSchema = z.object({
+  projectId: z.number().describe("The ID of the project this time entry should be associated with"),
+  description: z.string().describe("A brief description of what work was done during this time period"),
+  startTime: z.string().describe("ISO 8601 UTC timestamp for when this work started"),
+  endTime: z.string().describe("ISO 8601 UTC timestamp for when this work ended"),
+  billable: z.boolean().describe("Whether this work is billable to the client"),
+  confidence: z.enum(["high", "medium", "low"]).describe("How confident you are in this suggestion"),
+  reasoning: z.string().describe("Brief explanation of why you suggested this project and time range"),
+});
+
+const autofillResponseSchema = z.object({
+  suggestions: z.array(timeEntrySuggestionSchema).describe(
+    "Array of suggested time entries based on the activity sessions. Group related activities together. " +
+    "Only suggest entries for apps/activities that clearly relate to work projects. " +
+    "Ignore web browsing, email, chat apps unless the window titles indicate specific project work."
+  ),
+});
+
+// Helper function to merge adjacent sessions (similar to timeline utils but simplified)
+function mergeSessionsForAI(sessions: any[]): any[] {
+  if (sessions.length === 0) return [];
+
+  const MERGE_GAP_MINUTES = 10;
+  const MAX_DESCRIPTION_LENGTH = 200;
+
+  // Sort by start time
+  const sorted = [...sessions].sort((a, b) => {
+    const aInstant = Temporal.Instant.from(a.startTime);
+    const bInstant = Temporal.Instant.from(b.startTime);
+    return Temporal.Instant.compare(aInstant, bInstant);
+  });
+
+  const merged: any[] = [];
+
+  for (const session of sorted) {
+    const currentStart = Temporal.Instant.from(session.startTime);
+    const currentEnd = Temporal.Instant.from(session.endTime);
+
+    // Find recent session of same app
+    let existingIndex = -1;
+    for (let i = merged.length - 1; i >= 0; i--) {
+      const m = merged[i];
+      if (m.appClass !== session.appClass) continue;
+
+      const mEnd = Temporal.Instant.from(m.endTime);
+      const gapNs = currentStart.epochNanoseconds - mEnd.epochNanoseconds;
+      const gapMinutes = Number(gapNs) / (1_000_000_000 * 60);
+
+      if (gapMinutes <= MERGE_GAP_MINUTES) {
+        existingIndex = i;
+        break;
+      }
+    }
+
+    if (existingIndex >= 0) {
+      const existing = merged[existingIndex];
+      const existingEnd = Temporal.Instant.from(existing.endTime);
+
+      if (Temporal.Instant.compare(currentEnd, existingEnd) > 0) {
+        existing.endTime = session.endTime;
+      }
+
+      const existingStart = Temporal.Instant.from(existing.startTime);
+      const existingEndInstant = Temporal.Instant.from(existing.endTime);
+      const newDurationNs = existingEndInstant.epochNanoseconds - existingStart.epochNanoseconds;
+      existing.durationSeconds = Math.floor(Number(newDurationNs) / 1_000_000_000);
+
+      // Merge window titles (with length limit)
+      if (session.windowTitle && session.windowTitle !== existing.windowTitle) {
+        const currentTitle = existing.windowTitle || "";
+        const newTitle = session.windowTitle;
+        if (!currentTitle.includes(newTitle)) {
+          const combined = currentTitle ? `${currentTitle} / ${newTitle}` : newTitle;
+          existing.windowTitle = combined.length > MAX_DESCRIPTION_LENGTH
+            ? combined.substring(0, MAX_DESCRIPTION_LENGTH) + "..."
+            : combined;
+        }
+      }
+    } else {
+      // Truncate long descriptions
+      const truncated = { ...session };
+      if (truncated.windowTitle && truncated.windowTitle.length > MAX_DESCRIPTION_LENGTH) {
+        truncated.windowTitle = truncated.windowTitle.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
+      }
+      merged.push(truncated);
+    }
+  }
+
+  return merged;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { date } = await request.json();
+
+    if (!date) {
+      return NextResponse.json(
+        { error: "Date parameter is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file." },
+        { status: 500 }
+      );
+    }
+
+    // Parse the date and convert to local timezone boundaries
+    const plainDate = Temporal.PlainDate.from(date);
+    
+    // Get the local timezone (same as the client viewing the timeline)
+    const localTz = Temporal.Now.timeZoneId();
+    
+    // Create start of day (00:00:00) and end of day (23:59:59.999) in local timezone
+    const startOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("00:00:00"));
+    const endOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("23:59:59.999"));
+    
+    // Convert to ZonedDateTime in local timezone, then to Instant (UTC) for database query
+    const startInstant = startOfDay.toZonedDateTime(localTz).toInstant();
+    const endInstant = endOfDay.toZonedDateTime(localTz).toInstant();
+
+    console.log('=== AUTOFILL DEBUG ===');
+    console.log('Requested date:', date);
+    console.log('Plain date:', plainDate.toString());
+    console.log('Local timezone:', localTz);
+    console.log('Start of day (local):', startOfDay.toString());
+    console.log('End of day (local):', endOfDay.toString());
+    console.log('Start instant (UTC):', startInstant.toString());
+    console.log('End instant (UTC):', endInstant.toString());
+    console.log('Query start:', new Date(startInstant.toString()).toISOString());
+    console.log('Query end:', new Date(endInstant.toString()).toISOString());
+
+    // Fetch activity sessions for the day (database stores in UTC, so we query with UTC instants)
+    const sessions = await prisma.activitySession.findMany({
+      where: {
+        startTime: {
+          gte: new Date(startInstant.toString()),
+          lte: new Date(endInstant.toString()),
+        },
+      },
+      orderBy: { startTime: "asc" },
+    });
+
+    console.log('Sessions found:', sessions.length);
+    if (sessions.length > 0) {
+      console.log('First session:', sessions[0]!.startTime.toISOString());
+      console.log('Last session:', sessions[sessions.length - 1]!.startTime.toISOString());
+    }
+    console.log('======================');
+
+    if (sessions.length === 0) {
+      return NextResponse.json({
+        suggestions: [],
+        message: "No activity sessions found for this date.",
+      });
+    }
+
+    // Merge sessions to reduce data volume - keep in UTC
+    const mergedSessions = mergeSessionsForAI(
+      sessions.map((s) => ({
+        id: s.id,
+        startTime: s.startTime.toISOString(),
+        endTime: s.endTime.toISOString(),
+        appClass: s.appClass,
+        windowTitle: s.windowTitle,
+        durationSeconds: s.durationSeconds,
+      }))
+    );
+
+    // Fetch active projects
+    const projects = await prisma.project.findMany({
+      where: {
+        status: {
+          in: ["active", "on_hold"],
+        },
+      },
+      include: {
+        client: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (projects.length === 0) {
+      return NextResponse.json({
+        suggestions: [],
+        message: "No active projects found. Please create projects before using autofill.",
+      });
+    }
+
+    // Prepare data for AI - include all relevant project info
+    const projectsInfo = projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      clientName: p.client.name,
+      status: p.status,
+      billable: p.billable,
+    }));
+
+    // Limit to a reasonable number of sessions (top sessions by duration)
+    const sortedByDuration = mergedSessions
+      .sort((a, b) => b.durationSeconds - a.durationSeconds)
+      .slice(0, 50); // Limit to top 50 sessions
+
+    // Generate suggestions using AI
+    const { object } = await generateObject({
+      model: openai("gpt-5-mini"),
+      schema: autofillResponseSchema,
+      prompt: `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
+
+Today's date: ${date} (in ${localTz} timezone)
+UTC time range for this date: ${startInstant.toString()} to ${endInstant.toString()}
+
+CRITICAL: All timestamps you return MUST use the EXACT UTC times from the activity sessions below.
+Do NOT create timestamps like ${date}T00:00:00Z - use the actual session times which are in the range ${startInstant.toString()} to ${endInstant.toString()}.
+
+Available Projects:
+${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.description ? `\n  Description: ${p.description}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
+
+Activity Sessions (merged, top by duration):
+${sortedByDuration
+  .map(
+    (s) => {
+      const startTime = new Date(s.startTime).toISOString();
+      const endTime = new Date(s.endTime).toISOString();
+      return `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes, ${startTime} to ${endTime})`;
+    }
+  )
+  .join("\n")}
+
+Based on these activity sessions, suggest time entries that should be created for work. Group related activities together into logical work blocks.
+
+Guidelines:
+- Match activities to projects based on project name, description, and window titles
+- Include both billable AND non-billable projects - suggest for any project that matches the activity
+- Group consecutive work on the same project into single entries
+- Use the EXACT timestamps from the activity sessions above - do not modify the date portion
+- Ignore casual web browsing, social media, email checking unless window titles clearly indicate project work
+- Be conservative - when in doubt, don't suggest an entry
+- Provide realistic time ranges based on the activity data
+- Keep descriptions concise but informative
+- Mark entries as billable based on the project's billable status
+- Consider the confidence level based on how clearly the activities match a project`,
+    });
+
+    return NextResponse.json({
+      suggestions: object.suggestions,
+      activityCount: sessions.length,
+      mergedCount: sortedByDuration.length,
+    });
+  } catch (error: any) {
+    console.error("Error generating autofill suggestions:", error);
+    
+    // Provide helpful error messages
+    if (error?.message?.includes("API key")) {
+      return NextResponse.json(
+        { error: "Invalid OpenAI API key. Please check your OPENAI_API_KEY environment variable." },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: "Failed to generate suggestions. " + (error?.message || "Unknown error") },
+      { status: 500 }
+    );
+  }
+}

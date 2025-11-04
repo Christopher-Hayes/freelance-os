@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useRef, useMemo, memo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
+import { useToast } from "@repo/ui";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
 import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
 import CurrentTimeLine from "./timeline/CurrentTimeLine";
 import ActivitySession from "./timeline/ActivitySession";
 import TimeEntryBar from "./timeline/TimeEntryBar";
 import TimeEntryCreationDialog from "./timeline/TimeEntryCreationDialog";
+import AutofillDialog from "./timeline/AutofillDialog";
 import {
   type ActivitySession as ActivitySessionType,
   type TimeEntry,
@@ -80,6 +82,9 @@ export default function DayTimeline({
   selectedDate,
   onDateChange,
 }: DayTimelineProps) {
+  // Toast notifications
+  const toast = useToast();
+  
   // State
   const [sessions, setSessions] = useState<ActivitySessionType[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -115,6 +120,12 @@ export default function DayTimeline({
     startY: number;
     startTime: Temporal.ZonedDateTime;
   } | null>(null);
+  const [autofillDialog, setAutofillDialog] = useState<{
+    suggestions: any[];
+    activityCount?: number;
+    mergedCount?: number;
+  } | null>(null);
+  const [loadingAutofill, setLoadingAutofill] = useState(false);
 
   // Refs
   const activityScrollRef = useRef<HTMLDivElement>(null);
@@ -527,7 +538,7 @@ export default function DayTimeline({
       setCreatingEntry(null);
     } catch (error) {
       console.error("Error creating entry:", error);
-      alert("Failed to create entry");
+      toast.error("Failed to create entry");
     }
   };
 
@@ -557,12 +568,12 @@ export default function DayTimeline({
       setEditingEntryId(null);
     } catch (error) {
       console.error("Error updating entry:", error);
-      alert("Failed to update entry");
+      toast.error("Failed to update entry");
     }
   };
 
   const handleDelete = (entryId: number) => async () => {
-    if (!confirm("Delete this time entry?")) return;
+    // if (!confirm("Delete this time entry?")) return;
 
     try {
       const response = await fetch(`/api/time/${entryId}`, {
@@ -575,7 +586,94 @@ export default function DayTimeline({
       setEditingEntryId(null);
     } catch (error) {
       console.error("Error deleting entry:", error);
-      alert("Failed to delete entry");
+      toast.error("Failed to delete entry");
+    }
+  };
+
+  const handleAutofill = async () => {
+    setLoadingAutofill(true);
+    try {
+      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+      
+      console.log('=== CLIENT AUTOFILL ===');
+      console.log('Selected date object:', selectedDate.toString());
+      console.log('Sending date string:', dateStr);
+      console.log('======================');
+      
+      const response = await fetch("/api/time/autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: dateStr }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate suggestions");
+      }
+
+      const data = await response.json();
+      
+      if (data.message) {
+        toast.info(data.message);
+        return;
+      }
+
+      setAutofillDialog({
+        suggestions: data.suggestions || [],
+        activityCount: data.activityCount,
+        mergedCount: data.mergedCount,
+      });
+    } catch (error: any) {
+      console.error("Error generating autofill:", error);
+      toast.error(error.message || "Failed to generate suggestions. Make sure you have set OPENAI_API_KEY in your .env file.");
+    } finally {
+      setLoadingAutofill(false);
+    }
+  };
+
+  const handleApplySuggestions = async (suggestions: any[]) => {
+    try {
+      const localTz = Temporal.Now.timeZoneId();
+      
+      // Create time entries in parallel
+      const promises = suggestions.map((suggestion) => {
+        // Convert UTC timestamps to local timezone
+        const startInstant = Temporal.Instant.from(suggestion.startTime);
+        const endInstant = Temporal.Instant.from(suggestion.endTime);
+        const startLocal = startInstant.toZonedDateTimeISO(localTz);
+        const endLocal = endInstant.toZonedDateTimeISO(localTz);
+        
+        const durationMinutes = Math.round(
+          Number((endInstant.epochNanoseconds - startInstant.epochNanoseconds) / 60_000_000_000n)
+        );
+
+        return fetch("/api/time", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectId: suggestion.projectId,
+            description: suggestion.description,
+            startTime: startLocal.toString(),
+            endTime: endLocal.toString(),
+            durationMinutes,
+            billable: suggestion.billable,
+          }),
+        });
+      });
+
+      const results = await Promise.all(promises);
+      const failed = results.filter((r) => !r.ok);
+
+      if (failed.length > 0) {
+        throw new Error(`Failed to create ${failed.length} entries`);
+      }
+
+      await fetchDayData();
+      setAutofillDialog(null);
+      toast.success(`Successfully created ${suggestions.length} time ${suggestions.length === 1 ? 'entry' : 'entries'}!`);
+    } catch (error) {
+      console.error("Error applying suggestions:", error);
+      toast.error("Failed to create some entries. Please try again.");
     }
   };
 
@@ -716,9 +814,41 @@ export default function DayTimeline({
 
           {/* Time Entries Column */}
           <div className="col-span-2">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 select-none">
-              Project Tracking
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 select-none">
+                Project Tracking
+              </h3>
+              <button
+                onClick={handleAutofill}
+                disabled={loadingAutofill}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Use AI to suggest time entries based on app activity"
+              >
+                <svg 
+                  className={`w-4 h-4 ${loadingAutofill ? 'animate-spin' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  {loadingAutofill ? (
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                    />
+                  ) : (
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M13 10V3L4 14h7v7l9-11h-7z" 
+                    />
+                  )}
+                </svg>
+                {loadingAutofill ? "Analyzing..." : "Autofill"}
+              </button>
+            </div>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
               <div
                 ref={timelineRef}
@@ -758,6 +888,17 @@ export default function DayTimeline({
             projects={projects}
             onSubmit={handleCreateEntry}
             onCancel={() => setCreatingEntry(null)}
+          />
+        )}
+
+        {autofillDialog && (
+          <AutofillDialog
+            suggestions={autofillDialog.suggestions}
+            projects={projects}
+            onApply={handleApplySuggestions}
+            onCancel={() => setAutofillDialog(null)}
+            activityCount={autofillDialog.activityCount}
+            mergedCount={autofillDialog.mergedCount}
           />
         )}
 

@@ -58,6 +58,7 @@ export interface Project {
   name: string;
   color: string;
   clientId: number;
+  billable: boolean;
   client: {
     name: string;
   };
