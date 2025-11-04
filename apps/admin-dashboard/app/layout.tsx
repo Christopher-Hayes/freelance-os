@@ -61,6 +61,12 @@ export default function RootLayout({
                     >
                       Analytics
                     </Link>
+                    <Link
+                      href="/users"
+                      className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-blue-500 text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                    >
+                      Users
+                    </Link>
                   </div>
                 </div>
               </div>

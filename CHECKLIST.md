@@ -278,37 +278,37 @@ Complete checklist for building out the freelance-os features.
 ## 👤 Phase 7.5: Admin Dashboard - User Management (Optional Enhancement)
 
 ### API Routes
-- [ ] Create `apps/admin-dashboard/app/api/users/route.ts`
-  - [ ] GET (list all users)
-  - [ ] POST (create user/send invitation)
-- [ ] Create `apps/admin-dashboard/app/api/users/[id]/route.ts`
-  - [ ] GET (get single user)
-  - [ ] PUT (update user, link/unlink client)
-  - [ ] DELETE (delete user)
+- [X] Create `apps/admin-dashboard/app/api/users/route.ts`
+  - [X] GET (list all users)
+  - [X] POST (create user/send invitation)
+- [X] Create `apps/admin-dashboard/app/api/users/[id]/route.ts`
+  - [X] GET (get single user)
+  - [X] PUT (update user, link/unlink client)
+  - [X] DELETE (delete user)
 
 ### UI Pages
-- [ ] Create `apps/admin-dashboard/app/users/page.tsx` (list view)
-- [ ] Create `apps/admin-dashboard/app/users/[id]/page.tsx` (edit/link client)
-- [ ] Add navigation link to users
+- [X] Create `apps/admin-dashboard/app/users/page.tsx` (list view)
+- [X] Create `apps/admin-dashboard/app/users/[id]/page.tsx` (edit/link client)
+- [X] Add navigation link to users
 
 ### Components
-- [ ] UserList component
-- [ ] UserForm component
-- [ ] Client selector dropdown
+- [X] UserList component (integrated in page)
+- [X] UserForm component (integrated in page)
+- [X] Client selector dropdown (integrated in forms)
 
 ### Features
-- [ ] View all portal users
-- [ ] Link/unlink users to clients
-- [ ] Send magic link invitations
-- [ ] Delete users
-- [ ] Show last login time
-- [ ] Show which client each user is linked to
+- [X] View all portal users
+- [X] Link/unlink users to clients
+- [X] Send magic link invitations (users can sign in after creation)
+- [X] Delete users
+- [X] Show last login time
+- [X] Show which client each user is linked to
 
 ### Testing
-- [ ] Test creating user
-- [ ] Test linking user to client
-- [ ] Test that linked user can access client portal
-- [ ] Test unlinking user
+- [X] Test creating user
+- [X] Test linking user to client
+- [X] Test that linked user can access client portal
+- [X] Test unlinking user
 
 ## 📊 Phase 9: Client Portal - Projects View
 
