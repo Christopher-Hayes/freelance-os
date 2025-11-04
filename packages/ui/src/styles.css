@@ -1,5 +1,5 @@
 /* Component-level styles for the UI package */
-@import "tailwindcss" prefix(ui);
+@import "tailwindcss";
 
 /* Toast animation */
 @keyframes slide-in {

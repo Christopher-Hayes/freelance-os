@@ -1,13 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@repo/ui";
+import type { AiProvider } from "@freelance-os/types";
 
 export default function SettingsPage() {
   const [rescueTimeApiKey, setRescueTimeApiKey] = useState("");
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [googleApiKey, setGoogleApiKey] = useState("");
+  const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const toast = useToast();
+
+  // Debounce timers for each field
+  const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const openaiTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const googleTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     fetchSettings();
@@ -15,10 +23,13 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/settings?key=rescuetime_api_key");
+      const response = await fetch("/api/settings/all");
       if (response.ok) {
         const data = await response.json();
-        setRescueTimeApiKey(data.value || "");
+        setRescueTimeApiKey(data.rescuetimeKey || "");
+        setOpenaiApiKey(data.openaiKey || "");
+        setGoogleApiKey(data.googleApiKey || "");
+        setAiProvider(data.aiProvider || "openai");
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -27,31 +38,66 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
+  const saveSetting = async (field: string, value: string | AiProvider) => {
     try {
-      const response = await fetch("/api/settings", {
+      const response = await fetch("/api/settings/all", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          key: "rescuetime_api_key",
-          value: rescueTimeApiKey,
+          [field]: value,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save settings");
+        throw new Error("Failed to save setting");
       }
 
-      toast.success("Settings saved successfully!");
+      toast.success("Saved successfully");
     } catch (error) {
-      console.error("Error saving settings:", error);
-      toast.error("Failed to save settings");
-    } finally {
-      setSaving(false);
+      console.error(`Error saving ${field}:`, error);
+      toast.error(`Failed to save ${field}`);
     }
+  };
+
+  const handleRescueTimeChange = (value: string) => {
+    setRescueTimeApiKey(value);
+    
+    if (rescueTimeTimerRef.current) {
+      clearTimeout(rescueTimeTimerRef.current);
+    }
+
+    rescueTimeTimerRef.current = setTimeout(() => {
+      saveSetting("rescuetimeKey", value);
+    }, 1000);
+  };
+
+  const handleOpenaiChange = (value: string) => {
+    setOpenaiApiKey(value);
+    
+    if (openaiTimerRef.current) {
+      clearTimeout(openaiTimerRef.current);
+    }
+
+    openaiTimerRef.current = setTimeout(() => {
+      saveSetting("openaiKey", value);
+    }, 1000);
+  };
+
+  const handleGoogleChange = (value: string) => {
+    setGoogleApiKey(value);
+    
+    if (googleTimerRef.current) {
+      clearTimeout(googleTimerRef.current);
+    }
+
+    googleTimerRef.current = setTimeout(() => {
+      saveSetting("googleApiKey", value);
+    }, 1000);
+  };
+
+  const handleAiProviderChange = (value: AiProvider) => {
+    setAiProvider(value);
+    saveSetting("aiProvider", value);
   };
 
   if (loading) {
@@ -69,73 +115,135 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Configure your integrations and preferences
+          Configure your integrations and preferences. Changes are saved automatically.
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-        <form onSubmit={handleSave}>
-          <div className="p-6 space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-8">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            AI Provider Configuration
+          </h2>
+          
+          <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                RescueTime Integration
-              </h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="rescuetime_api_key"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    RescueTime API Key
-                  </label>
-                  <input
-                    type="password"
-                    id="rescuetime_api_key"
-                    value={rescueTimeApiKey}
-                    onChange={(e) => setRescueTimeApiKey(e.target.value)}
-                    placeholder="Enter your RescueTime API key"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    Get your API key from{" "}
-                    <a
-                      href="https://www.rescuetime.com/anapi/manage"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      RescueTime API Management
-                    </a>
-                  </p>
-                </div>
+              <label
+                htmlFor="ai_provider"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                AI Provider
+              </label>
+              <select
+                id="ai_provider"
+                value={aiProvider}
+                onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="openai">OpenAI (GPT-4, GPT-3.5)</option>
+                <option value="gemini">Google Gemini</option>
+              </select>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Choose which AI provider to use for AI-powered features
+              </p>
+            </div>
 
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">
-                    How to use RescueTime integration:
-                  </h3>
-                  <ol className="text-sm text-blue-800 dark:text-blue-400 space-y-1 list-decimal list-inside">
-                    <li>Create a RescueTime account at rescuetime.com</li>
-                    <li>Install the RescueTime tracking app on your computer</li>
-                    <li>Generate an API key from the link above</li>
-                    <li>Paste your API key here and save</li>
-                    <li>Go to Time Tracking and click "Import from RescueTime" on days with no activity data</li>
-                  </ol>
-                </div>
+            {aiProvider === "openai" && (
+              <div>
+                <label
+                  htmlFor="openai_api_key"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  OpenAI API Key
+                </label>
+                <input
+                  type="password"
+                  id="openai_api_key"
+                  value={openaiApiKey}
+                  onChange={(e) => handleOpenaiChange(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Get your API key from{" "}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    OpenAI Platform
+                  </a>
+                </p>
               </div>
+            )}
+
+            {aiProvider === "gemini" && (
+              <div>
+                <label
+                  htmlFor="google_api_key"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Google API Key
+                </label>
+                <input
+                  type="password"
+                  id="google_api_key"
+                  value={googleApiKey}
+                  onChange={(e) => handleGoogleChange(e.target.value)}
+                  placeholder="Enter your Google API key"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Get your API key from{" "}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Google AI Studio
+                  </a>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            RescueTime Integration
+          </h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="rescuetime_api_key"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                RescueTime API Key
+              </label>
+              <input
+                type="password"
+                id="rescuetime_api_key"
+                value={rescueTimeApiKey}
+                onChange={(e) => handleRescueTimeChange(e.target.value)}
+                placeholder="Enter your RescueTime API key"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Get your API key from{" "}
+                <a
+                  href="https://www.rescuetime.com/anapi/manage"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  RescueTime API Management
+                </a>
+              </p>
             </div>
           </div>
-
-          <div className="bg-gray-50 dark:bg-gray-900 px-6 py-4 flex justify-end rounded-b-lg">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Saving..." : "Save Settings"}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );

@@ -171,6 +171,19 @@ async function main() {
     activitySession5
   });
 
+  // Create default settings
+  const settings = await prisma.setting.upsert({
+    where: { key: 'main' },
+    update: {},
+    create: {
+      key: 'main',
+      value: '',
+      aiProvider: 'openai',
+    },
+  });
+
+  console.log('✅ Created default settings:', { settings });
+
   console.log('🎉 Database seeded successfully!');
 }
 

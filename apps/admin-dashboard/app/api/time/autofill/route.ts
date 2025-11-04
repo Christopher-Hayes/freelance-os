@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { getAiModel, isAiConfigured } from "@/lib/ai-provider";
 import { z } from "zod";
 import { Temporal } from "@/lib/temporal-polyfill";
 
@@ -107,10 +107,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if OpenAI API key is configured
-    if (!process.env.OPENAI_API_KEY) {
+    // Check if AI is configured
+    if (!(await isAiConfigured())) {
       return NextResponse.json(
-        { error: "OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file." },
+        { error: "AI provider not configured. Please configure OpenAI or Google Gemini API key in Settings." },
         { status: 500 }
       );
     }
@@ -224,8 +224,9 @@ export async function POST(request: NextRequest) {
     }));
 
     // Generate suggestions using AI
+    const aiModel = await getAiModel();
     const { object } = await generateObject({
-      model: openai("gpt-5-mini"),
+      model: aiModel,
       schema: autofillResponseSchema,
       prompt: `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
 
@@ -263,7 +264,8 @@ Guidelines:
 - Group consecutive work on the same project into single entries
 - Use the EXACT timestamps from the activity sessions above - do not modify the date portion
 - DO NOT create any entries that overlap with the existing time entries listed above
-- Ignore casual web browsing, social media, email checking unless window titles clearly indicate project work
+- Ignore casual web browsing, unless window titles clearly indicate project work
+- Social for business (like Slack, email, and sometimes Discord) can be included if window titles indicate project-related communication
 - Be conservative - when in doubt, don't suggest an entry
 - Provide realistic time ranges based on the activity data
 - Entries should be at minimum 15 minutes long
@@ -311,7 +313,7 @@ Guidelines:
     // Provide helpful error messages
     if (error?.message?.includes("API key")) {
       return NextResponse.json(
-        { error: "Invalid OpenAI API key. Please check your OPENAI_API_KEY environment variable." },
+        { error: "Invalid AI API key. Please check your API key configuration in Settings." },
         { status: 500 }
       );
     }

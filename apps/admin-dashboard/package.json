@@ -12,6 +12,7 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/google": "^2.0.27",
     "@ai-sdk/openai": "^2.0.62",
     "@freelance-os/database": "workspace:*",
     "@freelance-os/email": "workspace:*",

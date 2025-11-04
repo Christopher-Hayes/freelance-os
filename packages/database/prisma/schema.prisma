@@ -183,13 +183,23 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
+// Enum for AI provider selection
+enum AiProvider {
+  openai
+  gemini
+}
+
 // Settings for storing user preferences and API keys
 model Setting {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  value     String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id              Int         @id @default(autoincrement())
+  key             String      @unique
+  value           String      @db.Text
+  rescuetimeKey   String?     @map("rescuetime_key") @db.Text
+  openaiKey       String?     @map("openai_key") @db.Text
+  googleApiKey    String?     @map("google_api_key") @db.Text
+  aiProvider      AiProvider? @default(openai) @map("ai_provider")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("settings")
 }

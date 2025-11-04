@@ -185,3 +185,26 @@ export interface ClientDashboardData {
   invoices: Invoice[];
   totalHoursThisMonth: number;
 }
+
+// Settings types
+export type AiProvider = 'openai' | 'gemini';
+
+export interface Setting {
+  id: number;
+  key: string;
+  value: string;
+  rescuetimeKey?: string;
+  openaiKey?: string;
+  googleApiKey?: string;
+  aiProvider?: AiProvider;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpdateSettingInput {
+  value?: string;
+  rescuetimeKey?: string;
+  openaiKey?: string;
+  googleApiKey?: string;
+  aiProvider?: AiProvider;
+}

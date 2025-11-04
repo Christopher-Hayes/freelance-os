@@ -697,7 +697,7 @@ export default function DayTimeline({
       }
     } catch (error: any) {
       console.error("Error generating autofill:", error);
-      toast.error(error.message || "Failed to generate suggestions. Make sure you have set OPENAI_API_KEY in your .env file.");
+      toast.error(error.message || "Failed to generate suggestions. Please configure your AI provider (OpenAI or Google Gemini) in Settings.");
     } finally {
       setLoadingAutofill(false);
     }

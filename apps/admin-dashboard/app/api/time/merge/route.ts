@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { getAiModel, isAiConfigured } from "@/lib/ai-provider";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,10 +42,11 @@ export async function POST(request: NextRequest) {
     // Merge descriptions using AI if both have descriptions
     let mergedDescription = earlier.description || later.description || null;
     
-    if (earlier.description && later.description && process.env.OPENAI_API_KEY) {
+    if (earlier.description && later.description && (await isAiConfigured())) {
       try {
+        const aiModel = await getAiModel();
         const { text } = await generateText({
-          model: openai("gpt-5-mini"),
+          model: aiModel,
           prompt: `Merge these two work descriptions into a single concise description (max 100 characters):
 
 Description 1: ${earlier.description}
