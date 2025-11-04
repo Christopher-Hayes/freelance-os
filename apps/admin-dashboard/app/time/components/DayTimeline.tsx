@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useRef, useMemo, memo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { useToast } from "@repo/ui";
+import { toast } from "@repo/ui";
+import { useJobs } from "@/components/JobsProvider";
+import { hasActiveJobForDate } from "@/lib/job-utils";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
 import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
 import CurrentTimeLine from "./timeline/CurrentTimeLine";
@@ -142,8 +144,7 @@ export default function DayTimeline({
   selectedDate,
   onDateChange,
 }: DayTimelineProps) {
-  // Toast notifications
-  const toast = useToast();
+  const { jobs, createJob, refreshJobs } = useJobs();
   
   // State
   const [sessions, setSessions] = useState<ActivitySessionType[]>([]);
@@ -187,6 +188,7 @@ export default function DayTimeline({
   // Refs
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const completedJobIdsRef = useRef<Set<number>>(new Set());
 
   // Memoized calculations for time entries (these change with dragging)
   const overlapPositions = useMemo(
@@ -198,6 +200,28 @@ export default function DayTimeline({
   useEffect(() => {
     fetchDayData();
   }, [selectedDate]);
+
+  // Refresh day data when autofill jobs complete (only on status change)
+  useEffect(() => {
+    const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+    const completedJobs = jobs.filter(
+      (job) => 
+        job.type === "autofill_time_entries" &&
+        job.status === "completed" &&
+        job.parameters?.date === dateStr
+    );
+    
+    // Only refresh if we have NEW completed jobs (not already tracked)
+    const newlyCompletedJobs = completedJobs.filter(job => !completedJobIdsRef.current.has(job.id));
+    
+    if (newlyCompletedJobs.length > 0) {
+      // Track these jobs so we don't refresh again for them
+      newlyCompletedJobs.forEach(job => completedJobIdsRef.current.add(job.id));
+      
+      // Refresh data when a job for this date completes
+      fetchDayData();
+    }
+  }, [jobs, selectedDate]);
 
   useEffect(() => {
     setIsClient(true);
@@ -655,49 +679,13 @@ export default function DayTimeline({
     try {
       const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
       
-      console.log('=== CLIENT AUTOFILL ===');
-      console.log('Selected date object:', selectedDate.toString());
-      console.log('Sending date string:', dateStr);
-      console.log('Existing entries:', timeEntries.length);
-      console.log('======================');
+      // Create a background job instead of waiting for results
+      await createJob("autofill_time_entries", { date: dateStr });
       
-      const response = await fetch("/api/time/autofill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          date: dateStr,
-          existingEntries: timeEntries.map((entry) => ({
-            projectId: entry.projectId,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
-            description: entry.description,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to generate suggestions");
-      }
-
-      const data = await response.json();
-      
-      if (data.message) {
-        toast.info(data.message);
-        return;
-      }
-
-      // Show success message and refresh
-      const count = data.entriesCreated || 0;
-      if (count > 0) {
-        toast.success(`Successfully created ${count} time ${count === 1 ? 'entry' : 'entries'}!`);
-        await fetchDayData();
-      } else {
-        toast.info("No new time entries were suggested based on your activity.");
-      }
+      toast.info("Autofill job started! You'll be notified when it completes.");
     } catch (error: any) {
-      console.error("Error generating autofill:", error);
-      toast.error(error.message || "Failed to generate suggestions. Please configure your AI provider (OpenAI or Google Gemini) in Settings.");
+      console.error("Error starting autofill:", error);
+      toast.error(error.message || "Failed to start autofill job");
     } finally {
       setLoadingAutofill(false);
     }
@@ -949,17 +937,17 @@ export default function DayTimeline({
               </h3>
               <button
                 onClick={handleAutofill}
-                disabled={loadingAutofill}
+                disabled={loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Use AI to suggest time entries based on app activity"
+                title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
               >
                 <svg 
-                  className={`w-4 h-4 ${loadingAutofill ? 'animate-spin' : ''}`}
+                  className={`w-4 h-4 ${loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? 'animate-spin' : ''}`}
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24"
                 >
-                  {loadingAutofill ? (
+                  {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? (
                     <path 
                       strokeLinecap="round" 
                       strokeLinejoin="round" 
@@ -975,7 +963,7 @@ export default function DayTimeline({
                     />
                   )}
                 </svg>
-                {loadingAutofill ? "Analyzing..." : "Autofill"}
+                {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
               </button>
             </div>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">

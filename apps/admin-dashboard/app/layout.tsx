@@ -3,7 +3,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import Link from "next/link";
-import { ToastProvider } from "@repo/ui";
+import { Providers } from "@/components/Providers";
+import JobsIndicator from "@/components/JobsIndicator";
 // Initialize Temporal API polyfill
 import "@/lib/temporal-polyfill";
 
@@ -22,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={geist.className}>
-        <ToastProvider>
+        <Providers>
           <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             {/* Navigation */}
             <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -32,7 +33,7 @@ export default function RootLayout({
                     <Link href="/" className="flex items-center text-xl font-bold text-gray-900 dark:text-white">
                       Freelance OS
                     </Link>
-                    <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                    <div className="ml-6 flex space-x-8">
                       <Link
                         href="/clients"
                         className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-blue-500 text-sm font-medium text-gray-900 dark:text-gray-100"
@@ -77,6 +78,11 @@ export default function RootLayout({
                       </Link>
                     </div>
                   </div>
+                  
+                  {/* Jobs indicator on the right */}
+                  <div className="flex items-center">
+                    <JobsIndicator />
+                  </div>
                 </div>
               </div>
             </nav>
@@ -84,7 +90,7 @@ export default function RootLayout({
             {/* Main content */}
             <main className="max-w-7xl mx-auto">{children}</main>
           </div>
-        </ToastProvider>
+        </Providers>
       </body>
     </html>
   );

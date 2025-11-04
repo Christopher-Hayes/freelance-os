@@ -208,3 +208,31 @@ export interface UpdateSettingInput {
   googleApiKey?: string;
   aiProvider?: AiProvider;
 }
+
+// AI Job types
+export type AiJobType = 'autofill_time_entries'; // Future: 'generate_invoice_description', 'analyze_productivity', etc.
+export type AiJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+export interface AiJob {
+  id: number;
+  type: AiJobType;
+  status: AiJobStatus;
+  progress: number; // 0-100
+  parameters?: Record<string, any>; // Job-specific parameters
+  result?: Record<string, any>; // Job-specific results
+  error?: string;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  updatedAt: Date;
+}
+
+export interface CreateAiJobInput {
+  type: AiJobType;
+  parameters?: Record<string, any>;
+}
+
+export interface AiJobWithDisplay extends AiJob {
+  displayTitle: string;
+  displayDescription?: string;
+}

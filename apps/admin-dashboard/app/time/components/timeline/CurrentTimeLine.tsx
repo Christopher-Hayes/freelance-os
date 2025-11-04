@@ -51,9 +51,9 @@ const CurrentTimeLine = memo(function CurrentTimeLine({
       style={{ top: `${topPosition}px`, width: 'calc(100% + 1rem)' }}
     >
       {/* Line */}
-      <div className="h-0.5 bg-black/40 dark:bg-white/40 shadow-sm" />
+      <div className="h-0.5 bg-red-500 dark:bg-red-400 shadow-sm" />
       {/* Circle indicator on the left */}
-      <div className="absolute -left-1 top-[-5px] w-3 h-3 bg-black dark:bg-white rounded-full border-2 border-white dark:border-gray-900" />
+      <div className="absolute -left-1 top-[-5px] w-3 h-3 bg-red-500 dark:bg-red-400 rounded-full border-2 border-gray-50 dark:border-gray-900" />
     </div>
   );
 });

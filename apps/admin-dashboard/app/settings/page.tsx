@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useToast } from "@repo/ui";
+import { toast } from "@repo/ui";
 import type { AiProvider } from "@freelance-os/types";
 
 export default function SettingsPage() {
@@ -10,7 +10,6 @@ export default function SettingsPage() {
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
   const [loading, setLoading] = useState(true);
-  const toast = useToast();
 
   // Debounce timers for each field
   const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);

@@ -1,0 +1,91 @@
+import type { AiJob, AiJobWithDisplay } from "@freelance-os/types";
+
+/**
+ * Adds display information to an AI job for UI rendering
+ */
+export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
+  let displayTitle = "";
+  let displayDescription = "";
+
+  switch (job.type) {
+    case "autofill_time_entries": {
+      const params = job.parameters as { date?: string } | undefined;
+      const date = params?.date ? formatJobDate(params.date) : "Unknown date";
+      displayTitle = `Autofill: ${date}`;
+      
+      if (job.status === "completed" && job.result) {
+        const result = job.result as { entriesCreated?: number; date?: string };
+        displayDescription = `Created ${result.entriesCreated || 0} time entries`;
+      } else if (job.status === "processing") {
+        displayDescription = `Analyzing activities (${job.progress}%)`;
+      } else if (job.status === "failed") {
+        displayDescription = job.error || "Failed to process";
+      }
+      break;
+    }
+    default:
+      displayTitle = `Unknown job type: ${job.type}`;
+  }
+
+  return {
+    ...job,
+    displayTitle,
+    displayDescription,
+  };
+}
+
+/**
+ * Format date for job display
+ */
+function formatJobDate(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return dateString;
+  }
+}
+
+/**
+ * Get status badge color classes
+ */
+export function getJobStatusColor(status: AiJob["status"]): string {
+  switch (status) {
+    case "pending":
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+    case "processing":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+    case "completed":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    case "failed":
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+    case "cancelled":
+      return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+  }
+}
+
+/**
+ * Check if a job is for a specific date
+ */
+export function isJobForDate(job: AiJob, date: string): boolean {
+  if (job.type === "autofill_time_entries") {
+    const params = job.parameters as { date?: string } | undefined;
+    return params?.date === date;
+  }
+  return false;
+}
+
+/**
+ * Check if there's an active job for a specific date
+ */
+export function hasActiveJobForDate(jobs: AiJob[], date: string): boolean {
+  return jobs.some(
+    (job) =>
+      isJobForDate(job, date) &&
+      (job.status === "pending" || job.status === "processing")
+  );
+}

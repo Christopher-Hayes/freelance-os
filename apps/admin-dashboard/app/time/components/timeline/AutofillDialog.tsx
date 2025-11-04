@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { useToast } from "@repo/ui";
+import { toast } from "@repo/ui";
 
 interface TimeEntrySuggestion {
   projectId: number;
@@ -31,7 +31,6 @@ export default function AutofillDialog({
   activityCount,
   mergedCount,
 }: AutofillDialogProps) {
-  const toast = useToast();
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(
     new Set(suggestions.map((_, i) => i))
   );

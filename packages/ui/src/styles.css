@@ -1,5 +1,5 @@
 /* Component-level styles for the UI package */
-@import "tailwindcss";
+/* Note: Don't import Tailwind here - let the app import it via globals.css */
 
 /* Toast animation */
 @keyframes slide-in {

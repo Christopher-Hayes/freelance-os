@@ -25,8 +25,9 @@ export type { SkeletonProps } from "./skeleton";
 export { Spinner } from "./spinner";
 export type { SpinnerProps } from "./spinner";
 
-export { ToastProvider, useToast } from "./toast";
-export type { Toast, ToastType } from "./toast";
+// Toast using Sonner
+export { toast } from "sonner";
+export { Toaster } from "sonner";
 
 // Note: Breadcrumbs requires Next.js and should be imported directly by apps
 export { Breadcrumbs } from "./breadcrumbs";

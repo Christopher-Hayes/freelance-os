@@ -189,6 +189,49 @@ enum AiProvider {
   gemini
 }
 
+// Enum for AI job types
+enum AiJobType {
+  autofill_time_entries
+  // Future: generate_invoice_description, analyze_productivity, etc.
+}
+
+// Enum for AI job status
+enum AiJobStatus {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+}
+
+// Background AI jobs for async processing
+model AiJob {
+  id          Int         @id @default(autoincrement())
+  type        AiJobType
+  status      AiJobStatus @default(pending)
+  progress    Int         @default(0) // 0-100 percentage
+  
+  // Job context/parameters (JSON)
+  parameters  Json?       // e.g., { "date": "2024-10-22", "projectIds": [1,2,3] }
+  
+  // Results (JSON)
+  result      Json?       // e.g., { "entriesCreated": 5, "suggestions": [...] }
+  
+  // Error tracking
+  error       String?     @db.Text
+  
+  // Metadata
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  startedAt   DateTime?   @map("started_at") @db.Timestamptz
+  completedAt DateTime?   @map("completed_at") @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  
+  @@index([type, status])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ai_jobs")
+}
+
 // Settings for storing user preferences and API keys
 model Setting {
   id              Int         @id @default(autoincrement())
