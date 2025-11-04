@@ -1,8 +1,25 @@
 # Freelance-OS - Agent Instructions
 
-## CRITICAL RULES
+## ⛔ CRITICAL RULES - READ FIRST ⛔
 
-⚠️ **DO NOT CREATE DOCUMENTATION FILES** - Just implement the features. No GUIDE.md, SUMMARY.md, STATUS.md files unless explicitly requested by the user.
+### 🚫 ABSOLUTELY NO DOCUMENTATION FILES 🚫
+
+**DO NOT CREATE ANY .md FILES EXCEPT:**
+- README.md (one per app/package - only if missing)
+- AGENTS.md (ONLY in `/`, `/apps/admin-dashboard/`, `/apps/client-portal/`, `/packages/database/`)
+
+**FORBIDDEN FILES - NEVER CREATE THESE:**
+- ❌ Any GUIDE.md, SUMMARY.md, STATUS.md, TIMELINE.md, QUICKSTART.md
+- ❌ Any PHASE_*.md, FEATURE_*.md, IMPLEMENTATION_*.md  
+- ❌ Any SETUP.md, MIGRATION.md, QUICKREF.md, SYSTEM_STATUS.md
+- ❌ Any documentation files with dates, version numbers, or descriptive names
+- ❌ **ANY .md file not explicitly listed in the "allowed" list above**
+
+**JUST IMPLEMENT THE CODE. NO DOCUMENTATION. NO SUMMARIES. NO GUIDES.**
+
+If the user asks "document this" → Add comments in the code, NOT a .md file.
+If you finish a feature → Say it's done, DON'T create a SUMMARY.md.
+If you want to explain something → Put it in this AGENTS.md or a code comment.
 
 > **Note**: This file contains high-level project architecture. For app/package-specific details, see:
 > - `apps/admin-dashboard/AGENTS.md` - Admin dashboard patterns
