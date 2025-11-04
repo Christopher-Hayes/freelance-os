@@ -334,25 +334,26 @@ Complete checklist for building out the freelance-os features.
 ## ⏰ Phase 10: Client Portal - Time Tracking View
 
 ### API Routes
-- [ ] Create `apps/client-portal/app/api/time/route.ts`
-  - [ ] GET (client's time entries)
-- [ ] Create `apps/client-portal/app/api/time/summary/route.ts`
-  - [ ] GET (weekly breakdown)
+- [X] Create `apps/client-portal/app/api/time/route.ts`
+  - [X] GET (client's time entries)
+- [X] Create `apps/client-portal/app/api/time/summary/route.ts`
+  - [X] GET (weekly breakdown)
 
 ### UI Pages
-- [ ] Create `apps/client-portal/app/time/page.tsx`
+- [X] Create `apps/client-portal/app/time/page.tsx`
 
 ### Components
-- [ ] TimeEntriesList component
-- [ ] WeeklyBreakdownChart component
-- [ ] MonthlyTotalCard component
+- [X] TimeEntriesList component (integrated in page)
+- [X] WeeklyBreakdownChart component (D3.js line chart)
+- [X] ProjectDistributionChart component (D3.js donut chart)
+- [X] Summary cards (total/billable/non-billable hours, entry count)
 
 ### Features
-- [ ] Show all time entries for client's projects
-- [ ] Group by week
-- [ ] Show weekly distribution chart
-- [ ] Filter by date range
-- [ ] Filter by project
+- [X] Show all time entries for client's projects
+- [X] Group by week
+- [X] Show weekly distribution chart
+- [X] Filter by date range
+- [X] Filter by project
 
 ## 💵 Phase 11: Client Portal - Invoice View
 
@@ -505,7 +506,7 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 9 (Complete) → Ready for Phase 10
+**Current Phase**: Phase 10 (Complete) → Ready for Phase 11
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
@@ -517,6 +518,7 @@ Complete checklist for building out the freelance-os features.
 - ✅ Phase 7: Client Portal - Authentication
 - ✅ Phase 8: Client Portal - Dashboard
 - ✅ Phase 9: Client Portal - Projects View
+- ✅ Phase 10: Client Portal - Time Tracking View
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours

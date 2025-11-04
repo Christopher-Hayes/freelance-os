@@ -1,4 +1,5 @@
-import { auth, signOut } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { handleSignOut } from "@/lib/actions";
 import { Navigation } from "./Navigation";
 
 export async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -19,12 +20,7 @@ export async function DashboardLayout({ children }: { children: React.ReactNode 
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 {session?.user?.email}
               </span>
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/auth/signin" });
-                }}
-              >
+              <form action={handleSignOut}>
                 <button
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 transition-colors"

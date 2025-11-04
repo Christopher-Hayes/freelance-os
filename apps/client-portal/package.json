@@ -16,6 +16,8 @@
     "@freelance-os/database": "workspace:*",
     "@freelance-os/types": "workspace:*",
     "@repo/ui": "workspace:*",
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0",
     "next": "^16.0.0",
     "next-auth": "5.0.0-beta.30",
     "nodemailer": "^7.0.10",

@@ -102,6 +102,12 @@ importers:
       '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@types/d3':
+        specifier: ^7.4.3
+        version: 7.4.3
+      d3:
+        specifier: ^7.9.0
+        version: 7.9.0
       next:
         specifier: ^16.0.0
         version: 16.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
