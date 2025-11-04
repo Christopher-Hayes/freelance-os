@@ -1,9 +1,9 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { InvoicesContent } from "./InvoicesContent";
+import { InvoiceDetailsContent } from "./InvoiceDetailsContent";
 
-export default async function InvoicesPage() {
+export default async function InvoiceDetailPage() {
   const session = await auth();
 
   if (!session?.user) {
@@ -16,7 +16,7 @@ export default async function InvoicesPage() {
 
   return (
     <DashboardLayout>
-      <InvoicesContent />
+      <InvoiceDetailsContent />
     </DashboardLayout>
   );
 }

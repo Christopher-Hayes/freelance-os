@@ -358,25 +358,25 @@ Complete checklist for building out the freelance-os features.
 ## 💵 Phase 11: Client Portal - Invoice View
 
 ### API Routes
-- [ ] Create `apps/client-portal/app/api/invoices/route.ts`
-  - [ ] GET (client's invoices)
-- [ ] Create `apps/client-portal/app/api/invoices/[id]/route.ts`
-  - [ ] GET (single invoice details)
+- [X] Create `apps/client-portal/app/api/invoices/route.ts`
+  - [X] GET (client's invoices)
+- [X] Create `apps/client-portal/app/api/invoices/[id]/route.ts`
+  - [X] GET (single invoice details)
 
 ### UI Pages
-- [ ] Create `apps/client-portal/app/invoices/page.tsx` (list)
-- [ ] Create `apps/client-portal/app/invoices/[id]/page.tsx` (details)
+- [X] Create `apps/client-portal/app/invoices/page.tsx` (list)
+- [X] Create `apps/client-portal/app/invoices/[id]/page.tsx` (details)
 
 ### Components
-- [ ] InvoiceList component
-- [ ] InvoiceDetails component
-- [ ] PaymentStatus badge
+- [X] InvoiceList component (integrated in InvoicesContent)
+- [X] InvoiceDetails component (integrated in InvoiceDetailsContent)
+- [X] PaymentStatus badge (integrated in both components)
 
 ### Features
-- [ ] Show all invoices for client
-- [ ] Filter by status (paid, unpaid, overdue)
-- [ ] Show payment due dates
-- [ ] Highlight overdue invoices
+- [X] Show all invoices for client
+- [X] Filter by status (paid, unpaid, overdue)
+- [X] Show payment due dates
+- [X] Highlight overdue invoices
 
 ## 📄 Phase 12: PDF Generation
 
@@ -506,7 +506,7 @@ Complete checklist for building out the freelance-os features.
 
 ## 📝 Progress Tracking
 
-**Current Phase**: Phase 10 (Complete) → Ready for Phase 11
+**Current Phase**: Phase 11 (Complete) → Ready for Phase 12
 
 **Completed**:
 - ✅ Phase 1: Setup & Infrastructure
@@ -519,6 +519,7 @@ Complete checklist for building out the freelance-os features.
 - ✅ Phase 8: Client Portal - Dashboard
 - ✅ Phase 9: Client Portal - Projects View
 - ✅ Phase 10: Client Portal - Time Tracking View
+- ✅ Phase 11: Client Portal - Invoice View
 
 **Estimated Timeline**:
 - Phase 1: 1-2 hours

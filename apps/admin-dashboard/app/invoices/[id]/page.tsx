@@ -441,7 +441,7 @@ export default function InvoiceDetailPage() {
 
           <div className="mb-8">
             <h3 className="text-2xl font-bold text-right dark:text-white">
-              Amount: {formatCurrency(invoice.amount, invoice.currency)}
+              Amount: {formatCurrency(Number(invoice.amount), invoice.currency)}
             </h3>
           </div>
 

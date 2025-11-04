@@ -112,19 +112,19 @@ export default function InvoicesPage() {
   };
 
   const calculateTotalAmount = () => {
-    return invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+    return invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
   };
 
   const calculatePaidAmount = () => {
     return invoices
       .filter(inv => inv.status === 'paid')
-      .reduce((sum, invoice) => sum + invoice.amount, 0);
+      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
   };
 
   const calculateOutstandingAmount = () => {
     return invoices
       .filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled')
-      .reduce((sum, invoice) => sum + invoice.amount, 0);
+      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
   };
 
   if (loading) {
@@ -287,7 +287,7 @@ export default function InvoicesPage() {
                     {invoice.project?.name || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    {formatCurrency(invoice.amount, invoice.currency)}
+                    {formatCurrency(Number(invoice.amount), invoice.currency)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {formatDate(invoice.issueDate)}
