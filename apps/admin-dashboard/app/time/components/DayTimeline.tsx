@@ -17,6 +17,7 @@ import {
   HOUR_HEIGHT,
   TIMELINE_PADDING_TOP,
   TIMELINE_DRAG_OFFSET,
+  MERGE_THRESHOLD_MINUTES,
   yToTime,
   mergeAdjacentSessions,
   buildAppColorMap,
@@ -126,6 +127,7 @@ export default function DayTimeline({
     mergedCount?: number;
   } | null>(null);
   const [loadingAutofill, setLoadingAutofill] = useState(false);
+  const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
 
   // Refs
   const activityScrollRef = useRef<HTMLDivElement>(null);
@@ -213,6 +215,9 @@ export default function DayTimeline({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
+        const isToday = Temporal.PlainDate.compare(selectedDate, Temporal.Now.plainDateISO()) === 0;
+        if (!isToday) return;
+
         const timeSinceLastRefresh = Date.now() - lastRefreshTime;
         const fiveMinutesInMs = 5 * 60 * 1000;
         
@@ -677,6 +682,33 @@ export default function DayTimeline({
     }
   };
 
+  const handleMergeEntries = (entryId: number, nextEntryId: number) => async () => {
+    setMergingEntryId(entryId);
+    try {
+      const response = await fetch("/api/time/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryId1: entryId,
+          entryId2: nextEntryId,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to merge entries");
+      }
+
+      await fetchDayData();
+      toast.success("Entries merged successfully!");
+    } catch (error: any) {
+      console.error("Error merging entries:", error);
+      toast.error(error.message || "Failed to merge entries");
+    } finally {
+      setMergingEntryId(null);
+    }
+  };
+
   const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (timelineRef.current) {
       timelineRef.current.scrollTop = e.currentTarget.scrollTop;
@@ -713,11 +745,47 @@ export default function DayTimeline({
       } as TimeEntry);
     }
 
+    // Sort entries by start time to check for adjacent entries
+    const sortedEntries = [...entries].sort((a, b) => {
+      const aTime = Temporal.Instant.from(a.startTime);
+      const bTime = Temporal.Instant.from(b.startTime);
+      return Temporal.Instant.compare(aTime, bTime);
+    });
+
+    // Build a map of which entries can be merged
+    const canMergeMap = new Map<number, number>(); // entryId -> nextEntryId to merge with
+    
+    for (let i = 0; i < sortedEntries.length - 1; i++) {
+      const currentEntry = sortedEntries[i]!;
+      const nextEntry = sortedEntries[i + 1]!;
+      
+      // Skip ghost entries
+      if (currentEntry.id === -1 || nextEntry.id === -1) continue;
+      
+      // Check if they're the same project
+      if (currentEntry.projectId !== nextEntry.projectId) continue;
+      
+      const currentEnd = Temporal.Instant.from(currentEntry.endTime);
+      const nextStart = Temporal.Instant.from(nextEntry.startTime);
+      
+      // Calculate gap in minutes
+      const gapNs = nextStart.epochNanoseconds - currentEnd.epochNanoseconds;
+      const gapMinutes = Number(gapNs / 60_000_000_000n);
+      
+      // If gap is within threshold, mark as mergeable
+      if (gapMinutes >= 0 && gapMinutes <= MERGE_THRESHOLD_MINUTES) {
+        canMergeMap.set(currentEntry.id, nextEntry.id);
+      }
+    }
+
     return entries.map((entry) => {
       const isGhost = entry.id === -1;
       const position = isGhost 
         ? { column: 0, totalColumns: 1 }
         : (overlapPositions[entry.id] || { column: 0, totalColumns: 1 });
+      
+      const canMerge = canMergeMap.has(entry.id);
+      const nextEntryId = canMergeMap.get(entry.id);
 
       return (
         <TimeEntryBar
@@ -729,11 +797,14 @@ export default function DayTimeline({
           draggedTimes={draggedTimes[entry.id]}
           isEditing={editingEntryId === entry.id}
           projects={projects}
+          canMerge={canMerge}
+          isMerging={mergingEntryId === entry.id}
           onDragStart={(e, edge, time) => handleDragStart(e, entry.id, edge, time)}
           onClick={handleEntryClick(entry.id)}
           onSaveEdit={handleSaveEdit(entry.id)}
           onCancelEdit={() => setEditingEntryId(null)}
           onDelete={handleDelete(entry.id)}
+          onMerge={canMerge && nextEntryId ? handleMergeEntries(entry.id, nextEntryId) : undefined}
         />
       );
     });

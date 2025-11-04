@@ -6,6 +6,7 @@ export const TIMELINE_PADDING_TOP = 16;
 export const TIMELINE_DRAG_OFFSET = -8;
 export const MIN_DISPLAY_DURATION_MINUTES = 15;
 export const MERGE_GAP_MINUTES = 10;
+export const MERGE_THRESHOLD_MINUTES = 15; // Show merge button when entries are this close
 
 export const APP_COLORS = [
   '#3B82F6', // blue

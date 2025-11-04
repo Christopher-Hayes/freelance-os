@@ -73,7 +73,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
       title={`${session.appClass}\n${session.windowTitle || ""}\n${Math.round(session.durationSeconds / 60)} min`}
     >
       {height > 10 && (
-        <div className="flex flex-wrap text-xs truncate" style={{ color: appColor }}>
+        <div className="flex flex-wrap text-xs" style={{ color: appColor }}>
           {(height > 35 && session.windowTitle) ? (
             <>
               <div className="font-semibold truncate mb-0.5">{formatAppTitle(session.appClass)}</div>

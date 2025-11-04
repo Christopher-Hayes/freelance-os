@@ -252,6 +252,7 @@ Guidelines:
 - Ignore casual web browsing, social media, email checking unless window titles clearly indicate project work
 - Be conservative - when in doubt, don't suggest an entry
 - Provide realistic time ranges based on the activity data
+- Entries should be at minimum 15 minutes long
 - Keep descriptions concise but informative
 - Mark entries as billable based on the project's billable status
 - Consider the confidence level based on how clearly the activities match a project`,
