@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { authFetch } from '@/lib/util';
 
 interface Project {
   id: number;
@@ -47,7 +48,7 @@ export default function QuickEntryModal({
   useEffect(() => {
     if (isOpen) {
       // Fetch projects
-      fetch("/api/projects")
+      authFetch("/api/projects")
         .then((res) => res.json())
         .then((data) => setProjects(data))
         .catch((err) => console.error("Error fetching projects:", err));

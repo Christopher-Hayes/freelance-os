@@ -284,6 +284,7 @@ model Setting {
   jmapToken       String?     @map("jmap_token") @db.Text
   jmapUsername    String?     @map("jmap_username") @db.Text
   jmapHostname    String?     @map("jmap_hostname") @db.Text
+  jmapEnabled     Boolean     @default(false) @map("jmap_enabled") // Allow AI to search emails via JMAP
   companyName     String?     @map("company_name") @db.Text
   freelancerName  String?     @map("freelancer_name") @db.Text
   freelancerEmail String?     @map("freelancer_email") @db.Text

@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { Temporal } from '@/lib/temporal-polyfill';
-import { getWeekStart, formatWeekRange, plainDateToUTC } from '@/lib/util';
+import { getWeekStart, formatWeekRange, plainDateToUTC, authFetch } from '@/lib/util';
 import { generateWeeklySummary } from '@/lib/ai-actions';
+import { toast } from '@repo/ui';
 
 type TimeEntry = {
   id: number;
@@ -102,7 +103,7 @@ export function WeeklySummaries({
 
   const fetchSummaries = async () => {
     try {
-      const res = await fetch(`/api/weekly-summaries?projectId=${projectId}`);
+      const res = await authFetch(`/api/weekly-summaries?projectId=${projectId}`);
       if (res.ok) {
         const data = await res.json();
         setSummaries(data);
@@ -126,7 +127,7 @@ export function WeeklySummaries({
 
       if (summaryId) {
         // Update existing summary
-        const res = await fetch(`/api/weekly-summaries/${summaryId}`, {
+        const res = await authFetch(`/api/weekly-summaries/${summaryId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ summary: editText }),
@@ -135,7 +136,7 @@ export function WeeklySummaries({
         if (!res.ok) throw new Error('Failed to update summary');
       } else {
         // Create new summary
-        const res = await fetch('/api/weekly-summaries', {
+        const res = await authFetch('/api/weekly-summaries', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -151,9 +152,10 @@ export function WeeklySummaries({
       await fetchSummaries();
       setEditingWeek(null);
       setEditText('');
+      toast.success('Summary saved successfully');
     } catch (error) {
       console.error('Error saving summary:', error);
-      alert('Failed to save summary');
+      toast.error('Failed to save summary');
     } finally {
       setSaving(false);
     }
@@ -165,19 +167,18 @@ export function WeeklySummaries({
   };
 
   const handleDelete = async (summaryId: number) => {
-    if (!confirm('Are you sure you want to delete this weekly summary?')) return;
-
     try {
-      const res = await fetch(`/api/weekly-summaries/${summaryId}`, {
+      const res = await authFetch(`/api/weekly-summaries/${summaryId}`, {
         method: 'DELETE',
       });
 
       if (!res.ok) throw new Error('Failed to delete summary');
 
       await fetchSummaries();
+      toast.success('Summary deleted successfully');
     } catch (error) {
       console.error('Error deleting summary:', error);
-      alert('Failed to delete summary');
+      toast.error('Failed to delete summary');
     }
   };
 
@@ -190,7 +191,7 @@ export function WeeklySummaries({
         .slice(0, 5);
 
       if (weeksWithoutSummaries.length === 0) {
-        alert('All recent weeks already have summaries!');
+        toast.info('All recent weeks already have summaries!');
         return;
       }
 
@@ -211,14 +212,14 @@ export function WeeklySummaries({
           // Generate summary using AI
           const summary = await generateWeeklySummary({
             projectId,
-            weekStart: formatWeekRange(week.weekStart).split(',')[0]!, // Just the date range part
-            weekEnd: week.weekEnd.toString(),
+            weekStart: week.weekStart.toString(), // Convert to string for serialization
+            weekEnd: week.weekEnd.toString(),     // Convert to string for serialization
             entries,
           });
 
           // Save the summary
           const weekStartUTC = plainDateToUTC(week.weekStart);
-          const res = await fetch('/api/weekly-summaries', {
+          const res = await authFetch('/api/weekly-summaries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -238,10 +239,10 @@ export function WeeklySummaries({
 
       // Refresh summaries
       await fetchSummaries();
-      alert(`Generated ${weeksWithoutSummaries.length} weekly summaries!`);
+      toast.success(`Generated ${weeksWithoutSummaries.length} weekly summaries!`);
     } catch (error) {
       console.error('Error during autofill:', error);
-      alert('Failed to autofill summaries');
+      toast.error('Failed to autofill summaries');
     } finally {
       setAutofilling(false);
     }

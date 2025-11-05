@@ -53,6 +53,9 @@ importers:
       d3:
         specifier: ^7.9.0
         version: 7.9.0
+      jmap-jam:
+        specifier: ^0.12.1
+        version: 0.12.1
       lucide-react:
         specifier: ^0.552.0
         version: 0.552.0(react@19.2.0)
@@ -2142,6 +2145,12 @@ packages:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
     hasBin: true
 
+  jmap-jam@0.12.1:
+    resolution: {integrity: sha512-AN4U3luJiWSogvr16xbCHkPL+kj2W4Rz+coVOHK3HqiUdNlofn4OhIovrVp78el6511lJ39UwRf4RSJhMIwkYg==}
+
+  jmap-rfc-types@0.1.1:
+    resolution: {integrity: sha512-5LsCLUcU5Ka8ccuSBFPsRJZ+f3WzhYvzwjDg/8XA+IKAVTbgmsPW4JdYZeZZPelagmqeNZWDvoUV8kc1HV8TPw==}
+
   jose@6.1.0:
     resolution: {integrity: sha512-TTQJyoEoKcC1lscpVDCSsVgYzUDg/0Bt3WE//WiTPK6uOCQC2KZS4MpugbMWt/zyjkopgZoXhZuCi00gLudfUA==}
 
@@ -2865,6 +2874,10 @@ packages:
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
+
+  type-fest@4.41.0:
+    resolution: {integrity: sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA==}
+    engines: {node: '>=16'}
 
   typed-array-buffer@1.0.3:
     resolution: {integrity: sha512-nAYYwfY3qnzX30IkA6AQZjVbtK6duGontcQm1WSG1MD94YLqK0515GNApXkoxKOWMusVssAHWLh9SeaoefYFGw==}
@@ -4899,6 +4912,15 @@ snapshots:
 
   jiti@2.6.1: {}
 
+  jmap-jam@0.12.1:
+    dependencies:
+      jmap-rfc-types: 0.1.1
+      type-fest: 4.41.0
+
+  jmap-rfc-types@0.1.1:
+    dependencies:
+      type-fest: 4.41.0
+
   jose@6.1.0: {}
 
   js-tokens@4.0.0: {}
@@ -5569,6 +5591,8 @@ snapshots:
   type-check@0.4.0:
     dependencies:
       prelude-ls: 1.2.1
+
+  type-fest@4.41.0: {}
 
   typed-array-buffer@1.0.3:
     dependencies:

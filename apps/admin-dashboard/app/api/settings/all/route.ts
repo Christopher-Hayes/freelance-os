@@ -38,6 +38,7 @@ export async function GET() {
       
       // Non-sensitive fields - safe to expose
       aiProvider: setting.aiProvider || "openai",
+      jmapEnabled: setting.jmapEnabled || false,
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",
@@ -71,7 +72,8 @@ export async function PUT(request: Request) {
       rescuetimeKey, 
       openaiKey, 
       googleApiKey, 
-      aiProvider, 
+      aiProvider,
+      jmapEnabled,
       jmapToken, 
       jmapUsername, 
       jmapHostname,
@@ -111,6 +113,7 @@ export async function PUT(request: Request) {
     
     // Non-sensitive fields can be updated normally
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
+    if (jmapEnabled !== undefined) updateData.jmapEnabled = jmapEnabled === "true" || jmapEnabled === true;
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
     if (companyName !== undefined) updateData.companyName = companyName || null;
@@ -131,6 +134,7 @@ export async function PUT(request: Request) {
         openaiKey: openaiKey && openaiKey !== MASK_VALUE ? openaiKey : null,
         googleApiKey: googleApiKey && googleApiKey !== MASK_VALUE ? googleApiKey : null,
         aiProvider: (aiProvider as AiProvider) || "openai",
+        jmapEnabled: jmapEnabled === "true" || jmapEnabled === true || false,
         jmapToken: jmapToken && jmapToken !== MASK_VALUE ? jmapToken : null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
@@ -150,6 +154,7 @@ export async function PUT(request: Request) {
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
       aiProvider: setting.aiProvider || "openai",
+      jmapEnabled: setting.jmapEnabled || false,
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { authFetch } from '@/lib/util';
 
 type Client = {
   id: number;
@@ -48,7 +49,7 @@ export default function NewProjectPage() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch('/api/clients');
+      const res = await authFetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
       setClients(data);
@@ -63,7 +64,7 @@ export default function NewProjectPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await authFetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

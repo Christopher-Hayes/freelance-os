@@ -6,6 +6,7 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
 import { APIFooter } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 interface TimeEntry {
   id: number;
@@ -174,8 +175,8 @@ export default function TimeEntriesPage() {
   // Fetch clients and projects for filters
   useEffect(() => {
     Promise.all([
-      fetch("/api/clients").then((res) => res.json()),
-      fetch("/api/projects").then((res) => res.json()),
+      authFetch("/api/clients").then((res) => res.json()),
+      authFetch("/api/projects").then((res) => res.json()),
     ])
       .then(([clientsData, projectsData]) => {
         // Ensure we only set arrays, handle error responses
@@ -217,7 +218,7 @@ export default function TimeEntriesPage() {
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
 
-      const response = await fetch(`/api/time?${params}`);
+      const response = await authFetch(`/api/time?${params}`);
       if (!response.ok) throw new Error("Failed to fetch time entries");
 
       const data = await response.json();
@@ -235,7 +236,7 @@ export default function TimeEntriesPage() {
     if (!confirm("Are you sure you want to delete this time entry?")) return;
 
     try {
-      const response = await fetch(`/api/time/${id}`, {
+      const response = await authFetch(`/api/time/${id}`, {
         method: "DELETE",
       });
 

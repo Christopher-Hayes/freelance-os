@@ -31,6 +31,7 @@ import {
   type OverlapPosition,
 } from "./timeline/overlapCalculations";
 import { debounce, throttle } from "@/lib/util";
+import { authFetch } from '@/lib/util';
 
 // Memoized component for activity sessions timeline - only re-renders when sessions change
 const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
@@ -383,7 +384,7 @@ export default function DayTimeline({
             Number((endTime.epochNanoseconds - startTime.epochNanoseconds) / 60_000_000_000n)
           );
 
-          fetch(`/api/time/${dragging.entryId}`, {
+          authFetch(`/api/time/${dragging.entryId}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -418,7 +419,7 @@ export default function DayTimeline({
   // Data fetching
   const fetchProjects = async () => {
     try {
-      const response = await fetch("/api/projects");
+      const response = await authFetch("/api/projects");
       const data = await response.json();
       setProjects(data);
     } catch (error) {
@@ -432,8 +433,8 @@ export default function DayTimeline({
 
     try {
       const [sessionsRes, entriesRes] = await Promise.all([
-        fetch(`/api/activity-sessions?date=${dateStr}`),
-        fetch(`/api/time?startDate=${dateStr}&endDate=${dateStr}`),
+        authFetch(`/api/activity-sessions?date=${dateStr}`),
+        authFetch(`/api/time?startDate=${dateStr}&endDate=${dateStr}`),
       ]);
 
       const sessionsData = await sessionsRes.json();
@@ -605,7 +606,7 @@ export default function DayTimeline({
         Number((creatingEntry.endTime.epochNanoseconds - creatingEntry.startTime.epochNanoseconds) / 60_000_000_000n)
       );
 
-      const response = await fetch("/api/time", {
+      const response = await authFetch("/api/time", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -638,7 +639,7 @@ export default function DayTimeline({
     const billable = formData.get('billable') === 'on';
 
     try {
-      const response = await fetch(`/api/time/${entryId}`, {
+      const response = await authFetch(`/api/time/${entryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -662,7 +663,7 @@ export default function DayTimeline({
     // if (!confirm("Delete this time entry?")) return;
 
     try {
-      const response = await fetch(`/api/time/${entryId}`, {
+      const response = await authFetch(`/api/time/${entryId}`, {
         method: "DELETE",
       });
 

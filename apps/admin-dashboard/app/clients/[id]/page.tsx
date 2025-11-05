@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { authFetch } from '@/lib/util';
 
 interface Client {
   id: number;
@@ -53,7 +54,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     
     const fetchClient = async () => {
       try {
-        const response = await fetch(`/api/clients/${clientId}`);
+        const response = await authFetch(`/api/clients/${clientId}`);
         if (!response.ok) {
           throw new Error('Failed to fetch client');
         }
@@ -79,7 +80,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     setError('');
 
     try {
-      const response = await fetch(`/api/clients/${clientId}`, {
+      const response = await authFetch(`/api/clients/${clientId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     setError('');
 
     try {
-      const response = await fetch(`/api/clients/${clientId}`, {
+      const response = await authFetch(`/api/clients/${clientId}`, {
         method: 'DELETE',
       });
 
@@ -139,7 +140,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     setSuccessMessage('');
 
     try {
-      const response = await fetch(`/api/clients/${clientId}/welcome`, {
+      const response = await authFetch(`/api/clients/${clientId}/welcome`, {
         method: 'POST',
       });
 

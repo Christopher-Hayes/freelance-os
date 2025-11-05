@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
 import { WeeklySummaries } from './WeeklySummaries';
+import { authFetch } from '@/lib/util';
 
 type Client = {
   id: number;
@@ -108,7 +109,7 @@ export default function ProjectDetailPage({
   const fetchProject = async (id: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/projects/${id}`);
+      const res = await authFetch(`/api/projects/${id}`);
       if (!res.ok) throw new Error('Failed to fetch project');
       const data = await res.json();
       setProject(data);
@@ -132,7 +133,7 @@ export default function ProjectDetailPage({
 
   const fetchClients = async () => {
     try {
-      const res = await fetch('/api/clients');
+      const res = await authFetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
       setClients(data);
@@ -149,7 +150,7 @@ export default function ProjectDetailPage({
     setError(null);
 
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await authFetch(`/api/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -194,7 +195,7 @@ export default function ProjectDetailPage({
     }
 
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await authFetch(`/api/projects/${projectId}`, {
         method: 'DELETE',
       });
 

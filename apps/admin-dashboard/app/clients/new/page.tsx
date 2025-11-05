@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { authFetch } from '@/lib/util';
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function NewClientPage() {
     setError('');
 
     try {
-      const response = await fetch('/api/clients', {
+      const response = await authFetch('/api/clients', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

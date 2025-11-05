@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
+import { authFetch } from '@/lib/util';
 
 const MASK_VALUE = "••••••••";
 
@@ -27,6 +28,7 @@ export default function SettingsPage() {
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
+  const [jmapEnabled, setJmapEnabled] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [freelancerName, setFreelancerName] = useState("");
   const [freelancerEmail, setFreelancerEmail] = useState("");
@@ -64,7 +66,7 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/settings/all");
+      const response = await authFetch("/api/settings/all");
       if (response.ok) {
         const data = await response.json();
         // Sensitive fields will be masked (••••••••) if they exist
@@ -73,6 +75,7 @@ export default function SettingsPage() {
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
         setJmapToken(data.jmapToken || "");
+        setJmapEnabled(data.jmapEnabled || false);
         // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
@@ -82,7 +85,7 @@ export default function SettingsPage() {
         setAddress(data.address || "");
         setPhone(data.phone || "");
         setWebsite(data.website || "");
-        
+
         // Reset modified fields tracker on initial load
         setModifiedFields(new Set());
       }
@@ -95,7 +98,7 @@ export default function SettingsPage() {
 
   const saveSetting = async (field: string, value: string | AiProvider) => {
     try {
-      const response = await fetch("/api/settings/all", {
+      const response = await authFetch("/api/settings/all", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -117,7 +120,7 @@ export default function SettingsPage() {
   const handleRescueTimeChange = (value: string) => {
     setRescueTimeApiKey(value);
     setModifiedFields(prev => new Set(prev).add("rescuetimeKey"));
-    
+
     if (rescueTimeTimerRef.current) {
       clearTimeout(rescueTimeTimerRef.current);
     }
@@ -133,7 +136,7 @@ export default function SettingsPage() {
   const handleOpenaiChange = (value: string) => {
     setOpenaiApiKey(value);
     setModifiedFields(prev => new Set(prev).add("openaiKey"));
-    
+
     if (openaiTimerRef.current) {
       clearTimeout(openaiTimerRef.current);
     }
@@ -149,7 +152,7 @@ export default function SettingsPage() {
   const handleGoogleChange = (value: string) => {
     setGoogleApiKey(value);
     setModifiedFields(prev => new Set(prev).add("googleApiKey"));
-    
+
     if (googleTimerRef.current) {
       clearTimeout(googleTimerRef.current);
     }
@@ -170,7 +173,7 @@ export default function SettingsPage() {
   const handleJmapTokenChange = (value: string) => {
     setJmapToken(value);
     setModifiedFields(prev => new Set(prev).add("jmapToken"));
-    
+
     if (jmapTokenTimerRef.current) {
       clearTimeout(jmapTokenTimerRef.current);
     }
@@ -185,7 +188,7 @@ export default function SettingsPage() {
 
   const handleJmapUsernameChange = (value: string) => {
     setJmapUsername(value);
-    
+
     if (jmapUsernameTimerRef.current) {
       clearTimeout(jmapUsernameTimerRef.current);
     }
@@ -197,7 +200,7 @@ export default function SettingsPage() {
 
   const handleJmapHostnameChange = (value: string) => {
     setJmapHostname(value);
-    
+
     if (jmapHostnameTimerRef.current) {
       clearTimeout(jmapHostnameTimerRef.current);
     }
@@ -207,9 +210,14 @@ export default function SettingsPage() {
     }, 1000);
   };
 
+  const handleJmapEnabledChange = (checked: boolean) => {
+    setJmapEnabled(checked);
+    saveSetting("jmapEnabled", String(checked)); // Convert boolean to string for API
+  };
+
   const handleCompanyNameChange = (value: string) => {
     setCompanyName(value);
-    
+
     if (companyNameTimerRef.current) {
       clearTimeout(companyNameTimerRef.current);
     }
@@ -221,7 +229,7 @@ export default function SettingsPage() {
 
   const handleFreelancerNameChange = (value: string) => {
     setFreelancerName(value);
-    
+
     if (freelancerNameTimerRef.current) {
       clearTimeout(freelancerNameTimerRef.current);
     }
@@ -233,7 +241,7 @@ export default function SettingsPage() {
 
   const handleFreelancerEmailChange = (value: string) => {
     setFreelancerEmail(value);
-    
+
     if (freelancerEmailTimerRef.current) {
       clearTimeout(freelancerEmailTimerRef.current);
     }
@@ -245,7 +253,7 @@ export default function SettingsPage() {
 
   const handleAddressChange = (value: string) => {
     setAddress(value);
-    
+
     if (addressTimerRef.current) {
       clearTimeout(addressTimerRef.current);
     }
@@ -257,7 +265,7 @@ export default function SettingsPage() {
 
   const handlePhoneChange = (value: string) => {
     setPhone(value);
-    
+
     if (phoneTimerRef.current) {
       clearTimeout(phoneTimerRef.current);
     }
@@ -269,7 +277,7 @@ export default function SettingsPage() {
 
   const handleWebsiteChange = (value: string) => {
     setWebsite(value);
-    
+
     if (websiteTimerRef.current) {
       clearTimeout(websiteTimerRef.current);
     }
@@ -281,7 +289,7 @@ export default function SettingsPage() {
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch("/api/api-keys");
+      const response = await authFetch("/api/api-keys");
       if (response.ok) {
         const data = await response.json();
         setApiKeys(data);
@@ -297,7 +305,7 @@ export default function SettingsPage() {
     expiresAt?: Date
   ) => {
     try {
-      const response = await fetch("/api/api-keys", {
+      const response = await authFetch("/api/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, permissions, expiresAt }),
@@ -319,15 +327,15 @@ export default function SettingsPage() {
 
   const handleRevokeApiKey = async (id: string) => {
     try {
-      const response = await fetch(`/api/api-keys/${id}`, {
+      const response = await authFetch(`/api/api-keys/${id}`, {
         method: "DELETE",
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || "Failed to revoke API key");
       }
-      
+
       await fetchApiKeys();
       toast.success("API key revoked successfully");
     } catch (error) {
@@ -361,7 +369,7 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Freelancer Information
           </h2>
-          
+
           <div className="space-y-4">
             <div>
               <label
@@ -477,7 +485,7 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             AI Provider Configuration
           </h2>
-          
+
           <div className="space-y-4">
             <div>
               <label
@@ -578,7 +586,7 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             RescueTime Integration
           </h2>
-          
+
           <div className="space-y-4">
             <div>
               <label
@@ -620,8 +628,48 @@ export default function SettingsPage() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Email Configuration (JMAP)
           </h2>
-          
+
           <div className="space-y-4">
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  id="jmap_enabled"
+                  type="checkbox"
+                  checked={jmapEnabled}
+                  onChange={(e) => handleJmapEnabledChange(e.target.checked)}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                />
+              </div>
+              <div className="ml-3">
+                <label htmlFor="jmap_enabled" className="font-medium text-gray-700 dark:text-gray-300">
+                  Allow AI to search for emails via JMAP
+                </label>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy.
+                </p>
+              </div>
+            </div>
+            {jmapEnabled && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+                <div className="flex items-start">
+                  <div className="shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      Privacy Warning
+                    </h3>
+                    <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                      <p>
+                        When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <label
                 htmlFor="jmap_token"
@@ -672,7 +720,7 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                The email address to send from
+                Your email address for JMAP authentication
               </p>
             </div>
 
@@ -715,8 +763,16 @@ export default function SettingsPage() {
               Generate New Key
             </button>
           </div>
-          
-          <ApiKeyList apiKeys={apiKeys} onRevoke={handleRevokeApiKey} />
+
+          <ApiKeyList 
+            apiKeys={apiKeys.map(key => ({
+              ...key,
+              lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
+              expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
+              createdAt: key.createdAt.toISOString()
+            }))} 
+            onRevoke={handleRevokeApiKey} 
+          />
         </div>
       </div>
 

@@ -1,11 +1,12 @@
 "use server";
 
-import { generateText, generateObject } from "ai";
+import { generateText, generateObject, tool, Experimental_Agent as Agent, stepCountIs } from "ai";
 import { z } from "zod";
 import { getAiModel } from "@/lib/ai-provider";
 import { prisma } from "@freelance-os/database";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { headers } from 'next/headers'
+import { headers } from 'next/headers';
+import { searchEmailsByKeyword, searchEmailsByDateRange, isJmapEnabled, getFullEmailById, getEmailThreadById } from "@/lib/jmap-provider";
 
 /**
  * Generate code snippet for API endpoint using AI
@@ -342,11 +343,12 @@ function mergeSessionsForAI(sessions: any[]): any[] {
 
 /**
  * Generate a client-friendly weekly summary based on time entry descriptions
+ * Uses an AI agent with JMAP search tools for intelligent email context gathering
  */
 export async function generateWeeklySummary(params: {
   projectId: number;
-  weekStart: string;
-  weekEnd: string;
+  weekStart: string; // ISO date string (YYYY-MM-DD)
+  weekEnd: string;   // ISO date string (YYYY-MM-DD)
   entries: Array<{
     date: string;
     description: string | null;
@@ -354,6 +356,10 @@ export async function generateWeeklySummary(params: {
   }>;
 }): Promise<string> {
   const model = await getAiModel();
+  
+  // Convert string dates to Temporal.PlainDate
+  const weekStart = Temporal.PlainDate.from(params.weekStart);
+  const weekEnd = Temporal.PlainDate.from(params.weekEnd);
 
   // Fetch project details
   const project = await prisma.project.findUnique({
@@ -364,6 +370,12 @@ export async function generateWeeklySummary(params: {
       privateNotes: true,
       startDate: true,
       endDate: true,
+      client: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
     },
   });
 
@@ -373,8 +385,9 @@ export async function generateWeeklySummary(params: {
 
   const totalHours = params.entries.reduce((sum, e) => sum + e.hours, 0);
   
-  // Build project context section
+  // Build project context
   let projectContext = `Project: ${project.name}`;
+  projectContext += `\nClient: ${project.client.name} (${project.client.email})`;
   if (project.clientDescription) {
     projectContext += `\nProject Description: ${project.clientDescription}`;
   }
@@ -390,17 +403,23 @@ export async function generateWeeklySummary(params: {
       projectContext += `${project.startDate ? ',' : ''} Due ${project.endDate.toISOString().split('T')[0]}`;
     }
   }
-  
-  const prompt = `You are writing a professional weekly summary for a client invoice.
 
-${projectContext}
-Week: ${params.weekStart} to ${params.weekEnd}
-Total Hours: ${totalHours.toFixed(1)} hours
+  // Check if JMAP is available
+  const jmapIsEnabled = await isJmapEnabled();
 
-Time Entries:
-${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
+  // Convert dates to Instants for email search
+  const weekStartInstant = weekStart.toPlainDateTime(Temporal.PlainTime.from("00:00:00")).toZonedDateTime("UTC").toInstant();
+  const weekEndInstant = weekEnd.toPlainDateTime(Temporal.PlainTime.from("23:59:59")).toZonedDateTime("UTC").toInstant();
 
-Write a concise 1-2 sentence summary of the work accomplished this week. 
+  if (!jmapIsEnabled) {
+    // Fallback to simple generation without email context
+    const { text } = await generateText({
+      model,
+      system: `You are writing a professional weekly summary for a client invoice.
+
+Your goal is to create a concise 1-2 sentence summary of the work accomplished this week.
+
+Guidelines:
 - Use client-friendly, professional language (avoid technical jargon or shorthand)
 - Focus on outcomes and deliverables, not just activities
 - Be specific about what was accomplished
@@ -410,12 +429,153 @@ Write a concise 1-2 sentence summary of the work accomplished this week.
 - Do not use bullet points, write in paragraph form
 - If project timeline is provided, consider where this week falls in the overall project progress
 
-Summary:`;
+Provide ONLY the summary text, no preamble or explanation.`,
+      prompt: `${projectContext}
+Week: ${weekStart.toString()} to ${weekEnd.toString()}
+Total Hours: ${totalHours.toFixed(1)} hours
 
-  const { text } = await generateText({
-    model,
-    prompt,
+Time Entries:
+${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
+
+Generate the weekly summary now:`,
+    });
+
+    return text.trim();
+  }
+
+  const summaryAgent = new Agent({
+    model: model,
+    stopWhen: stepCountIs(10), // Allow up to 10 steps
+    tools: {
+      searchEmailsByKeyword: tool({
+        description: 'Search for emails containing specific keywords within the week. Use this to find project communications that provide context for vague time entries.',
+        inputSchema: z.object({
+          keyword: z.string().describe('Search keyword (project name, feature, client name). One or two words preferred.'),
+          limit: z.number().optional().default(5).describe('Max results'),
+        }),
+        execute: async ({ keyword, limit }: { keyword: string; limit?: number }) => {
+          const results = await searchEmailsByKeyword(keyword, weekStartInstant, weekEndInstant, limit || 5);
+          if (results.length === 0) {
+            return { count: 0, message: `No emails found for "${keyword}"` };
+          }
+          console.log(`searchEmailsByKeyword results for "${keyword}":`, results);
+          return {
+            count: results.length,
+            emails: results.map(e => ({
+              date: e.date.toISOString().split('T')[0],
+              from: e.from,
+              subject: e.subject,
+              preview: e.preview.substring(0, 150),
+            })),
+          };
+        },
+      }),
+      searchEmailsFromClient: tool({
+        description: 'Search for emails from the client within the week. Use this to find direct communications that provide context for time entries.',
+        inputSchema: z.object({
+          limit: z.number().optional().default(5).describe('Max results'),
+          emails: z.array(z.string()).describe('Client email addresses to search from'),
+        }),
+        execute: async ({ limit, emails }: { limit?: number; emails: string[] }) => {
+          const results = await searchEmailsByDateRange(weekStartInstant, weekEndInstant, limit || 5);
+          if (results.length === 0) {
+            return { count: 0, message: `No emails found from client addresses` };
+          }
+          console.log("searchEmailsFromClient results:", results);
+          return {
+            count: results.length,
+            emails: results.map(e => ({
+              date: e.date.toISOString().split('T')[0],
+              from: e.from,
+              subject: e.subject,
+              preview: e.preview.substring(0, 150),
+            })),
+          };
+        },
+      }),
+      getFullEmailThread: tool({
+        description: 'Retrieve the full email thread for a specific email by its ID. Use this to get complete context from important email conversations.',
+        inputSchema: z.object({
+          threadId: z.string().describe('The unique identifier of the email thread to retrieve'),
+        }),
+        execute: async ({ threadId }: { threadId: string }) => {
+          const emails = await getEmailThreadById(threadId);
+          if (!emails) {
+            return { message: `Email thread with ID ${threadId} not found` };
+          }
+          console.log("Fetched all emails in thread ID:", threadId);
+          return {
+            emails: emails.map(e => ({
+              date: e.date.toISOString().split('T')[0],
+              from: e.from,
+              subject: e.subject,
+              body: e.body,
+            })),
+          };
+        },
+      }),
+      getFullEmailContent: tool({
+        description: 'Retrieve the full content of a specific email by its ID. Use this to get detailed context from important emails.',
+        inputSchema: z.object({
+          emailId: z.string().describe('The unique identifier of the email to retrieve'),
+        }),
+        execute: async ({ emailId }: { emailId: string }) => {
+          const email = await getFullEmailById(emailId);
+          if (!email) {
+            return { message: `Email with ID ${emailId} not found` };
+          }
+          console.log("Fetched full email content for ID:", emailId);
+          return {
+            date: email.date.toISOString().split('T')[0],
+            from: email.from,
+            subject: email.subject,
+            body: email.body,
+          };
+        },
+      }),
+    },
   });
 
-  return text.trim();
+  // Use generateText with tools for intelligent email gathering
+  const result = await summaryAgent.generate({
+    system: `You are a professional assistant creating client-friendly weekly summaries for invoices.
+
+Your process:
+1. Analyze the time entries to understand what work was done this week
+2. Determine if the entries are vague/generic and would benefit from email context
+3. If yes, intelligently search emails using the available tools
+4. Use the gathered context to write a specific, outcome-focused summary
+
+When to search emails:
+- Time entries are vague (e.g., "worked on project", "bug fixes")
+- Specific features/deliverables are mentioned that might have email discussions
+- Client communications would clarify what was accomplished
+
+Email search strategy:
+- Search for project name, client name, or specific features mentioned
+- You can search multiple times with different keywords if needed
+- Don't over-search if entries are already clear
+
+Summary writing guidelines:
+- Client-friendly, professional language (avoid jargon)
+- Focus on outcomes and deliverables
+- Be specific about accomplishments
+- Write in past tense, describe work objectively
+- 1-2 sentences, no bullet points
+- Use email context to enrich with specific deliverables discussed
+
+Always end by providing your final summary as plain text.`,
+    prompt: `${projectContext}
+Week: ${weekStart.toString()} to ${weekEnd.toString()}
+Total Hours: ${totalHours.toFixed(1)} hours
+
+Time Entries:
+${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
+
+Please analyze these entries, search emails if helpful, then provide the final weekly summary.`,
+  });
+
+  console.log(`Generated summary with ${result.toolCalls?.length || 0} tool calls`);
+
+  return result.text.trim();
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Client, Project } from '@freelance-os/types';
 import { generateInvoice } from '@/lib/invoice-actions';
+import { authFetch } from '@/lib/util';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function NewInvoicePage() {
 
   const fetchClients = async () => {
     try {
-      const response = await fetch('/api/clients');
+      const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
       const data = await response.json();
       setClients(data);
@@ -62,7 +63,7 @@ export default function NewInvoicePage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects');
+      const response = await authFetch('/api/projects');
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data);
@@ -86,7 +87,7 @@ export default function NewInvoicePage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/invoices', {
+      const response = await authFetch('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

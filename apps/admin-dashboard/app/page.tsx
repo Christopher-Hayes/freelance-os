@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from "next/link";
 import { APIFooter } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 type DashboardStats = {
   clientCount: number;
@@ -17,9 +18,9 @@ export default function Page() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/clients').then(res => res.json()),
-      fetch('/api/projects').then(res => res.json()),
-      fetch('/api/invoices').then(res => res.json()),
+      authFetch('/api/clients').then(res => res.json()),
+      authFetch('/api/projects').then(res => res.json()),
+      authFetch('/api/invoices').then(res => res.json()),
     ])
       .then(([clients, projects, invoices]) => {
         setStats({

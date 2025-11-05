@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { EmptyState, Breadcrumbs, APIFooter } from '@repo/ui';
-import { authFetch } from '@/lib/util';
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 type Client = {
   id: number;

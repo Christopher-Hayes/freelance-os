@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -38,7 +39,7 @@ export default function InvoicesPage() {
       if (clientFilter) params.append('clientId', clientFilter);
       if (statusFilter) params.append('status', statusFilter);
 
-      const response = await fetch(`/api/invoices?${params}`);
+      const response = await authFetch(`/api/invoices?${params}`);
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
       setInvoices(data);
@@ -51,7 +52,7 @@ export default function InvoicesPage() {
 
   const fetchClients = async () => {
     try {
-      const response = await fetch('/api/clients');
+      const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
       const data = await response.json();
       setClients(data);
@@ -64,7 +65,7 @@ export default function InvoicesPage() {
     if (!confirm('Are you sure you want to delete this invoice?')) return;
 
     try {
-      const response = await fetch(`/api/invoices/${id}`, {
+      const response = await authFetch(`/api/invoices/${id}`, {
         method: 'DELETE',
       });
 

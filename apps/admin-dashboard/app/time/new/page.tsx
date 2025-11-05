@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { authFetch } from '@/lib/util';
 
 interface Client {
   id: number;
@@ -38,8 +39,8 @@ export default function NewTimeEntryPage() {
   // Fetch clients and projects
   useEffect(() => {
     Promise.all([
-      fetch("/api/clients").then((res) => res.json()),
-      fetch("/api/projects").then((res) => res.json()),
+      authFetch("/api/clients").then((res) => res.json()),
+      authFetch("/api/projects").then((res) => res.json()),
     ])
       .then(([clientsData, projectsData]) => {
         setClients(clientsData);
@@ -100,7 +101,7 @@ export default function NewTimeEntryPage() {
       const startDateTime = new Date(`${date}T${startTime}`).toISOString();
       const endDateTime = new Date(`${date}T${endTime}`).toISOString();
 
-      const response = await fetch("/api/time", {
+      const response = await authFetch("/api/time", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

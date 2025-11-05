@@ -4,9 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
-import { formatAppTitle } from '@/lib/util';
+import { formatAppTitle, authFetch } from '@/lib/util';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 interface SummaryData {
   totalHours: number;
@@ -55,8 +56,8 @@ export default function AnalyticsPage() {
       if (endDate) params.append('endDate', endDate);
 
       const [summaryRes, activityRes] = await Promise.all([
-        fetch(`/api/analytics/summary?${params}`),
-        fetch(`/api/analytics/activity?${params}`),
+        authFetch(`/api/analytics/summary?${params}`),
+        authFetch(`/api/analytics/activity?${params}`),
       ]);
 
       const summaryData = await summaryRes.json() as SummaryData;

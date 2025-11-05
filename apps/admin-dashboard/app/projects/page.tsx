@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 type Client = {
   id: number;
@@ -163,7 +164,7 @@ export default function ProjectsPage() {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch('/api/clients');
+      const res = await authFetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
       const data = await res.json();
       setClients(data);
@@ -180,7 +181,7 @@ export default function ProjectsPage() {
       if (filterStatus) params.append('status', filterStatus);
       
       const url = `/api/projects${params.toString() ? `?${params.toString()}` : ''}`;
-      const res = await fetch(url);
+      const res = await authFetch(url);
       
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
@@ -199,7 +200,7 @@ export default function ProjectsPage() {
     }
 
     try {
-      const res = await fetch(`/api/projects/${id}`, {
+      const res = await authFetch(`/api/projects/${id}`, {
         method: 'DELETE',
       });
 

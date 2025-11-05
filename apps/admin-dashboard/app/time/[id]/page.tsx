@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { authFetch } from '@/lib/util';
 
 interface Client {
   id: number;
@@ -68,9 +69,9 @@ export default function EditTimeEntryPage({
     if (!id) return;
 
     Promise.all([
-      fetch(`/api/time/${id}`).then((res) => res.json()),
-      fetch("/api/clients").then((res) => res.json()),
-      fetch("/api/projects").then((res) => res.json()),
+      authFetch(`/api/time/${id}`).then((res) => res.json()),
+      authFetch("/api/clients").then((res) => res.json()),
+      authFetch("/api/projects").then((res) => res.json()),
     ])
       .then(([timeEntry, clientsData, projectsData]: [
         TimeEntry,
@@ -153,7 +154,7 @@ export default function EditTimeEntryPage({
       const startDateTime = new Date(`${date}T${startTime}`).toISOString();
       const endDateTime = new Date(`${date}T${endTime}`).toISOString();
 
-      const response = await fetch(`/api/time/${id}`, {
+      const response = await authFetch(`/api/time/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

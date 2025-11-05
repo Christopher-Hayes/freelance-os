@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { APIFooter, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { ApiKeyListItem } from "@freelance-os/types";
 import { generateCode } from "@/lib/ai-actions";
+import { authFetch } from '@/lib/util';
 
 // Demo permissions available for API keys
 const availablePermissions = [
@@ -59,7 +60,7 @@ export default function ApiDemoPage() {
     expiresAt?: Date
   ) => {
     try {
-      const response = await fetch("/api/api-keys", {
+      const response = await authFetch("/api/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,7 +90,7 @@ export default function ApiDemoPage() {
 
   const handleRevokeApiKey = async (id: string) => {
     try {
-      const response = await fetch(`/api/api-keys/${id}`, {
+      const response = await authFetch(`/api/api-keys/${id}`, {
         method: "DELETE",
       });
       
@@ -108,7 +109,7 @@ export default function ApiDemoPage() {
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch("/api/api-keys");
+      const response = await authFetch("/api/api-keys");
       if (response.ok) {
         const data = await response.json();
         setApiKeys(data);

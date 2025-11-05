@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { parseUTC, formatDateTime } from '@/lib/datetime';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { authFetch } from '@/lib/util';
 
 interface User {
   id: string;
@@ -44,7 +45,7 @@ export default function UsersPage() {
 
   async function fetchUsers() {
     try {
-      const response = await fetch('/api/users');
+      const response = await authFetch('/api/users');
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
       setUsers(data.users);
@@ -57,7 +58,7 @@ export default function UsersPage() {
 
   async function fetchClients() {
     try {
-      const response = await fetch('/api/clients');
+      const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
       const data = await response.json();
       // API returns array directly, not { clients: [...] }
@@ -73,7 +74,7 @@ export default function UsersPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/users', {
+      const response = await authFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,7 +107,7 @@ export default function UsersPage() {
     }
 
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await authFetch(`/api/users/${userId}`, {
         method: 'DELETE',
       });
 

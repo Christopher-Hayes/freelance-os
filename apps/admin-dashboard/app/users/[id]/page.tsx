@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { parseUTC, formatDateTime } from '@/lib/datetime';
+import { authFetch } from '@/lib/util';
 
 interface User {
   id: string;
@@ -65,7 +66,7 @@ export default function UserDetailPage() {
 
   async function fetchUser() {
     try {
-      const response = await fetch(`/api/users/${userId}`);
+      const response = await authFetch(`/api/users/${userId}`);
       if (!response.ok) throw new Error('Failed to fetch user');
       const data = await response.json();
       setUser(data.user);
@@ -83,7 +84,7 @@ export default function UserDetailPage() {
 
   async function fetchClients() {
     try {
-      const response = await fetch('/api/clients');
+      const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
       const data = await response.json();
       setClients(data.clients);
@@ -98,7 +99,7 @@ export default function UserDetailPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await authFetch(`/api/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,7 +135,7 @@ export default function UserDetailPage() {
     }
 
     try {
-      const response = await fetch(`/api/users/${userId}`, {
+      const response = await authFetch(`/api/users/${userId}`, {
         method: 'DELETE',
       });
 

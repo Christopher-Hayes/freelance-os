@@ -153,7 +153,14 @@ export function SettingsContent({ userName, userEmail }: SettingsContentProps) {
             </button>
           </div>
           
-          <ApiKeyList apiKeys={apiKeys} onRevoke={handleRevokeApiKey} />
+          <ApiKeyList
+            apiKeys={apiKeys.map(key => ({
+              ...key,
+              lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
+              expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
+              createdAt: key.createdAt.toISOString()
+            }))} 
+            onRevoke={handleRevokeApiKey} />
         </div>
       </div>
 

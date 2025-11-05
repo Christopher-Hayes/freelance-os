@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
 import { EditButton, DownloadButton } from '@repo/ui';
 import { sendInvoiceEmail } from '@/lib/invoice-actions';
+import { authFetch } from '@/lib/util';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -46,7 +47,7 @@ export default function InvoiceDetailPage() {
   const fetchInvoice = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/invoices/${id}`);
+      const response = await authFetch(`/api/invoices/${id}`);
       if (!response.ok) throw new Error('Failed to fetch invoice');
       const data = await response.json();
       setInvoice(data);
@@ -71,7 +72,7 @@ export default function InvoiceDetailPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/invoices/${id}`, {
+      const response = await authFetch(`/api/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,7 +105,7 @@ export default function InvoiceDetailPage() {
     }
 
     try {
-      const response = await fetch(`/api/invoices/${id}`, {
+      const response = await authFetch(`/api/invoices/${id}`, {
         method: 'DELETE',
       });
 
@@ -120,7 +121,7 @@ export default function InvoiceDetailPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/invoices/${id}`, {
+      const response = await authFetch(`/api/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,7 +152,7 @@ export default function InvoiceDetailPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/invoices/${id}`, {
+      const response = await authFetch(`/api/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
