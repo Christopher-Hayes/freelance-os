@@ -5,6 +5,8 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import { toast } from "@repo/ui";
 import { useJobs } from "@/components/JobsProvider";
 import { hasActiveJobForDate } from "@/lib/job-utils";
+import { mergeTimeEntries } from "@/lib/time-actions";
+import { importRescueTimeData } from "@/lib/activity-actions";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
 import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
 import CurrentTimeLine from "./timeline/CurrentTimeLine";
@@ -694,20 +696,7 @@ export default function DayTimeline({
   const handleMergeEntries = (entryId: number, nextEntryId: number) => async () => {
     setMergingEntryId(entryId);
     try {
-      const response = await fetch("/api/time/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryId1: entryId,
-          entryId2: nextEntryId,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to merge entries");
-      }
-
+      await mergeTimeEntries(entryId, nextEntryId);
       await fetchDayData();
       toast.success("Entries merged successfully!");
     } catch (error: any) {
@@ -723,17 +712,7 @@ export default function DayTimeline({
     try {
       const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
       
-      const response = await fetch("/api/activity-sessions/import-rescuetime", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: dateStr }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to import from RescueTime");
-      }
+      const data = await importRescueTimeData(dateStr);
 
       if (data.sessionsImported > 0) {
         toast.success(`Imported ${data.sessionsImported} activity sessions from RescueTime!`);

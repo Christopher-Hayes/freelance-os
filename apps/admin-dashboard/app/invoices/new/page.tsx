@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Client, Project } from '@freelance-os/types';
+import { generateInvoice } from '@/lib/invoice-actions';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -121,27 +122,17 @@ export default function NewInvoicePage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/invoices/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: Number(clientId),
-          projectId: projectId ? Number(projectId) : undefined,
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
-          hourlyRate: parseFloat(hourlyRate),
-          currency,
-          notes,
-          dueInDays: parseInt(dueInDays),
-        }),
+      const invoice = await generateInvoice({
+        clientId: Number(clientId),
+        projectId: projectId ? Number(projectId) : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        hourlyRate: parseFloat(hourlyRate),
+        currency,
+        notes,
+        dueInDays: parseInt(dueInDays),
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to generate invoice');
-      }
-
-      const invoice = await response.json();
       router.push(`/invoices/${invoice.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

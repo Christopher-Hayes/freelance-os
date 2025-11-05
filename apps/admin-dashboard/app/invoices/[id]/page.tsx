@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
 import { EditButton, DownloadButton } from '@repo/ui';
+import { sendInvoiceEmail } from '@/lib/invoice-actions';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -185,22 +186,13 @@ export default function InvoiceDetailPage() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`/api/invoices/${id}/send`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.details || data.error || 'Failed to send invoice');
-      }
-
-      const result = await response.json();
+      const result = await sendInvoiceEmail(parseInt(id));
       setSuccessMessage(result.message || 'Invoice sent successfully!');
       
       // Update invoice if status changed
       if (result.invoice) {
-        setInvoice(result.invoice);
-        setStatus(result.invoice.status);
+        setInvoice(result.invoice as any);
+        setStatus(result.invoice.status as InvoiceStatus);
       }
       
       // Clear success message after 5 seconds

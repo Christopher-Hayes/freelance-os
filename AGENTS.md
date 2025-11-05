@@ -103,6 +103,39 @@ activity_summaries (standalone, external utility)
   const { id } = await params; // Required in Next.js 15+
   ```
 
+### API Routes vs Server Actions
+
+Choose the appropriate pattern based on intended usage:
+
+**Use API Routes (`app/api/*/route.ts`) for:**
+- Database models (clients, projects, invoices, time entries, etc.)
+- Resources that admins/users may want to integrate with external software
+- Operations that benefit from being API-accessible for automation
+- Any endpoint you'd want to document for external use
+
+**Use Server Actions (`lib/*-actions.ts`) for:**
+- Internal utilities (AI/LLM calls, file processing, etc.)
+- Operations with no value as a public/external API
+- Single-purpose helper functions
+- Background job processing logic
+
+**Examples:**
+- ✅ API Route: `GET /api/invoices` - Users may want to integrate with accounting software
+- ✅ API Route: `POST /api/time` - Could be used with time-tracking browser extensions
+- ✅ Server Action: `generateCode()` - AI code generation is internal-only
+- ✅ Server Action: `generateAutofillSuggestions()` - LLM logic called by jobs processor
+- ✅ Server Action: `processImage()` - File manipulation utilities
+
+**Pattern:**
+```typescript
+// lib/ai-actions.ts (Server Actions)
+"use server";
+export async function generateCode(endpoint: any, language: string) { ... }
+
+// app/api/invoices/route.ts (API Routes)
+export async function GET(request: NextRequest) { ... }
+```
+
 ## Development Workflow
 
 ### Quick Start
