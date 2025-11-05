@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import type { AiProvider } from "@freelance-os/types";
 
+// Helper to mask sensitive values
+const MASK_VALUE = "••••••••";
+
+function maskIfPresent(value: string | null): string {
+  return value ? MASK_VALUE : "";
+}
+
 // GET /api/settings/all - Get all settings with structured fields
+// Sensitive fields (API keys, tokens) are masked to prevent exposure to client
 export async function GET() {
   try {
     // Try to find the main settings record (we'll use key 'main' for the single settings row)
@@ -22,11 +30,14 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      rescuetimeKey: setting.rescuetimeKey || "",
-      openaiKey: setting.openaiKey || "",
-      googleApiKey: setting.googleApiKey || "",
+      // Sensitive fields - masked to prevent client-side exposure
+      rescuetimeKey: maskIfPresent(setting.rescuetimeKey),
+      openaiKey: maskIfPresent(setting.openaiKey),
+      googleApiKey: maskIfPresent(setting.googleApiKey),
+      jmapToken: maskIfPresent(setting.jmapToken),
+      
+      // Non-sensitive fields - safe to expose
       aiProvider: setting.aiProvider || "openai",
-      jmapToken: setting.jmapToken || "",
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",
@@ -35,6 +46,12 @@ export async function GET() {
       address: setting.address || "",
       phone: setting.phone || "",
       website: setting.website || "",
+      
+      // Metadata to help client know which fields are set
+      hasRescuetimeKey: !!setting.rescuetimeKey,
+      hasOpenaiKey: !!setting.openaiKey,
+      hasGoogleApiKey: !!setting.googleApiKey,
+      hasJmapToken: !!setting.jmapToken,
     });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -46,6 +63,7 @@ export async function GET() {
 }
 
 // PUT /api/settings/all - Update settings (partial updates supported)
+// Ignores masked placeholder values to prevent overwriting actual credentials
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
@@ -74,12 +92,25 @@ export async function PUT(request: Request) {
     }
 
     // Build update object with only provided fields
+    // IMPORTANT: Ignore masked placeholder values to prevent overwriting actual credentials
     const updateData: any = {};
-    if (rescuetimeKey !== undefined) updateData.rescuetimeKey = rescuetimeKey || null;
-    if (openaiKey !== undefined) updateData.openaiKey = openaiKey || null;
-    if (googleApiKey !== undefined) updateData.googleApiKey = googleApiKey || null;
+    
+    // Only update sensitive fields if they're not the mask value and not empty
+    if (rescuetimeKey !== undefined && rescuetimeKey !== MASK_VALUE) {
+      updateData.rescuetimeKey = rescuetimeKey || null;
+    }
+    if (openaiKey !== undefined && openaiKey !== MASK_VALUE) {
+      updateData.openaiKey = openaiKey || null;
+    }
+    if (googleApiKey !== undefined && googleApiKey !== MASK_VALUE) {
+      updateData.googleApiKey = googleApiKey || null;
+    }
+    if (jmapToken !== undefined && jmapToken !== MASK_VALUE) {
+      updateData.jmapToken = jmapToken || null;
+    }
+    
+    // Non-sensitive fields can be updated normally
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
-    if (jmapToken !== undefined) updateData.jmapToken = jmapToken || null;
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
     if (companyName !== undefined) updateData.companyName = companyName || null;
@@ -96,11 +127,11 @@ export async function PUT(request: Request) {
       create: {
         key: "main",
         value: "",
-        rescuetimeKey: rescuetimeKey || null,
-        openaiKey: openaiKey || null,
-        googleApiKey: googleApiKey || null,
+        rescuetimeKey: rescuetimeKey && rescuetimeKey !== MASK_VALUE ? rescuetimeKey : null,
+        openaiKey: openaiKey && openaiKey !== MASK_VALUE ? openaiKey : null,
+        googleApiKey: googleApiKey && googleApiKey !== MASK_VALUE ? googleApiKey : null,
         aiProvider: (aiProvider as AiProvider) || "openai",
-        jmapToken: jmapToken || null,
+        jmapToken: jmapToken && jmapToken !== MASK_VALUE ? jmapToken : null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
         companyName: companyName || null,
@@ -112,12 +143,13 @@ export async function PUT(request: Request) {
       },
     });
 
+    // Return masked values like GET does
     return NextResponse.json({
-      rescuetimeKey: setting.rescuetimeKey || "",
-      openaiKey: setting.openaiKey || "",
-      googleApiKey: setting.googleApiKey || "",
+      rescuetimeKey: maskIfPresent(setting.rescuetimeKey),
+      openaiKey: maskIfPresent(setting.openaiKey),
+      googleApiKey: maskIfPresent(setting.googleApiKey),
+      jmapToken: maskIfPresent(setting.jmapToken),
       aiProvider: setting.aiProvider || "openai",
-      jmapToken: setting.jmapToken || "",
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",
@@ -126,6 +158,10 @@ export async function PUT(request: Request) {
       address: setting.address || "",
       phone: setting.phone || "",
       website: setting.website || "",
+      hasRescuetimeKey: !!setting.rescuetimeKey,
+      hasOpenaiKey: !!setting.openaiKey,
+      hasGoogleApiKey: !!setting.googleApiKey,
+      hasJmapToken: !!setting.jmapToken,
     });
   } catch (error) {
     console.error("Error updating settings:", error);

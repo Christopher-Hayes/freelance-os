@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "@repo/ui";
 import type { AiProvider } from "@freelance-os/types";
 
+const MASK_VALUE = "••••••••";
+
 export default function SettingsPage() {
   const [rescueTimeApiKey, setRescueTimeApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
@@ -19,6 +21,10 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Track which sensitive fields have been modified by the user
+  // This prevents auto-saving masked placeholder values
+  const [modifiedFields, setModifiedFields] = useState<Set<string>>(new Set());
 
   // Debounce timers for each field
   const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -43,11 +49,13 @@ export default function SettingsPage() {
       const response = await fetch("/api/settings/all");
       if (response.ok) {
         const data = await response.json();
+        // Sensitive fields will be masked (••••••••) if they exist
         setRescueTimeApiKey(data.rescuetimeKey || "");
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
         setJmapToken(data.jmapToken || "");
+        // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
         setCompanyName(data.companyName || "");
@@ -56,6 +64,9 @@ export default function SettingsPage() {
         setAddress(data.address || "");
         setPhone(data.phone || "");
         setWebsite(data.website || "");
+        
+        // Reset modified fields tracker on initial load
+        setModifiedFields(new Set());
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -87,37 +98,49 @@ export default function SettingsPage() {
 
   const handleRescueTimeChange = (value: string) => {
     setRescueTimeApiKey(value);
+    setModifiedFields(prev => new Set(prev).add("rescuetimeKey"));
     
     if (rescueTimeTimerRef.current) {
       clearTimeout(rescueTimeTimerRef.current);
     }
 
     rescueTimeTimerRef.current = setTimeout(() => {
-      saveSetting("rescuetimeKey", value);
+      // Only save if this field was actually modified by the user
+      if (value !== MASK_VALUE) {
+        saveSetting("rescuetimeKey", value);
+      }
     }, 1000);
   };
 
   const handleOpenaiChange = (value: string) => {
     setOpenaiApiKey(value);
+    setModifiedFields(prev => new Set(prev).add("openaiKey"));
     
     if (openaiTimerRef.current) {
       clearTimeout(openaiTimerRef.current);
     }
 
     openaiTimerRef.current = setTimeout(() => {
-      saveSetting("openaiKey", value);
+      // Only save if this field was actually modified by the user
+      if (value !== MASK_VALUE) {
+        saveSetting("openaiKey", value);
+      }
     }, 1000);
   };
 
   const handleGoogleChange = (value: string) => {
     setGoogleApiKey(value);
+    setModifiedFields(prev => new Set(prev).add("googleApiKey"));
     
     if (googleTimerRef.current) {
       clearTimeout(googleTimerRef.current);
     }
 
     googleTimerRef.current = setTimeout(() => {
-      saveSetting("googleApiKey", value);
+      // Only save if this field was actually modified by the user
+      if (value !== MASK_VALUE) {
+        saveSetting("googleApiKey", value);
+      }
     }, 1000);
   };
 
@@ -128,13 +151,17 @@ export default function SettingsPage() {
 
   const handleJmapTokenChange = (value: string) => {
     setJmapToken(value);
+    setModifiedFields(prev => new Set(prev).add("jmapToken"));
     
     if (jmapTokenTimerRef.current) {
       clearTimeout(jmapTokenTimerRef.current);
     }
 
     jmapTokenTimerRef.current = setTimeout(() => {
-      saveSetting("jmapToken", value);
+      // Only save if this field was actually modified by the user
+      if (value !== MASK_VALUE) {
+        saveSetting("jmapToken", value);
+      }
     }, 1000);
   };
 
@@ -414,15 +441,21 @@ export default function SettingsPage() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Get your API key from{" "}
-                  <a
-                    href="https://platform.openai.com/api-keys"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    OpenAI Platform
-                  </a>
+                  {openaiApiKey === MASK_VALUE ? (
+                    <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                  ) : (
+                    <>
+                      Get your API key from{" "}
+                      <a
+                        href="https://platform.openai.com/api-keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        OpenAI Platform
+                      </a>
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -444,15 +477,21 @@ export default function SettingsPage() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Get your API key from{" "}
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    Google AI Studio
-                  </a>
+                  {googleApiKey === MASK_VALUE ? (
+                    <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                  ) : (
+                    <>
+                      Get your API key from{" "}
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        Google AI Studio
+                      </a>
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -481,15 +520,21 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Get your API key from{" "}
-                <a
-                  href="https://www.rescuetime.com/anapi/manage"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  RescueTime API Management
-                </a>
+                {rescueTimeApiKey === MASK_VALUE ? (
+                  <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                ) : (
+                  <>
+                    Get your API key from{" "}
+                    <a
+                      href="https://www.rescuetime.com/anapi/manage"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      RescueTime API Management
+                    </a>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -517,15 +562,21 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                For Fastmail, create an app-specific password from your{" "}
-                <a
-                  href="https://www.fastmail.com/settings/security/devicekeys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  security settings
-                </a>
+                {jmapToken === MASK_VALUE ? (
+                  <span className="text-green-600 dark:text-green-400">✓ API token is configured. Edit to update.</span>
+                ) : (
+                  <>
+                    For Fastmail, create an app-specific password from your{" "}
+                    <a
+                      href="https://www.fastmail.com/settings/security/devicekeys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      security settings
+                    </a>
+                  </>
+                )}
               </p>
             </div>
 
