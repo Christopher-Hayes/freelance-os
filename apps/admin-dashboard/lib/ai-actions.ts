@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getAiModel } from "@/lib/ai-provider";
 import { prisma } from "@freelance-os/database";
 import { Temporal } from "@/lib/temporal-polyfill";
+import { headers } from 'next/headers'
 
 /**
  * Generate code snippet for API endpoint using AI
@@ -22,6 +23,7 @@ export async function generateCode(endpoint: {
   body?: string;
 }, language: string): Promise<string> {
   const model = await getAiModel();
+  const origin = (await headers()).get("origin") || "http://localhost:3010";
 
   const languageMap: Record<string, string> = {
     "curl": "cURL",
@@ -37,10 +39,10 @@ export async function generateCode(endpoint: {
   const fullLanguage = languageMap[language] || language;
 
   // Build the prompt for code generation
-  let prompt = `Generate a ${fullLanguage} code snippet for the following API endpoint:\n\n`;
-  prompt += `Method: ${endpoint.method}\n`;
-  prompt += `Path: ${endpoint.path}\n`;
-  prompt += `Description: ${endpoint.description}\n\n`;
+  let prompt = `Generate a ${fullLanguage} code snippet for the following API endpoint:\n
+Method: ${endpoint.method}
+Path: ${endpoint.path}
+Description: ${endpoint.description}\n\n`;
 
   if (endpoint.queryParams && endpoint.queryParams.length > 0) {
     prompt += `Query Parameters:\n`;
@@ -54,14 +56,12 @@ export async function generateCode(endpoint: {
     prompt += `Request Body Example:\n${endpoint.body}\n\n`;
   }
 
-  prompt += `Requirements:\n`;
-  prompt += `- Include proper error handling\n`;
-  prompt += `- Add comments explaining key parts\n`;
-  prompt += `- Use modern best practices for ${fullLanguage}\n`;
-  prompt += `- Include authentication header placeholder (Bearer token)\n`;
-  prompt += `- Make it production-ready\n`;
-  prompt += `- Use the full URL: {BASE_URL}${endpoint.path}\n\n`;
-  prompt += `Generate ONLY the code, no explanations or markdown formatting. Just raw code ready to copy-paste.`;
+  prompt += `Requirements:\n
+Generate ONLY the code, no explanations or markdown formatting. Just raw code ready to copy-paste.
+Keep it concise and to the point.
+Include authentication header placeholder (Bearer token).
+Prefer working example values for query parameters and body over placeholders.
+Use the full URL: ${origin}${endpoint.path}`;
 
   const { text } = await generateText({
     model,

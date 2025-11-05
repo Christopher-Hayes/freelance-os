@@ -85,7 +85,7 @@ DATABASE_URL="postgresql://freelance_user:your_secure_password@localhost:5432/fr
 
 # Next Auth (for client portal authentication)
 NEXTAUTH_SECRET="your-nextauth-secret-generate-with-openssl-rand-base64-32"
-NEXTAUTH_URL="http://localhost:3001"
+NEXTAUTH_URL="http://localhost:3011"
 
 # Admin Dashboard Auth
 ADMIN_SECRET="your-admin-secret"
