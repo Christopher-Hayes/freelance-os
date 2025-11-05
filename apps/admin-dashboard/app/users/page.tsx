@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { parseUTC, formatDateTime } from '@/lib/datetime';
 import { APIFooter } from '@repo/ui';
+import { generateCode } from '@/lib/ai-actions';
 
 interface User {
   id: string;
@@ -128,18 +129,7 @@ export default function UsersPage() {
   }
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
-    const response = await fetch("/api/generate-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint, language }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to generate code");
-    }
-
-    const data = await response.json();
-    return data.code;
+    return await generateCode(endpoint, language);
   };
 
   if (loading) {

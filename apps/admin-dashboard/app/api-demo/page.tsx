@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { APIFooter, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { ApiKeyListItem } from "@freelance-os/types";
+import { generateCode } from "@/lib/ai-actions";
 
 // Demo permissions available for API keys
 const availablePermissions = [
@@ -118,18 +119,8 @@ export default function ApiDemoPage() {
   };
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
-    const response = await fetch("/api/generate-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint, language }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to generate code");
-    }
-
-    const data = await response.json();
-    return data.code;
+    const code = await generateCode(endpoint, language);
+    return code;
   };
 
   // Load API keys on mount

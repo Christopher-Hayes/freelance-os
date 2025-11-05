@@ -6,6 +6,7 @@ import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
 import { formatAppTitle } from '@/lib/util';
 import { APIFooter } from '@repo/ui';
+import { generateCode } from '@/lib/ai-actions';
 
 interface SummaryData {
   totalHours: number;
@@ -87,18 +88,7 @@ export default function AnalyticsPage() {
   );
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
-    const response = await fetch("/api/generate-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint, language }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to generate code");
-    }
-
-    const data = await response.json();
-    return data.code;
+    return await generateCode(endpoint, language);
   };
 
   return (
