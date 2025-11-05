@@ -5,6 +5,7 @@ import { Geist } from "next/font/google";
 import Link from "next/link";
 import { Providers } from "@/components/Providers";
 import JobsIndicator from "@/components/JobsIndicator";
+import LogoutButton from "@/components/LogoutButton";
 // Initialize Temporal API polyfill
 import "@/lib/temporal-polyfill";
 
@@ -79,9 +80,10 @@ export default function RootLayout({
                     </div>
                   </div>
                   
-                  {/* Jobs indicator on the right */}
-                  <div className="flex items-center">
+                  {/* Jobs indicator and logout button on the right */}
+                  <div className="flex items-center gap-2">
                     <JobsIndicator />
+                    <LogoutButton />
                   </div>
                 </div>
               </div>

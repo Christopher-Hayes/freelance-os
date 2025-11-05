@@ -1,6 +1,39 @@
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { prisma } from "@freelance-os/database";
 import { createHash } from "crypto";
+import { sessions } from "./sessions";
+
+/**
+ * Verify session token from cookie
+ */
+async function verifySessionToken(token: string): Promise<boolean> {
+  const session = sessions.get(token);
+  if (!session) {
+    return false;
+  }
+
+  const now = Date.now();
+  if (session.expiresAt < now) {
+    sessions.delete(token);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Get session from cookie
+ */
+async function getSessionFromCookie(): Promise<boolean> {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get('admin-session')?.value;
+  
+  if (!sessionToken) {
+    return false;
+  }
+
+  return verifySessionToken(sessionToken);
+}
 
 /**
  * Extract bearer token from Authorization header
@@ -119,7 +152,7 @@ export async function getAdminAuth(): Promise<{
   isPasswordAuth?: boolean;
   apiKeyId?: string;
 } | null> {
-  // Check for bearer token authentication
+  // Check for bearer token authentication first
   const bearerToken = await getBearerToken();
   if (bearerToken) {
     // First, try password authentication
@@ -149,9 +182,19 @@ export async function getAdminAuth(): Promise<{
     return null;
   }
 
-  // TODO: Add session-based authentication when NextAuth is set up for admin dashboard
-  // For now, admin dashboard requires bearer token auth
+  // Check for session-based authentication (cookie)
+  const hasValidSession = await getSessionFromCookie();
+  if (hasValidSession) {
+    return {
+      userId: "admin",
+      userEmail: null,
+      userName: "Admin",
+      permissions: ["*"], // Full access with session
+      isPasswordAuth: true,
+    };
+  }
 
+  // No valid authentication found
   return null;
 }
 

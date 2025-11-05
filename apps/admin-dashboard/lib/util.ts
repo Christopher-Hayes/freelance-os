@@ -2,6 +2,24 @@
 import { ActivitySession } from '@/app/time/components/timeline/utils';
 import { Temporal } from '@/lib/temporal-polyfill';
 
+/**
+ * Fetch wrapper that redirects to login on 401 Unauthorized
+ * Use this for all authenticated API calls from client components
+ */
+export async function authFetch(url: string, options?: RequestInit): Promise<Response> {
+  const response = await fetch(url, options);
+  
+  if (response.status === 401) {
+    // Redirect to login with callback URL
+    const callbackUrl = encodeURIComponent(window.location.pathname);
+    window.location.href = `/login?callbackUrl=${callbackUrl}`;
+    // Throw to prevent further processing
+    throw new Error('Unauthorized - redirecting to login');
+  }
+  
+  return response;
+}
+
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number,

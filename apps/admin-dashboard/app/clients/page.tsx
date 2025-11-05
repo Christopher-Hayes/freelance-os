@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { EmptyState, Breadcrumbs, APIFooter } from '@repo/ui';
+import { authFetch } from '@/lib/util';
 
 type Client = {
   id: number;
@@ -20,9 +21,14 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/clients')
-      .then(res => res.json())
-      .then(data => {
+    authFetch('/api/clients')
+      .then(async res => {
+        const data = await res.json();
+        if (data.error) {
+          console.error('API error:', data.error);
+          setLoading(false);
+          return;
+        }
         setClients(data);
         setLoading(false);
       })
