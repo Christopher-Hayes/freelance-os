@@ -45,9 +45,17 @@ export async function GET(
 ): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
     const { id } = await params;
+    const timeEntryId = parseInt(id);
+
+    if (isNaN(timeEntryId)) {
+      return NextResponse.json(
+        { error: "Invalid time entry ID" },
+        { status: 400 }
+      );
+    }
 
     const timeEntry = await prisma.timeEntry.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: timeEntryId },
       include: {
         project: {
           include: {
@@ -102,12 +110,20 @@ export async function PUT(
 ): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
     const { id } = await params;
+    const timeEntryId = parseInt(id);
     const body: TimeEntryUpdateRequest = await request.json();
     const { projectId, startTime, endTime, durationMinutes, description, billable } = body;
 
+    if (isNaN(timeEntryId)) {
+      return NextResponse.json(
+        { error: "Invalid time entry ID" },
+        { status: 400 }
+      );
+    }
+
     // Check if time entry exists
     const existingEntry = await prisma.timeEntry.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: timeEntryId },
     });
 
     if (!existingEntry) {
@@ -179,7 +195,7 @@ export async function PUT(
     }
 
     const timeEntry = await prisma.timeEntry.update({
-      where: { id: parseInt(id) },
+      where: { id: timeEntryId },
       data: updateData,
       include: {
         project: {
@@ -228,10 +244,18 @@ export async function DELETE(
 ): Promise<NextResponse<{ success: boolean } | { error: string }>> {
   try {
     const { id } = await params;
+    const timeEntryId = parseInt(id);
+
+    if (isNaN(timeEntryId)) {
+      return NextResponse.json(
+        { error: "Invalid time entry ID" },
+        { status: 400 }
+      );
+    }
 
     // Check if time entry exists
     const existingEntry = await prisma.timeEntry.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: timeEntryId },
     });
 
     if (!existingEntry) {
@@ -242,7 +266,7 @@ export async function DELETE(
     }
 
     await prisma.timeEntry.delete({
-      where: { id: parseInt(id) },
+      where: { id: timeEntryId },
     });
 
     return NextResponse.json({ success: true });

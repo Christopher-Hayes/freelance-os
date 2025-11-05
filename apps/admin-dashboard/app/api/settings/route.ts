@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
+import { getAdminAuth } from "@/lib/auth";
 
 // GET /api/settings - Get all settings or a specific setting by key
 export async function GET(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const key = searchParams.get("key");
 
@@ -46,12 +52,34 @@ export async function GET(request: Request) {
 // PUT /api/settings - Update or create a setting
 export async function PUT(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { key, value } = body;
 
     if (!key || value === undefined) {
       return NextResponse.json(
         { error: "Key and value are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate key format (alphanumeric, dots, underscores, hyphens)
+    const keyRegex = /^[a-zA-Z0-9._-]+$/;
+    if (!keyRegex.test(key)) {
+      return NextResponse.json(
+        { error: 'Invalid key format. Use only alphanumeric characters, dots, underscores, and hyphens' },
+        { status: 400 }
+      );
+    }
+
+    // Validate value is a string
+    if (typeof value !== 'string') {
+      return NextResponse.json(
+        { error: 'Value must be a string' },
         { status: 400 }
       );
     }

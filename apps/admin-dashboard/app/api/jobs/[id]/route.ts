@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
+import { getAdminAuth } from "@/lib/auth";
 
 // GET /api/jobs/[id] - Get a specific job's status
 export async function GET(
@@ -7,6 +8,11 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const jobId = parseInt(id);
 
@@ -44,6 +50,11 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await context.params;
     const jobId = parseInt(id);
 

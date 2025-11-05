@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import type { CreateAiJobInput } from "@freelance-os/types";
+import { getAdminAuth } from "@/lib/auth";
 
 // GET /api/jobs - List all jobs or active jobs
 export async function GET(request: NextRequest) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const activeOnly = searchParams.get("active") === "true";
 
@@ -35,6 +41,11 @@ export async function GET(request: NextRequest) {
 // POST /api/jobs - Create a new job
 export async function POST(request: NextRequest) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body: CreateAiJobInput = await request.json();
 
     const job = await prisma.aiJob.create({

@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { randomBytes, createHash } from "crypto";
+import { getAdminAuth } from "@/lib/auth";
 
 export async function GET() {
   try {
-    // In a real app, you'd get the userId from the session
-    // For now, we'll fetch all API keys for demo purposes
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Fetch all API keys
+    // Note: Admin dashboard shows all keys since it's a single-admin system
+    // If you need multi-admin support, filter by authData.userId here
     const apiKeys = await prisma.apiKey.findMany({
       select: {
         id: true,
@@ -39,12 +46,32 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { name, permissions, expiresAt, userId } = await request.json();
 
     // Validate inputs
     if (!name || !permissions) {
       return NextResponse.json(
         { error: "Name and permissions are required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate name length
+    if (name.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Name cannot be empty" },
+        { status: 400 }
+      );
+    }
+
+    if (name.length > 100) {
+      return NextResponse.json(
+        { error: "Name must be 100 characters or less" },
         { status: 400 }
       );
     }
@@ -56,7 +83,36 @@ export async function POST(request: Request) {
       );
     }
 
-    // For admin dashboard, we need to get or create a system user
+    // Validate permission values
+    const validPermissions = ['read', 'write', 'delete', 'admin'];
+    const invalidPermissions = permissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid permissions: ${invalidPermissions.join(', ')}. Valid permissions are: ${validPermissions.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Validate expiresAt if provided
+    if (expiresAt) {
+      const expiryDate = new Date(expiresAt);
+      if (isNaN(expiryDate.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid expiry date format" },
+          { status: 400 }
+        );
+      }
+      if (expiryDate < new Date()) {
+        return NextResponse.json(
+          { error: "Expiry date must be in the future" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // API keys require a userId in the database
+    // Admin session auth doesn't have a real userId (it's just "admin")
+    // So we create/use a system user for API keys
     let actualUserId = userId;
     if (!actualUserId) {
       // Check if a system admin user exists

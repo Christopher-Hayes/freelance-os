@@ -166,6 +166,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({
+      success: true,
       message: 'Client deleted successfully',
       deletedCounts,
     });

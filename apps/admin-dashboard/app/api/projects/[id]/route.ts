@@ -11,6 +11,13 @@ export async function GET(
     const { id } = await params;
     const projectId = parseInt(id);
 
+    if (isNaN(projectId)) {
+      return NextResponse.json(
+        { error: 'Invalid project ID' },
+        { status: 400 }
+      );
+    }
+
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -81,6 +88,13 @@ export async function PUT(
     const projectId = parseInt(id);
     const body = await request.json();
     const { name, clientDescription, privateNotes, clientId, status, color, billable, startDate, endDate } = body;
+
+    if (isNaN(projectId)) {
+      return NextResponse.json(
+        { error: 'Invalid project ID' },
+        { status: 400 }
+      );
+    }
 
     // Check if project exists
     const existingProject = await prisma.project.findUnique({
@@ -162,6 +176,13 @@ export async function DELETE(
     const { id } = await params;
     const projectId = parseInt(id);
 
+    if (isNaN(projectId)) {
+      return NextResponse.json(
+        { error: 'Invalid project ID' },
+        { status: 400 }
+      );
+    }
+
     // Check if project exists and count time entries
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -189,6 +210,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({
+      success: true,
       message: 'Project deleted successfully',
       deletedTimeEntries: timeEntriesCount,
     });
