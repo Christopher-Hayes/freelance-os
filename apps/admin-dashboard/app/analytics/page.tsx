@@ -5,6 +5,7 @@ import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
 import { formatAppTitle } from '@/lib/util';
+import { APIFooter } from '@repo/ui';
 
 interface SummaryData {
   totalHours: number;
@@ -84,6 +85,21 @@ export default function AnalyticsPage() {
     () => summary?.weeklyData || [],
     [summary?.weeklyData]
   );
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
+  };
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 p-8">
@@ -183,6 +199,76 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/analytics/summary",
+            description: "Get activity summary for a date range",
+            queryParams: [
+              {
+                name: "startDate",
+                type: "string",
+                description: "Start date for analytics range (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "End date for analytics range (YYYY-MM-DD)",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/analytics/activity",
+            description: "Get detailed activity data (daily breakdown and top apps)",
+            queryParams: [
+              {
+                name: "startDate",
+                type: "string",
+                description: "Start date for analytics range (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "End date for analytics range (YYYY-MM-DD)",
+              },
+              {
+                name: "limit",
+                type: "number",
+                description: "Limit number of top apps returned (default: 10)",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/analytics/sessions",
+            description: "Get raw activity sessions",
+            queryParams: [
+              {
+                name: "startDate",
+                type: "string",
+                description: "Start date for sessions (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "End date for sessions (YYYY-MM-DD)",
+              },
+              {
+                name: "appName",
+                type: "string",
+                description: "Filter by application name",
+              },
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

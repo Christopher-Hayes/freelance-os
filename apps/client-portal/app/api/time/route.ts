@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getClientAuth } from "@/lib/auth";
 import { prisma } from "@freelance-os/database";
 
 export async function GET(request: Request) {
   try {
-    const session = await auth();
-
-    if (!session?.user?.clientId) {
+    const authData = await getClientAuth();
+    if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -18,7 +17,7 @@ export async function GET(request: Request) {
     // Build filter conditions
     const whereConditions: any = {
       project: {
-        clientId: session.user.clientId, // CRITICAL: Filter through relation
+        clientId: authData.clientId, // CRITICAL: Filter through relation
       },
     };
 

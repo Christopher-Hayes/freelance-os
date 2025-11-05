@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Invoice, InvoiceStatus } from '@freelance-os/types';
+import { APIFooter } from '@repo/ui';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -270,6 +271,57 @@ export function InvoicesContent() {
           </div>
         </div>
       )}
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/settings?tab=api'}
+        onGenerateCode={async (endpoint: any, language: string) => {
+          const response = await fetch("/api/generate-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint, language }),
+          });
+          if (!response.ok) throw new Error("Failed to generate code");
+          const data = await response.json();
+          return data.code;
+        }}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/invoices",
+            description: "List your invoices (filtered by your client account)",
+            queryParams: [
+              {
+                name: "status",
+                type: "string",
+                enum: ["draft", "sent", "paid", "overdue", "cancelled"],
+                description: "Filter by invoice status",
+              },
+              {
+                name: "projectId",
+                type: "number",
+                description: "Filter by project ID",
+              },
+              {
+                name: "startDate",
+                type: "string",
+                description: "Filter by issue date >= startDate (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "Filter by issue date <= endDate (YYYY-MM-DD)",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/invoices/{id}",
+            description: "Get details for a specific invoice (only if it belongs to your client)",
+          },
+        ]}
+      />
     </div>
   );
 }

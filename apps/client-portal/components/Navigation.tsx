@@ -8,6 +8,7 @@ const navigation = [
   { name: "Projects", href: "/projects" },
   { name: "Time Tracking", href: "/time" },
   { name: "Invoices", href: "/invoices" },
+  { name: "Settings", href: "/settings" },
 ];
 
 export function Navigation() {

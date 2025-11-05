@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { handleSignOut } from "@/lib/actions";
-import { Navigation } from "./Navigation";
+import { Sidebar } from "./Sidebar";
 
 export async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -36,11 +36,7 @@ export async function DashboardLayout({ children }: { children: React.ReactNode 
       {/* Sidebar + Main Content */}
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 min-h-[calc(100vh-4rem)]">
-          <div className="p-4">
-            <Navigation />
-          </div>
-        </aside>
+        <Sidebar />
 
         {/* Main Content */}
         <main className="flex-1">

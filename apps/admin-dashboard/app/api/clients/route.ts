@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import type { Client } from '@freelance-os/types';
+import { getAdminAuth } from '@/lib/auth';
 
 // GET /api/clients - List all clients
 export async function GET() {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const clients = await prisma.client.findMany({
       orderBy: {
         name: 'asc',
@@ -32,6 +38,11 @@ export async function GET() {
 // POST /api/clients - Create a new client
 export async function POST(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     
     // Validate required fields

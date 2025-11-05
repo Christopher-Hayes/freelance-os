@@ -1,25 +1,55 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { prisma } from '@freelance-os/database';
-import { EmptyState, Breadcrumbs } from '@repo/ui';
+import { EmptyState, Breadcrumbs, APIFooter } from '@repo/ui';
 
-async function getClients() {
-  return await prisma.client.findMany({
-    orderBy: {
-      name: 'asc',
-    },
-    include: {
-      _count: {
-        select: {
-          projects: true,
-          invoices: true,
-        },
-      },
-    },
-  });
-}
+type Client = {
+  id: number;
+  name: string;
+  email: string;
+  company: string | null;
+  _count: {
+    projects: number;
+    invoices: number;
+  };
+};
 
-export default async function ClientsPage() {
-  const clients = await getClients();
+export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/clients')
+      .then(res => res.json())
+      .then(data => {
+        setClients(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching clients:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
+  };
+
+  if (loading) {
+    return <div className="p-8"><div className="text-gray-600 dark:text-gray-400">Loading...</div></div>;
+  }
 
   return (
     <div className="p-8">
@@ -121,6 +151,76 @@ export default async function ClientsPage() {
           ))}
         </div>
       )}
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/clients",
+            description: "List all clients with project and invoice counts",
+            queryParams: [
+              {
+                name: "page",
+                type: "number",
+                description: "Page number for pagination",
+              },
+              {
+                name: "limit",
+                type: "number",
+                description: "Number of items per page (default: 50)",
+              },
+              {
+                name: "search",
+                type: "string",
+                description: "Search by client name, email, or company",
+              },
+            ],
+          },
+          {
+            method: "POST",
+            path: "/clients",
+            description: "Create a new client",
+            body: JSON.stringify(
+              {
+                name: "Client Name",
+                email: "client@example.com",
+                company: "Company Name",
+                phone: "+1234567890",
+                address: "123 Main St",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "GET",
+            path: "/clients/{id}",
+            description: "Get a specific client with related data",
+          },
+          {
+            method: "PUT",
+            path: "/clients/{id}",
+            description: "Update a client's information",
+            body: JSON.stringify(
+              {
+                name: "Updated Name",
+                email: "newemail@example.com",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/clients/{id}",
+            description: "Delete a client (cascades to projects, time entries, and invoices)",
+          },
+        ]}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { prisma } from "@freelance-os/database";
+import { ProjectsAPIFooter } from "./components/ProjectsAPIFooter";
 
 interface Project {
   id: number;
@@ -176,6 +177,8 @@ export default async function ProjectsPage() {
           </div>
         )}
       </div>
+
+      <ProjectsAPIFooter />
     </DashboardLayout>
   );
 }

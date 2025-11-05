@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { auth } from "@/lib/auth";
+import { getClientAuth } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get session and verify user is authenticated
-    const session = await auth();
-    if (!session?.user?.clientId) {
+    const authData = await getClientAuth();
+    if (!authData) {
       return NextResponse.json(
-        { error: "Unauthorized - No client ID in session" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
     const { id } = await params;
-    const clientId = session.user.clientId;
     const invoiceId = parseInt(id);
 
     if (isNaN(invoiceId)) {
@@ -28,7 +26,7 @@ export async function GET(
     const invoice = await prisma.invoice.findFirst({
       where: {
         id: invoiceId,
-        clientId: clientId, // CRITICAL: Verify this invoice belongs to this client
+        clientId: authData.clientId, // CRITICAL: Verify this invoice belongs to this client
       },
       include: {
         client: {
@@ -41,7 +39,7 @@ export async function GET(
         project: {
           select: {
             name: true,
-            description: true,
+            clientDescription: true,
           },
         },
       },

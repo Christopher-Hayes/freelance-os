@@ -56,6 +56,7 @@ model Client {
   
   projects  Project[]
   invoices  Invoice[]
+  apiKeys   ApiKey[]
 
   @@map("clients")
 }
@@ -171,8 +172,28 @@ model User {
 
   accounts Account[]
   sessions Session[]
+  apiKeys  ApiKey[]
 
   @@map("users")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String    // User-defined name like "Mobile App" or "Integration Script"
+  key         String    @unique // The actual API key (hashed)
+  userId      String    @map("user_id") // Who created it
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    Int?      @map("client_id") // For client portal users, scope to their client
+  client      Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  permissions String[]  // Array of allowed scopes like ["read:projects", "write:time"]
+  lastUsedAt  DateTime? @map("last_used_at") @db.Timestamptz
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  
+  @@index([userId])
+  @@index([clientId])
+  @@index([key])
+  @@map("api_keys")
 }
 
 model VerificationToken {

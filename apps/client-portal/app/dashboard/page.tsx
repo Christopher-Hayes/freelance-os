@@ -6,6 +6,7 @@ import { RecentTimeEntries } from "./components/RecentTimeEntries";
 import { InvoicesSummary } from "./components/InvoicesSummary";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { prisma } from "@freelance-os/database";
+import { DashboardAPIFooter } from "./components/DashboardAPIFooter";
 
 interface DashboardData {
   client: {
@@ -277,6 +278,8 @@ export default async function DashboardPage() {
           <div className="mt-6">
             <InvoicesSummary invoices={dashboardData.recentInvoices} />
           </div>
+
+          <DashboardAPIFooter />
         </>
       )}
     </DashboardLayout>

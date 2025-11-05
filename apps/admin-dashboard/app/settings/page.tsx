@@ -1,10 +1,23 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { toast } from "@repo/ui";
-import type { AiProvider } from "@freelance-os/types";
+import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
+import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
 
 const MASK_VALUE = "••••••••";
+
+// Demo permissions available for API keys
+const availablePermissions = [
+  { id: "read:clients", label: "Read Clients", description: "View client information and details" },
+  { id: "write:clients", label: "Write Clients", description: "Create and update client records" },
+  { id: "read:projects", label: "Read Projects", description: "View project information and status" },
+  { id: "write:projects", label: "Write Projects", description: "Create and update projects" },
+  { id: "read:time", label: "Read Time Entries", description: "View time tracking data" },
+  { id: "write:time", label: "Write Time Entries", description: "Create and update time entries" },
+  { id: "read:invoices", label: "Read Invoices", description: "View invoice information" },
+  { id: "write:invoices", label: "Write Invoices", description: "Create and update invoices" },
+  { id: "read:analytics", label: "Read Analytics", description: "View analytics and reports" },
+];
 
 export default function SettingsPage() {
   const [rescueTimeApiKey, setRescueTimeApiKey] = useState("");
@@ -21,6 +34,10 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // API Keys state
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeyListItem[]>([]);
 
   // Track which sensitive fields have been modified by the user
   // This prevents auto-saving masked placeholder values
@@ -42,6 +59,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetchApiKeys();
   }, []);
 
   const fetchSettings = async () => {
@@ -259,6 +277,64 @@ export default function SettingsPage() {
     websiteTimerRef.current = setTimeout(() => {
       saveSetting("website", value);
     }, 1000);
+  };
+
+  const fetchApiKeys = async () => {
+    try {
+      const response = await fetch("/api/api-keys");
+      if (response.ok) {
+        const data = await response.json();
+        setApiKeys(data);
+      }
+    } catch (error) {
+      console.error("Error fetching API keys:", error);
+    }
+  };
+
+  const handleGenerateApiKey = async (
+    name: string,
+    permissions: string[],
+    expiresAt?: Date
+  ) => {
+    try {
+      const response = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, permissions, expiresAt }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to generate API key");
+      }
+
+      const data = await response.json();
+      await fetchApiKeys();
+      return { key: data.key };
+    } catch (error) {
+      console.error("Error generating API key:", error);
+      throw error;
+    }
+  };
+
+  const handleRevokeApiKey = async (id: string) => {
+    try {
+      const response = await fetch(`/api/api-keys/${id}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to revoke API key");
+      }
+      
+      await fetchApiKeys();
+      toast.success("API key revoked successfully");
+    } catch (error) {
+      console.error("Error revoking API key:", error);
+      toast.error("Failed to revoke API key");
+      throw error;
+    }
   };
 
   if (loading) {
@@ -621,7 +697,35 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                API Keys
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Generate API keys for programmatic access to your data
+              </p>
+            </div>
+            <button
+              onClick={() => setIsApiKeyModalOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+            >
+              Generate New Key
+            </button>
+          </div>
+          
+          <ApiKeyList apiKeys={apiKeys} onRevoke={handleRevokeApiKey} />
+        </div>
       </div>
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onGenerate={handleGenerateApiKey}
+        availablePermissions={availablePermissions}
+      />
     </div>
   );
 }

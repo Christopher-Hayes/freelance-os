@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { parseUTC, formatDateTime } from '@/lib/datetime';
+import { APIFooter } from '@repo/ui';
 
 interface User {
   id: string;
@@ -125,6 +126,21 @@ export default function UsersPage() {
     const client = clients.find((c) => c.id === clientId);
     return client ? `${client.name} (${client.company || 'No company'})` : 'Unknown client';
   }
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
+  };
 
   if (loading) {
     return (
@@ -302,6 +318,69 @@ export default function UsersPage() {
           their email, they'll have access to the portal data based on their linked client.
         </p>
       </div>
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/users",
+            description: "List all users with session info",
+            queryParams: [
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter users by linked client ID",
+              },
+              {
+                name: "verified",
+                type: "boolean",
+                description: "Filter by email verification status",
+              },
+            ],
+          },
+          {
+            method: "POST",
+            path: "/users",
+            description: "Create a new user (sends magic link email)",
+            body: JSON.stringify(
+              {
+                email: "user@example.com",
+                name: "User Name",
+                clientId: 1,
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "GET",
+            path: "/users/{id}",
+            description: "Get a specific user with detailed info",
+          },
+          {
+            method: "PUT",
+            path: "/users/{id}",
+            description: "Update a user's information",
+            body: JSON.stringify(
+              {
+                name: "Updated Name",
+                clientId: 2,
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/users/{id}",
+            description: "Delete a user (removes sessions and accounts)",
+          },
+        ]}
+      />
     </div>
   );
 }

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
+import { getAdminAuth } from '@/lib/auth';
 
 // GET /api/invoices - List all invoices with optional filters
 export async function GET(request: NextRequest) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('clientId');
     const projectId = searchParams.get('projectId');
@@ -65,6 +71,11 @@ export async function GET(request: NextRequest) {
 // POST /api/invoices - Create a new invoice
 export async function POST(request: NextRequest) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       invoiceNumber,

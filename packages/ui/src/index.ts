@@ -39,6 +39,12 @@ export { Toaster } from "sonner";
 export { Breadcrumbs } from "./breadcrumbs";
 export type { BreadcrumbsProps, BreadcrumbItem } from "./breadcrumbs";
 
+export { APIFooter } from "./api-footer";
+
+export { ApiKeyModal } from "./api-key-modal";
+
+export { ApiKeyList } from "./api-key-list";
+
 // Legacy components
 export { Gradient } from "./gradient";
 export { TurborepoLogo } from "./turborepo-logo";

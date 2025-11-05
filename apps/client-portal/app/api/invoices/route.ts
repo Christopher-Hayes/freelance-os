@@ -1,25 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { auth } from "@/lib/auth";
+import { getClientAuth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    // Get session and verify user is authenticated
-    const session = await auth();
-    if (!session?.user?.clientId) {
+    const authData = await getClientAuth();
+    if (!authData) {
       return NextResponse.json(
-        { error: "Unauthorized - No client ID in session" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const clientId = session.user.clientId;
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get("status");
 
     // Build query filter
     const where: any = {
-      clientId: clientId, // CRITICAL: Only show this client's invoices
+      clientId: authData.clientId, // CRITICAL: Only show this client's invoices
     };
 
     // Add status filter if provided

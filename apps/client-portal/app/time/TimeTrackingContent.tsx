@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import WeeklyBreakdownChart from "./WeeklyBreakdownChart";
 import ProjectDistributionChart from "./ProjectDistributionChart";
+import { APIFooter } from "@repo/ui";
 
 interface TimeEntry {
   id: number;
@@ -342,6 +343,68 @@ export function TimeTrackingContent() {
           </div>
         )}
       </div>
+
+            <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/settings?tab=api'}
+        onGenerateCode={async (endpoint: any, language: string) => {
+          const response = await fetch("/api/generate-code", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint, language }),
+          });
+          if (!response.ok) throw new Error("Failed to generate code");
+          const data = await response.json();
+          return data.code;
+        }}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/time",
+            description: "List your time entries",
+            queryParams: [
+              {
+                name: "projectId",
+                type: "number",
+                description: "Filter by project ID",
+              },
+              {
+                name: "startDate",
+                type: "string",
+                description: "Filter entries from date (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "Filter entries to date (YYYY-MM-DD)",
+              },
+              {
+                name: "billable",
+                type: "boolean",
+                description: "Filter by billable status",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/time/summary",
+            description: "Get summary of time entries by week",
+            queryParams: [
+              {
+                name: "startDate",
+                type: "string",
+                description: "Start date for summary (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "End date for summary (YYYY-MM-DD)",
+              },
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import Link from 'next/link';
+import { APIFooter } from '@repo/ui';
 
 type Client = {
   id: number;
@@ -217,6 +218,21 @@ export default function ProjectsPage() {
     // Note: API handles filtering, so no client-side filtering needed
   }, [projects]);
 
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
+  };
+
   if (loading && projects.length === 0) {
     return (
       <div className="p-8">
@@ -300,6 +316,81 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/projects",
+            description: "List all projects with optional filtering",
+            queryParams: [
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter projects by client ID",
+              },
+              {
+                name: "status",
+                type: "string",
+                enum: ["active", "completed", "on-hold"],
+                description: "Filter by project status",
+              },
+              {
+                name: "sortBy",
+                type: "string",
+                enum: ["name", "startDate", "endDate", "createdAt"],
+                description: "Sort field (default: createdAt desc)",
+              },
+            ],
+          },
+          {
+            method: "POST",
+            path: "/projects",
+            description: "Create a new project",
+            body: JSON.stringify(
+              {
+                name: "Project Name",
+                clientId: 1,
+                clientDescription: "Description visible to client",
+                privateNotes: "Internal notes",
+                status: "active",
+                color: "#22C55E",
+                startDate: "2025-01-01",
+                endDate: "2025-12-31",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "GET",
+            path: "/projects/{id}",
+            description: "Get a specific project with time entries",
+          },
+          {
+            method: "PUT",
+            path: "/projects/{id}",
+            description: "Update a project",
+            body: JSON.stringify(
+              {
+                name: "Updated Project Name",
+                status: "completed",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/projects/{id}",
+            description: "Delete a project (cascades to time entries)",
+          },
+        ]}
+      />
     </div>
   );
 }

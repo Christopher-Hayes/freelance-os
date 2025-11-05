@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
+import { APIFooter } from '@repo/ui';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -125,6 +126,21 @@ export default function InvoicesPage() {
     return invoices
       .filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled')
       .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+  };
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
   };
 
   if (loading) {
@@ -323,6 +339,91 @@ export default function InvoicesPage() {
           </table>
         </div>
       )}
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/invoices",
+            description: "List all invoices with optional filters",
+            queryParams: [
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter by client ID",
+              },
+              {
+                name: "status",
+                type: "string",
+                enum: ["draft", "sent", "paid", "overdue", "cancelled"],
+                description: "Filter by invoice status",
+              },
+              {
+                name: "projectId",
+                type: "number",
+                description: "Filter by project ID",
+              },
+              {
+                name: "startDate",
+                type: "string",
+                description: "Filter by issue date >= startDate (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "Filter by issue date <= endDate (YYYY-MM-DD)",
+              },
+            ],
+          },
+          {
+            method: "POST",
+            path: "/invoices",
+            description: "Create a new invoice",
+            body: JSON.stringify(
+              {
+                clientId: 1,
+                projectId: 1,
+                invoiceNumber: "INV-20251104-001",
+                issueDate: "2025-11-04",
+                dueDate: "2025-11-18",
+                amount: "1500.00",
+                currency: "USD",
+                status: "draft",
+                notes: "Payment terms: Net 14",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "GET",
+            path: "/invoices/{id}",
+            description: "Get a specific invoice with details",
+          },
+          {
+            method: "PUT",
+            path: "/invoices/{id}",
+            description: "Update an invoice",
+            body: JSON.stringify(
+              {
+                status: "sent",
+                sentDate: "2025-11-04",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/invoices/{id}",
+            description: "Delete an invoice",
+          },
+        ]}
+      />
     </div>
   );
 }

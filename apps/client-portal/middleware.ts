@@ -13,6 +13,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Check for bearer token in Authorization header (for API routes)
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    // Let the API route handle token validation
+    return NextResponse.next();
+  }
+
   // Check for session cookie
   const sessionToken = request.cookies.get("authjs.session-token")?.value;
   

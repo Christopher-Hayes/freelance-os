@@ -1,22 +1,57 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from "next/link";
-import { prisma } from "@freelance-os/database";
+import { APIFooter } from "@repo/ui";
 
-async function getDashboardStats() {
-  const [clientCount, projectCount, invoiceCount] = await Promise.all([
-    prisma.client.count(),
-    prisma.project.count(),
-    prisma.invoice.count(),
-  ]);
+type DashboardStats = {
+  clientCount: number;
+  projectCount: number;
+  invoiceCount: number;
+};
 
-  return {
-    clientCount,
-    projectCount,
-    invoiceCount,
+export default function Page() {
+  const [stats, setStats] = useState<DashboardStats>({ clientCount: 0, projectCount: 0, invoiceCount: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/clients').then(res => res.json()),
+      fetch('/api/projects').then(res => res.json()),
+      fetch('/api/invoices').then(res => res.json()),
+    ])
+      .then(([clients, projects, invoices]) => {
+        setStats({
+          clientCount: Array.isArray(clients) ? clients.length : 0,
+          projectCount: Array.isArray(projects) ? projects.length : 0,
+          invoiceCount: Array.isArray(invoices) ? invoices.length : 0,
+        });
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching stats:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
   };
-}
 
-export default async function Page() {
-  const stats = await getDashboardStats();
+  if (loading) {
+    return <div className="p-8"><div className="text-gray-600 dark:text-gray-400">Loading...</div></div>;
+  }
 
   return (
     <div className="p-8">
@@ -101,6 +136,90 @@ export default async function Page() {
           </Link>
         </div>
       </div>
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/clients",
+            description: "List all clients",
+            queryParams: [
+              {
+                name: "page",
+                type: "number",
+                description: "Page number for pagination",
+              },
+              {
+                name: "limit",
+                type: "number",
+                description: "Items per page",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/projects",
+            description: "List all projects",
+            queryParams: [
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter by client",
+              },
+              {
+                name: "status",
+                type: "string",
+                enum: ["active", "completed", "on-hold"],
+                description: "Filter by status",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/invoices",
+            description: "List all invoices",
+            queryParams: [
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter by client",
+              },
+              {
+                name: "status",
+                type: "string",
+                enum: ["draft", "sent", "paid", "overdue", "cancelled"],
+                description: "Filter by status",
+              },
+            ],
+          },
+          {
+            method: "GET",
+            path: "/time",
+            description: "List all time entries",
+            queryParams: [
+              {
+                name: "projectId",
+                type: "number",
+                description: "Filter by project",
+              },
+              {
+                name: "startDate",
+                type: "string",
+                description: "Filter from date (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "Filter to date (YYYY-MM-DD)",
+              },
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }

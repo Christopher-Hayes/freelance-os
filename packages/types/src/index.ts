@@ -239,3 +239,32 @@ export interface AiJobWithDisplay extends AiJob {
   displayTitle: string;
   displayDescription?: string;
 }
+
+// API Key types
+export interface ApiKey {
+  id: string;
+  name: string;
+  key: string; // Only returned on creation (hashed in DB)
+  userId: string;
+  clientId?: number;
+  permissions: string[];
+  lastUsedAt?: Date;
+  expiresAt?: Date;
+  createdAt: Date;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  permissions: string[];
+  expiresAt?: Date;
+  userId?: string; // Admin can specify userId, clients use their own
+}
+
+export interface ApiKeyListItem {
+  id: string;
+  name: string;
+  permissions: string[];
+  lastUsedAt?: Date;
+  expiresAt?: Date;
+  createdAt: Date;
+}

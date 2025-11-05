@@ -1,10 +1,10 @@
 /**
  * Custom NextAuth email provider using JMAP (Fastmail)
  * Works with Edge runtime unlike SMTP/Nodemailer
+ * Fetches JMAP settings from database instead of environment variables
  */
 
-const hostname = process.env.JMAP_HOSTNAME || "api.fastmail.com";
-const authUrl = `https://${hostname}/.well-known/jmap`;
+import { prisma } from '@freelance-os/database';
 
 interface JMAPSession {
   apiUrl: string;
@@ -13,7 +13,9 @@ interface JMAPSession {
   };
 }
 
-async function getSession(token: string): Promise<JMAPSession> {
+async function getSession(token: string, hostname: string): Promise<JMAPSession> {
+  const authUrl = `https://${hostname}/.well-known/jmap`;
+  
   const response = await fetch(authUrl, {
     method: "GET",
     headers: {
@@ -21,6 +23,11 @@ async function getSession(token: string): Promise<JMAPSession> {
       Authorization: `Bearer ${token}`,
     },
   });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get JMAP session: ${response.statusText}`);
+  }
+  
   return response.json();
 }
 
@@ -42,6 +49,11 @@ async function getDraftMailboxId(
       ],
     }),
   });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get draft mailbox: ${response.statusText}`);
+  }
+  
   const data = await response.json();
   return data.methodResponses[0][1].ids[0];
 }
@@ -67,10 +79,20 @@ async function getIdentityId(
       methodCalls: [["Identity/get", { accountId, ids: null }, "a"]],
     }),
   });
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get identity: ${response.statusText}`);
+  }
+  
   const data = await response.json();
   const identity = data.methodResponses[0][1].list.find(
     (id: { email: string }) => id.email === username
   );
+  
+  if (!identity) {
+    throw new Error(`No identity found for email: ${username}`);
+  }
+  
   return identity.id;
 }
 
@@ -127,12 +149,37 @@ async function sendEmail(
     }),
   });
 
+  if (!response.ok) {
+    throw new Error(`Failed to send email: ${response.statusText}`);
+  }
+
   const data = await response.json();
   
   // Check for errors
   if (data.methodResponses[0][1].notCreated || data.methodResponses[1][1].notCreated) {
-    throw new Error("Failed to send email via JMAP");
+    const error = data.methodResponses[0][1].notCreated || data.methodResponses[1][1].notCreated;
+    throw new Error(`JMAP error: ${JSON.stringify(error)}`);
   }
+}
+
+/**
+ * Fetch JMAP settings from database
+ */
+async function getJMAPSettings() {
+  // Try to get settings - there should only be one row with key 'main'
+  const settings = await prisma.setting.findUnique({
+    where: { key: 'main' }
+  });
+  
+  if (!settings?.jmapToken || !settings?.jmapUsername) {
+    throw new Error("JMAP settings not configured in database. Please configure JMAP in admin settings.");
+  }
+  
+  return {
+    token: settings.jmapToken,
+    username: settings.jmapUsername,
+    hostname: settings.jmapHostname || 'api.fastmail.com',
+  };
 }
 
 export async function sendVerificationRequest(params: {
@@ -145,16 +192,11 @@ export async function sendVerificationRequest(params: {
   console.log("[JMAP] Sending verification email to:", email);
   console.log("[JMAP] Magic link URL:", url);
   
-  const token = process.env.JMAP_TOKEN;
-  const username = process.env.JMAP_USERNAME;
-
-  if (!token || !username) {
-    console.error("[JMAP] Missing JMAP_TOKEN or JMAP_USERNAME");
-    throw new Error("JMAP_TOKEN and JMAP_USERNAME must be set");
-  }
+  // Fetch JMAP settings from database
+  const { token, username, hostname } = await getJMAPSettings();
 
   try {
-    const session = await getSession(token);
+    const session = await getSession(token, hostname);
     const accountId = session.primaryAccounts["urn:ietf:params:jmap:mail"];
     const draftId = await getDraftMailboxId(session.apiUrl, accountId, token);
     const identityId = await getIdentityId(session.apiUrl, accountId, token, username);

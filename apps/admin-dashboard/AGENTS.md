@@ -8,9 +8,87 @@
 
 The admin dashboard is the internal management interface for the freelance business. It provides full access to all data without client-based filtering.
 
-**Port**: 3000  
-**Auth**: NextAuth.js with admin provider (not yet implemented)  
+**Port**: 3010  
+**Auth**: Bearer token (API keys or admin password) + NextAuth.js (future)  
 **Access**: Full database access (no client filtering)
+
+## Authentication
+
+### Current Implementation (Bearer Token)
+
+All admin API routes support bearer token authentication via `Authorization: Bearer <token>` header:
+
+1. **Admin Password** (full access):
+   ```bash
+   # Set in .env
+   ADMIN_PASSWORD="your-secure-password"
+   
+   # Use in API calls
+   curl -H "Authorization: Bearer your-secure-password" \
+        http://localhost:3010/api/clients
+   ```
+
+2. **API Keys** (permission-based):
+   - API keys created via admin dashboard
+   - Stored as SHA-256 hashes in database
+   - Must belong to users without `clientId` (admin users only)
+   - Support granular permissions like `read:clients`, `write:invoices`, etc.
+
+### Auth Helper Usage
+
+```typescript
+// app/api/your-route/route.ts
+import { getAdminAuth } from '@/lib/auth';
+
+export async function GET() {
+  const authData = await getAdminAuth();
+  if (!authData) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // authData contains:
+  // - userId: string
+  // - userEmail: string | null
+  // - userName: string | null
+  // - permissions: string[]
+  // - isPasswordAuth?: boolean (if admin password was used)
+  // - apiKeyId?: string (if API key was used)
+
+  // Your route logic here...
+}
+```
+
+### Permission Checking
+
+```typescript
+import { getAdminAuth, hasPermission } from '@/lib/auth';
+
+export async function DELETE(request: Request) {
+  const authData = await getAdminAuth();
+  if (!authData) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Check specific permission
+  if (!hasPermission(authData, 'write:clients')) {
+    return NextResponse.json({ 
+      error: "Forbidden - Missing permission: write:clients" 
+    }, { status: 403 });
+  }
+
+  // Delete logic...
+}
+```
+
+### Permission Patterns
+
+- `*` - Wildcard (full access, granted by admin password)
+- `read:clients`, `write:clients` - Specific resource actions
+- `read:*`, `write:*` - All read or write permissions
+
+### Future: NextAuth.js Session-Based Auth
+
+*Not yet implemented - will add web UI login flow for admin dashboard*
 
 ## DateTime Handling ⚠️ CRITICAL
 

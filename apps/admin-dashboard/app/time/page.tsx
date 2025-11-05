@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
 import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
+import { APIFooter } from "@repo/ui";
 
 interface TimeEntry {
   id: number;
@@ -271,6 +272,21 @@ export default function TimeEntriesPage() {
   // Get visible entries
   const visibleEntries = timeEntries.slice(0, displayCount);
 
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    const response = await fetch("/api/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, language }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate code");
+    }
+
+    const data = await response.json();
+    return data.code;
+  };
+
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto">
@@ -469,6 +485,86 @@ export default function TimeEntriesPage() {
           )}
         </div>
       </div>
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/time",
+            description: "List all time entries with optional filters",
+            queryParams: [
+              {
+                name: "projectId",
+                type: "number",
+                description: "Filter by project ID",
+              },
+              {
+                name: "clientId",
+                type: "number",
+                description: "Filter by client ID",
+              },
+              {
+                name: "startDate",
+                type: "string",
+                description: "Filter entries starting from date (YYYY-MM-DD)",
+              },
+              {
+                name: "endDate",
+                type: "string",
+                description: "Filter entries up to date (YYYY-MM-DD)",
+              },
+              {
+                name: "billable",
+                type: "boolean",
+                description: "Filter by billable status",
+              },
+            ],
+          },
+          {
+            method: "POST",
+            path: "/time",
+            description: "Create a new time entry",
+            body: JSON.stringify(
+              {
+                projectId: 1,
+                description: "Work description",
+                startTime: "2025-11-04T09:00:00Z",
+                endTime: "2025-11-04T11:30:00Z",
+                billable: true,
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "GET",
+            path: "/time/{id}",
+            description: "Get a specific time entry",
+          },
+          {
+            method: "PUT",
+            path: "/time/{id}",
+            description: "Update a time entry",
+            body: JSON.stringify(
+              {
+                description: "Updated description",
+                billable: false,
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/time/{id}",
+            description: "Delete a time entry",
+          },
+        ]}
+      />
     </div>
   );
 }

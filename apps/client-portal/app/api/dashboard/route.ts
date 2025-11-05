@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { auth } from "@/lib/auth";
+import { getClientAuth } from "@/lib/auth";
 
 export async function GET() {
   try {
-    const session = await auth();
-    
-    if (!session?.user?.clientId) {
+    const authData = await getClientAuth();
+    if (!authData) {
       return NextResponse.json(
-        { error: "Unauthorized - No client linked to account" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const clientId = session.user.clientId;
+    const clientId = authData.clientId;
 
     // Get client information
     const client = await prisma.client.findUnique({
