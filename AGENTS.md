@@ -39,8 +39,31 @@ Freelance-OS is a **Turborepo monorepo** for managing freelance business operati
 - Use tailwindcss for styling
 - Always support dark mode
 - Prefer Server Components (default in Next.js 15+)
-- Use shared components from `@freelance-os/ui` package when it makes sense
+- Use shared components from `@repo/ui` package when it makes sense
 - **Avoid modals** - Prefer inline editing, side panels, or page-based flows instead
+
+### Tailwind CSS Configuration
+
+**IMPORTANT**: This project uses **Tailwind CSS v4** with a unified configuration to prevent class purging issues.
+
+- **Single source of truth**: `packages/tailwind-config/shared-styles.css` contains the base Tailwind config
+- **Content scanning**: Each app's `globals.css` uses `@source` to scan the UI package for classes
+- **No purging issues**: UI package classes are preserved because apps scan `packages/ui/src/**/*.{js,ts,jsx,tsx}`
+- **CSS linter warnings**: The `@source` and `@theme` directives will show "Unknown at rule" warnings in CSS linters - **this is expected and safe to ignore**
+
+Example from `apps/admin-dashboard/app/globals.css`:
+```css
+@import "tailwindcss";
+@import "@repo/tailwind-config";
+
+/* Scan UI package to prevent class purging */
+@source "../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
+```
+
+**Do NOT**:
+- Create separate Tailwind configs for each app
+- Import Tailwind multiple times in the same app
+- Remove the `@source` directive from app globals.css files
 
 ### DateTime Handling (Temporal API)
 
@@ -58,14 +81,15 @@ See `apps/admin-dashboard/DATETIME_GUIDE.md` for complete documentation.
 ### Packages
 - **`packages/database`** - Prisma schema + singleton client ⚠️ **Use this, never create new PrismaClient**
 - **`packages/types`** - Shared TypeScript types ⚠️ **Use these, not Prisma-generated types**
-- **`packages/ui`** - Shared React components
+- **`packages/ui`** - Shared React components (imported as `@repo/ui`)
 - **`packages/*-config`** - Shared configs (eslint, tailwind, typescript)
 
 ### Critical Rules
 1. **Database**: Always `import { prisma } from '@freelance-os/database'` (never instantiate `new PrismaClient()`)
 2. **Types**: Import from `@freelance-os/types` (not `@prisma/client`)
-3. **Client Portal Security**: ALL queries must filter by `session.user.clientId`
-4. **Workspaces**: All packages use `workspace:*` protocol
+3. **UI Components**: Import from `@repo/ui` (e.g., `import { Button, EditButton } from '@repo/ui'`)
+4. **Client Portal Security**: ALL queries must filter by `session.user.clientId`
+5. **Workspaces**: All packages use `workspace:*` protocol
 
 ## Data Architecture
 

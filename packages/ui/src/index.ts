@@ -7,6 +7,12 @@ export type { ButtonProps } from "./button";
 
 export { Card } from "./card";
 
+export { DownloadButton } from "./download-button";
+export type { DownloadButtonProps } from "./download-button";
+
+export { EditButton } from "./edit-button";
+export type { EditButtonProps } from "./edit-button";
+
 export { EmptyState } from "./empty-state";
 export type { EmptyStateProps } from "./empty-state";
 

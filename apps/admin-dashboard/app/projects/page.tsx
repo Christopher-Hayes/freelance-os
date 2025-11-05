@@ -117,7 +117,7 @@ const ProjectCard = memo(function ProjectCard({
             </div>
             <div className="flex gap-2">
               <Link
-                href={`/projects/${project.id}`}
+                href={`/projects/${project.id}?edit=true`}
                 className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 text-sm"
               >
                 Edit

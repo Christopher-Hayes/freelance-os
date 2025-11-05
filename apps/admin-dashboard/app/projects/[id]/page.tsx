@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 type Client = {
@@ -53,6 +53,7 @@ export default function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,8 +91,14 @@ export default function ProjectDetailPage({
       setProjectId(id);
       fetchProject(id);
       fetchClients();
+      
+      // Check if we should start in edit mode
+      const shouldEdit = searchParams.get('edit') === 'true';
+      if (shouldEdit) {
+        setEditing(true);
+      }
     });
-  }, [params]);
+  }, [params, searchParams]);
 
   const fetchProject = async (id: string) => {
     try {

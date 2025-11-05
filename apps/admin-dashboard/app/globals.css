@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@repo/tailwind-config";
 
+/* Scan UI package to prevent class purging */
+@source "../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;

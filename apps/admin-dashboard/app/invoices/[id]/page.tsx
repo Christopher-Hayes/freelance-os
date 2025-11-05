@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
+import { EditButton, DownloadButton } from '@repo/ui';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -292,75 +293,6 @@ export default function InvoiceDetailPage() {
               </span>
             )}
           </div>
-          <div className="flex gap-2">
-            {!editing && (
-              <>
-                <button
-                  onClick={handleSendEmail}
-                  disabled={sending || saving}
-                  className="bg-indigo-500 dark:bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-600 dark:hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition flex items-center gap-2"
-                  title="Send invoice email to client"
-                >
-                  {sending ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Send Invoice
-                    </>
-                  )}
-                </button>
-                {invoice.status === 'draft' && (
-                  <button
-                    onClick={handleMarkAsSent}
-                    disabled={saving}
-                    className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
-                  >
-                    Mark as Sent
-                  </button>
-                )}
-                {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
-                  <button
-                    onClick={handleMarkAsPaid}
-                    disabled={saving}
-                    className="bg-green-500 dark:bg-green-600 text-white px-4 py-2 rounded hover:bg-green-600 dark:hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
-                  >
-                    Mark as Paid
-                  </button>
-                )}
-                <a
-                  href={`/api/invoices/${id}/pdf`}
-                  download
-                  className="bg-purple-500 dark:bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-600 dark:hover:bg-purple-700 transition inline-flex items-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
-                  Download PDF
-                </a>
-                <button
-                  onClick={() => setEditing(true)}
-                  className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                >
-                  Edit
-                </button>
-              </>
-            )}
-            <button
-              onClick={handleDelete}
-              className="bg-red-500 dark:bg-red-600 text-white px-4 py-2 rounded hover:bg-red-600 dark:hover:bg-red-700 transition"
-            >
-              Delete
-            </button>
-          </div>
         </div>
       </div>
 
@@ -455,35 +387,49 @@ export default function InvoiceDetailPage() {
             />
           </div>
 
-          <div className="mt-6 flex gap-4">
+          <div className="mt-6 flex justify-between items-center">
+            <div className="flex gap-4">
+              <button
+                onClick={handleUpdate}
+                disabled={saving}
+                className="bg-blue-500 dark:bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => {
+                  setEditing(false);
+                  // Reset form fields
+                  setAmount(invoice.amount.toString());
+                  setStatus(invoice.status);
+                  const dueDateStr = invoice.dueDate.split('T')[0];
+                  if (dueDateStr) setDueDate(dueDateStr);
+                  const paidDateStr = invoice.paidDate ? invoice.paidDate.split('T')[0] : '';
+                  if (paidDateStr !== undefined) setPaidDate(paidDateStr);
+                  setNotes(invoice.notes || '');
+                }}
+                className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+              >
+                Cancel
+              </button>
+            </div>
             <button
-              onClick={handleUpdate}
-              disabled={saving}
-              className="bg-blue-500 dark:bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
+              onClick={handleDelete}
+              className="bg-red-500 dark:bg-red-600 text-white px-6 py-2 rounded hover:bg-red-600 dark:hover:bg-red-700 transition"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              onClick={() => {
-                setEditing(false);
-                // Reset form fields
-                setAmount(invoice.amount.toString());
-                setStatus(invoice.status);
-                const dueDateStr = invoice.dueDate.split('T')[0];
-                if (dueDateStr) setDueDate(dueDateStr);
-                const paidDateStr = invoice.paidDate ? invoice.paidDate.split('T')[0] : '';
-                if (paidDateStr !== undefined) setPaidDate(paidDateStr);
-                setNotes(invoice.notes || '');
-              }}
-              className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-            >
-              Cancel
+              Delete
             </button>
           </div>
         </div>
       ) : (
         /* View Mode */
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900">
+        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900 relative">
+          {/* Overlay buttons in top-right */}
+          <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <DownloadButton href={`/api/invoices/${id}/pdf`} />
+            <EditButton onClick={() => setEditing(true)} />
+          </div>
+
           <div className="grid grid-cols-2 gap-8 mb-8">
             <div>
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Client</h3>
@@ -526,15 +472,51 @@ export default function InvoiceDetailPage() {
           </div>
 
           {invoice.notes && (
-            <div>
+            <div className="mb-8">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Notes</h3>
               <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{invoice.notes}</p>
             </div>
           )}
 
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
+          <div className="mb-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
             <p>Created: {formatDate(invoice.createdAt)}</p>
             <p>Last Updated: {formatDate(invoice.updatedAt)}</p>
+          </div>
+
+          {/* Action buttons at bottom */}
+          <div className="flex gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <button
+              onClick={handleSendEmail}
+              disabled={sending || saving}
+              className="bg-indigo-500 dark:bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-600 dark:hover:bg-indigo-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition flex items-center gap-2"
+              title="Send invoice email to client"
+            >
+              {sending ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send Invoice
+                </>
+              )}
+            </button>
+            {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+              <button
+                onClick={handleMarkAsPaid}
+                disabled={saving}
+                className="bg-green-500 dark:bg-green-600 text-white px-4 py-2 rounded hover:bg-green-600 dark:hover:bg-green-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
+              >
+                Mark as Paid
+              </button>
+            )}
           </div>
         </div>
       )}
