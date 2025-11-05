@@ -7,7 +7,7 @@ import { prisma } from "@freelance-os/database";
 interface Project {
   id: number;
   name: string;
-  description: string | null;
+  clientDescription: string | null;
   status: string;
   totalHours: string;
   createdAt: Date;
@@ -27,6 +27,7 @@ async function getProjects(): Promise<Project[]> {
   }
 
   // CRITICAL: Only fetch projects for the authenticated client
+  // Explicitly select fields to prevent exposing privateNotes
   const projects = await prisma.project.findMany({
     where: {
       clientId: session.user.clientId,
@@ -34,7 +35,13 @@ async function getProjects(): Promise<Project[]> {
     orderBy: {
       createdAt: "desc",
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      clientDescription: true,
+      // privateNotes: NEVER select this field in client portal!
+      status: true,
+      createdAt: true,
       client: {
         select: {
           name: true,
@@ -63,7 +70,7 @@ async function getProjects(): Promise<Project[]> {
       return {
         id: project.id,
         name: project.name,
-        description: project.description,
+        clientDescription: project.clientDescription,
         status: project.status,
         createdAt: project.createdAt,
         client: project.client,
@@ -135,9 +142,9 @@ export default async function ProjectsPage() {
                   <StatusBadge status={project.status} />
                 </div>
 
-                {project.description && (
+                {project.clientDescription && (
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                    {project.description}
+                    {project.clientDescription}
                   </p>
                 )}
 

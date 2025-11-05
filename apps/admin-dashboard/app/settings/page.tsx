@@ -416,8 +416,8 @@ export default function SettingsPage() {
                 onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
-                <option value="openai">OpenAI (GPT-4, GPT-3.5)</option>
-                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI (gpt-5)</option>
+                <option value="gemini">Google Gemini (gemini-2.5-flash)</option>
               </select>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                 Choose which AI provider to use for AI-powered features

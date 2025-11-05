@@ -251,7 +251,8 @@ async function processAutofillJob(job: any) {
   const projectsInfo = projects.map((p) => ({
     id: p.id,
     name: p.name,
-    description: p.description,
+    clientDescription: p.clientDescription,
+    privateNotes: p.privateNotes, // Use private notes for AI matching hints
     clientName: p.client.name,
     status: p.status,
     billable: p.billable,
@@ -295,7 +296,7 @@ UTC time range for this date: ${startInstant.toString()} to ${endInstant.toStrin
 CRITICAL: All timestamps you return MUST use the EXACT UTC times from the activity sessions below.
 
 Available Projects:
-${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.description ? `\n  Description: ${p.description}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
+${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.clientDescription ? `\n  Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Matching hints: ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
 ${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
 ${existingEntriesInfo.map((e) => {

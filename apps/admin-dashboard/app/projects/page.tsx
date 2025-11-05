@@ -12,7 +12,8 @@ type Client = {
 type Project = {
   id: number;
   name: string;
-  description: string | null;
+  clientDescription: string | null;
+  privateNotes: string | null;
   status: string;
   color: string;
   startDate: string | null;
@@ -78,8 +79,13 @@ const ProjectCard = memo(function ProjectCard({
                   {statusLabels[project.status as keyof typeof statusLabels] || project.status}
                 </span>
               </div>
-              {project.description && (
-                <p className="text-gray-600 dark:text-gray-400 mb-3">{project.description}</p>
+              {project.clientDescription && (
+                <p className="text-gray-600 dark:text-gray-400 mb-3">{project.clientDescription}</p>
+              )}
+              {project.privateNotes && (
+                <p className="text-gray-500 dark:text-gray-500 mb-3 text-sm italic border-l-2 border-gray-300 dark:border-gray-600 pl-3">
+                  Private: {project.privateNotes}
+                </p>
               )}
               <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
                 <div>

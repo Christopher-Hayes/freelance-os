@@ -16,7 +16,7 @@ interface TimeEntry {
 interface Project {
   id: number;
   name: string;
-  description: string | null;
+  clientDescription: string | null;
   status: string;
   totalHours: string;
   createdAt: Date;
@@ -42,11 +42,20 @@ async function getProject(id: string): Promise<Project> {
   }
 
   // CRITICAL: Verify the project belongs to the authenticated client
+  // Explicitly select fields to prevent exposing privateNotes
   const project = await prisma.project.findUnique({
     where: {
       id: idNum,
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      clientDescription: true,
+      // privateNotes: NEVER select this field in client portal!
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      clientId: true,
       client: {
         select: {
           name: true,
@@ -89,7 +98,7 @@ async function getProject(id: string): Promise<Project> {
   return {
     id: project.id,
     name: project.name,
-    description: project.description,
+    clientDescription: project.clientDescription,
     status: project.status,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
@@ -148,9 +157,9 @@ export default async function ProjectDetailPage({
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                 {project.name}
               </h1>
-              {project.description && (
+              {project.clientDescription && (
                 <p className="mt-2 text-gray-600 dark:text-gray-400">
-                  {project.description}
+                  {project.clientDescription}
                 </p>
               )}
             </div>

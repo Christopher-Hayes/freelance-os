@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, clientId, status, color, billable, startDate, endDate } = body;
+    const { name, clientDescription, privateNotes, clientId, status, color, billable, startDate, endDate } = body;
 
     // Validation
     if (!name || !clientId) {
@@ -94,7 +94,8 @@ export async function POST(request: NextRequest) {
     const project = await prisma.project.create({
       data: {
         name,
-        description,
+        clientDescription,
+        privateNotes,
         clientId: parseInt(clientId),
         status: status || 'active',
         color: color || '#22C55E', // Default green if not provided

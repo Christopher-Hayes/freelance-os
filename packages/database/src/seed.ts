@@ -30,7 +30,8 @@ async function main() {
   const project1 = await prisma.project.create({
     data: {
       name: 'Website Redesign',
-      description: 'Complete overhaul of company website',
+      clientDescription: 'Complete overhaul of company website with modern design and improved user experience',
+      privateNotes: 'Client is very detail-oriented. Schedule weekly check-ins. Uses Figma for design reviews. Keywords for AI: figma, website, design, frontend',
       clientId: client1.id,
       status: 'active',
       startDate: new Date('2025-10-01'),
@@ -40,7 +41,8 @@ async function main() {
   const project2 = await prisma.project.create({
     data: {
       name: 'Mobile App Development',
-      description: 'React Native mobile application',
+      clientDescription: 'React Native mobile application for iOS and Android platforms',
+      privateNotes: 'Fast-paced startup, prefers async communication. Tech stack: React Native, Expo, Firebase. Keywords for AI: react-native, mobile, expo, firebase, app development',
       clientId: client2.id,
       status: 'active',
       startDate: new Date('2025-10-15'),

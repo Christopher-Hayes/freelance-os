@@ -26,7 +26,8 @@ export type ProjectStatus = 'active' | 'completed' | 'on-hold';
 export interface Project {
   id: number;
   name: string;
-  description?: string;
+  clientDescription?: string; // Client-viewable description
+  privateNotes?: string; // Private notes (admin-only, for AI matching)
   clientId: number;
   status: ProjectStatus;
   color: string; // Hex color code (e.g., "#22C55E")
@@ -39,7 +40,8 @@ export interface Project {
 
 export interface CreateProjectInput {
   name: string;
-  description?: string;
+  clientDescription?: string;
+  privateNotes?: string;
   clientId: number;
   status?: ProjectStatus;
   color?: string;
@@ -50,7 +52,8 @@ export interface CreateProjectInput {
 
 export interface UpdateProjectInput {
   name?: string;
-  description?: string;
+  clientDescription?: string;
+  privateNotes?: string;
   status?: ProjectStatus;
   color?: string;
   billable?: boolean;

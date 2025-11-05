@@ -62,17 +62,18 @@ model Client {
 
 // Project tracking
 model Project {
-  id          Int       @id @default(autoincrement())
-  name        String
-  description String?   @db.Text
-  clientId    Int       @map("client_id")
-  status      String    @default("active") // active, completed, on-hold
-  color       String    @default("#22C55E") @db.VarChar(7) // Hex color for timeline display
-  billable    Boolean   @default(true) // General billable setting for project (affects time entry UI, invoicing, etc.)
-  startDate   DateTime? @map("start_date") @db.Timestamptz
-  endDate     DateTime? @map("end_date") @db.Timestamptz
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  id                 Int       @id @default(autoincrement())
+  name               String
+  clientDescription  String?   @map("client_description") @db.Text // Client-viewable description
+  privateNotes       String?   @map("private_notes") @db.Text // Private notes (admin-only, for AI matching, etc.)
+  clientId           Int       @map("client_id")
+  status             String    @default("active") // active, completed, on-hold
+  color              String    @default("#22C55E") @db.VarChar(7) // Hex color for timeline display
+  billable           Boolean   @default(true) // General billable setting for project (affects time entry UI, invoicing, etc.)
+  startDate          DateTime? @map("start_date") @db.Timestamptz
+  endDate            DateTime? @map("end_date") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   
   client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
   timeEntries TimeEntry[]

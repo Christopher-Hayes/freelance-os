@@ -29,6 +29,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<AiJobWithDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [completedJobIds, setCompletedJobIds] = useState<Set<number>>(new Set());
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -38,26 +39,39 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       const rawJobs: AiJob[] = await response.json();
       const enrichedJobs = rawJobs.map(enrichJobWithDisplay);
       
-      // Check for newly completed jobs to show toasts
-      enrichedJobs.forEach((job) => {
-        if (
-          job.status === "completed" &&
-          !completedJobIds.has(job.id)
-        ) {
-          setCompletedJobIds((prev) => new Set(prev).add(job.id));
-          const message = job.displayDescription
-            ? `${job.displayTitle}: ${job.displayDescription}`
-            : `${job.displayTitle} completed`;
-          toast.success(message);
-        } else if (
-          job.status === "failed" &&
-          !completedJobIds.has(job.id)
-        ) {
-          setCompletedJobIds((prev) => new Set(prev).add(job.id));
-          const message = `${job.displayTitle} failed${job.error ? `: ${job.error}` : ""}`;
-          toast.error(message);
-        }
-      });
+      // Only show toasts after initial load (not on page refresh)
+      if (!isInitialLoad) {
+        // Check for newly completed jobs to show toasts
+        enrichedJobs.forEach((job) => {
+          if (
+            job.status === "completed" &&
+            !completedJobIds.has(job.id)
+          ) {
+            setCompletedJobIds((prev) => new Set(prev).add(job.id));
+            const message = job.displayDescription
+              ? `${job.displayTitle}: ${job.displayDescription}`
+              : `${job.displayTitle} completed`;
+            toast.success(message);
+          } else if (
+            job.status === "failed" &&
+            !completedJobIds.has(job.id)
+          ) {
+            setCompletedJobIds((prev) => new Set(prev).add(job.id));
+            const message = `${job.displayTitle} failed${job.error ? `: ${job.error}` : ""}`;
+            toast.error(message);
+          }
+        });
+      } else {
+        // On initial load, just mark all completed/failed jobs as seen
+        const completedIds = new Set<number>();
+        enrichedJobs.forEach((job) => {
+          if (job.status === "completed" || job.status === "failed") {
+            completedIds.add(job.id);
+          }
+        });
+        setCompletedJobIds(completedIds);
+        setIsInitialLoad(false);
+      }
       
       setJobs(enrichedJobs);
       setIsLoading(false);
@@ -65,7 +79,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       console.error("Error fetching jobs:", error);
       setIsLoading(false);
     }
-  }, [completedJobIds]);
+  }, [completedJobIds, isInitialLoad]);
 
   const createJob = useCallback(
     async (type: AiJob["type"], parameters?: Record<string, any>) => {

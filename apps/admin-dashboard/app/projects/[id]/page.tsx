@@ -22,7 +22,8 @@ type TimeEntry = {
 type Project = {
   id: number;
   name: string;
-  description: string | null;
+  clientDescription: string | null;
+  privateNotes: string | null;
   status: string;
   color: string;
   startDate: string | null;
@@ -63,7 +64,8 @@ export default function ProjectDetailPage({
   const [projectId, setProjectId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
+    clientDescription: '',
+    privateNotes: '',
     clientId: '',
     status: 'active',
     color: '#22C55E', // Default green
@@ -109,7 +111,8 @@ export default function ProjectDetailPage({
       setProject(data);
       setFormData({
         name: data.name,
-        description: data.description || '',
+        clientDescription: data.clientDescription || '',
+        privateNotes: data.privateNotes || '',
         clientId: data.client.id.toString(),
         status: data.status,
         color: data.color || '#22C55E',
@@ -279,17 +282,37 @@ export default function ProjectDetailPage({
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Description
+            <label htmlFor="clientDescription" className="block text-sm font-medium dark:text-gray-300 mb-2">
+              Client-Viewable Description
             </label>
             <textarea
-              id="description"
-              name="description"
-              value={formData.description}
+              id="clientDescription"
+              name="clientDescription"
+              value={formData.clientDescription}
               onChange={handleChange}
-              rows={4}
+              rows={3}
               className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              This description will be visible to the client in their portal
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="privateNotes" className="block text-sm font-medium dark:text-gray-300 mb-2">
+              Private Notes
+            </label>
+            <textarea
+              id="privateNotes"
+              name="privateNotes"
+              value={formData.privateNotes}
+              onChange={handleChange}
+              rows={3}
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              These notes are only visible to you and can include AI activity matching rules
+            </p>
           </div>
 
           <div>
@@ -413,7 +436,8 @@ export default function ProjectDetailPage({
                 if (project) {
                   setFormData({
                     name: project.name,
-                    description: project.description || '',
+                    clientDescription: project.clientDescription || '',
+                    privateNotes: project.privateNotes || '',
                     clientId: project.client.id.toString(),
                     status: project.status,
                     color: project.color || '#22C55E',
@@ -475,10 +499,22 @@ export default function ProjectDetailPage({
             </div>
           </div>
 
-          {project.description && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold dark:text-white mb-2">Description</h2>
-              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{project.description}</p>
+          {(project.clientDescription || project.privateNotes) && (
+            <div className="mb-6 space-y-4">
+              {project.clientDescription && (
+                <div>
+                  <h2 className="text-lg font-semibold dark:text-white mb-2">Client-Viewable Description</h2>
+                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{project.clientDescription}</p>
+                </div>
+              )}
+              {project.privateNotes && (
+                <div>
+                  <h2 className="text-lg font-semibold dark:text-white mb-2">Private Notes</h2>
+                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap italic border-l-2 border-gray-300 dark:border-gray-600 pl-3">
+                    {project.privateNotes}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -184,7 +184,13 @@ export async function POST(request: NextRequest) {
           in: ["active", "on_hold"],
         },
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        clientDescription: true,
+        privateNotes: true,
+        status: true,
+        billable: true,
         client: {
           select: {
             name: true,
@@ -204,7 +210,8 @@ export async function POST(request: NextRequest) {
     const projectsInfo = projects.map((p) => ({
       id: p.id,
       name: p.name,
-      description: p.description,
+      clientDescription: p.clientDescription,
+      privateNotes: p.privateNotes,
       clientName: p.client.name,
       status: p.status,
       billable: p.billable,
@@ -237,7 +244,7 @@ CRITICAL: All timestamps you return MUST use the EXACT UTC times from the activi
 Do NOT create timestamps like ${date}T00:00:00Z - use the actual session times which are in the range ${startInstant.toString()} to ${endInstant.toString()}.
 
 Available Projects:
-${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.description ? `\n  Description: ${p.description}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
+${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.clientDescription ? `\n  Client-Facing Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Private Notes (Activity Matching): ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
 ${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
 ${existingEntriesInfo.map((e: any) => {
@@ -259,7 +266,8 @@ ${sortedByDuration
 Based on these activity sessions, suggest time entries that should be created for work. Group related activities together into logical work blocks.
 
 Guidelines:
-- Match activities to projects based on project name, description, and window titles
+- Match activities to projects based on project name, client-facing description, and especially the private notes (which often contain app-specific matching hints like app names or window title patterns)
+- Pay close attention to private notes as they contain important information about how activities should be matched to projects
 - Include both billable AND non-billable projects - suggest for any project that matches the activity
 - Group consecutive work on the same project into single entries
 - Use the EXACT timestamps from the activity sessions above - do not modify the date portion

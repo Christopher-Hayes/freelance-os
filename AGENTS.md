@@ -117,8 +117,12 @@ cd packages/database
 pnpm db:studio              # GUI at localhost:5555
 pnpm db:push                # Push schema (dev)
 pnpm db:migrate             # Create migration (prod)
-pnpm db:seed                # Load sample data
 ```
+
+**⚠️ CRITICAL: Never run `pnpm db:seed` on a database with existing data!**
+- The seed script is ONLY for populating empty databases
+- Always check if database has data before seeding
+- Running seed on production will create duplicate/test data
 
 ### Adding New Features
 1. Update schema in `packages/database/prisma/schema.prisma`
@@ -128,6 +132,7 @@ pnpm db:seed                # Load sample data
    - Use Command Palette → "TypeScript: Restart TS Server"
    - Or the `typescript.restartTsServer` command
 5. Implement in apps (see app-specific AGENTS.md files)
+6. **NEVER run seed scripts to test changes** - use the running apps instead
 
 ## Design Philosophy: Activity Sessions vs Time Entries
 
