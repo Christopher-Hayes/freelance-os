@@ -60,6 +60,7 @@ Description: ${endpoint.description}\n\n`;
 Generate ONLY the code, no explanations or markdown formatting. Just raw code ready to copy-paste.
 Keep it concise and to the point.
 Include authentication header placeholder (Bearer token).
+Use ONLY the query parameters listed above - DO NOT fabricate or add additional query parameters.
 Prefer working example values for query parameters and body over placeholders.
 Use the full URL: ${origin}${endpoint.path}`;
 

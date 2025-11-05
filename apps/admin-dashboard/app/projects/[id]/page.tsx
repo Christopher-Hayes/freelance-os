@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { APIFooter } from '@repo/ui';
+import { generateCode } from '@/lib/ai-actions';
 
 type Client = {
   id: number;
@@ -203,6 +205,16 @@ export default function ProjectDetailPage({
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete project');
     }
+  };
+
+  const handleGenerateCode = async (endpoint: any, language: string) => {
+    // Replace {id} placeholder with actual project ID in the path
+    const endpointWithActualId = {
+      ...endpoint,
+      path: endpoint.path.replace('{id}', projectId || '1'),
+    };
+    
+    return await generateCode(endpointWithActualId, language);
   };
 
   if (loading) {
@@ -582,6 +594,69 @@ export default function ProjectDetailPage({
           </div>
         </div>
       )}
+
+      <APIFooter
+        enableApiKeys
+        enableCodeGen
+        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateCode={handleGenerateCode}
+        endpoints={[
+          {
+            method: "GET",
+            path: "/projects/{id}",
+            description: "Get a specific project with time entries and summary",
+            queryParams: [
+              {
+                name: "id",
+                type: "number",
+                required: true,
+                description: "Project ID (in URL path)",
+              },
+            ],
+          },
+          {
+            method: "PUT",
+            path: "/projects/{id}",
+            description: "Update a project",
+            queryParams: [
+              {
+                name: "id",
+                type: "number",
+                required: true,
+                description: "Project ID (in URL path)",
+              },
+            ],
+            body: JSON.stringify(
+              {
+                name: "Updated Project Name",
+                clientId: 1,
+                clientDescription: "Updated description",
+                privateNotes: "Updated notes",
+                status: "completed",
+                color: "#3B82F6",
+                billable: true,
+                startDate: "2025-01-01",
+                endDate: "2025-12-31",
+              },
+              null,
+              2
+            ),
+          },
+          {
+            method: "DELETE",
+            path: "/projects/{id}",
+            description: "Delete a project (cascades to time entries)",
+            queryParams: [
+              {
+                name: "id",
+                type: "number",
+                required: true,
+                description: "Project ID (in URL path)",
+              },
+            ],
+          },
+        ]}
+      />
     </div>
   );
 }
