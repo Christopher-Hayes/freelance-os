@@ -27,7 +27,7 @@ export async function getAiModel(): Promise<LanguageModel> {
       const google = createGoogleGenerativeAI({
         apiKey: googleApiKey,
       });
-      return google("gemini-2.5-flash");
+      return google("gemini-2.5-pro");
       
     case "openai":
     default:
@@ -39,7 +39,7 @@ export async function getAiModel(): Promise<LanguageModel> {
       // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
       // but we'll set it in the environment for this process
       process.env.OPENAI_API_KEY = openaiKey;
-      return openai("gpt-5-mini");
+      return openai("gpt-5");
   }
 }
 

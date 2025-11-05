@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { WeeklySummaries } from './WeeklySummaries';
 
 type Client = {
   id: number;
@@ -557,6 +558,10 @@ export default function ProjectDetailPage({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="mb-8">
+            <WeeklySummaries projectId={project.id} projectName={project.name} timeEntries={project.timeEntries} />
           </div>
 
           <div>

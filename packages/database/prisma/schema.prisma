@@ -76,12 +76,30 @@ model Project {
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   
-  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  timeEntries TimeEntry[]
-  invoices    Invoice[]
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  timeEntries     TimeEntry[]
+  invoices        Invoice[]
+  weeklySummaries WeeklySummary[]
 
   @@index([clientId])
   @@map("projects")
+}
+
+// Weekly summaries for projects
+model WeeklySummary {
+  id          Int      @id @default(autoincrement())
+  projectId   Int      @map("project_id")
+  weekStart   DateTime @map("week_start") @db.Timestamptz // Monday of the week at 00:00:00 UTC
+  summary     String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, weekStart])
+  @@index([projectId])
+  @@index([weekStart])
+  @@map("project_weekly_summaries")
 }
 
 // Time tracking entries (linked to projects)

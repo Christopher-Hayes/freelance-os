@@ -109,3 +109,62 @@ export function formatAppTitle(appClass: string): string {
 
   return `${appName?.[0]?.toUpperCase() ?? ''}${appName.slice(1)}`;
 }
+
+/**
+ * Get the Monday (start) of the week for a given date (ISO week)
+ * @param date Any date in the week
+ * @returns PlainDate representing Monday of that week
+ */
+export function getWeekStart(date: Date | Temporal.PlainDate): Temporal.PlainDate {
+  const plainDate = date instanceof Date 
+    ? Temporal.PlainDate.from(date.toISOString().split('T')[0]!)
+    : date;
+  
+  // Get day of week (1 = Monday, 7 = Sunday in ISO)
+  const dayOfWeek = plainDate.dayOfWeek;
+  
+  // Subtract days to get to Monday
+  const daysToSubtract = dayOfWeek - 1;
+  return plainDate.subtract({ days: daysToSubtract });
+}
+
+/**
+ * Get the Sunday (end) of the week for a given date (ISO week)
+ * @param date Any date in the week
+ * @returns PlainDate representing Sunday of that week
+ */
+export function getWeekEnd(date: Date | Temporal.PlainDate): Temporal.PlainDate {
+  const weekStart = getWeekStart(date);
+  return weekStart.add({ days: 6 });
+}
+
+/**
+ * Format a week range as "MMM D - D, YYYY" or "MMM D - MMM D, YYYY" if crossing months
+ * @param weekStart Monday of the week
+ * @returns Formatted string like "Jan 15 - 21, 2024" or "Jan 29 - Feb 4, 2024"
+ */
+export function formatWeekRange(weekStart: Date | Temporal.PlainDate): string {
+  const start = weekStart instanceof Date 
+    ? Temporal.PlainDate.from(weekStart.toISOString().split('T')[0]!)
+    : weekStart;
+  const end = start.add({ days: 6 });
+  
+  const startMonth = start.toLocaleString('en-US', { month: 'short' });
+  const endMonth = end.toLocaleString('en-US', { month: 'short' });
+  const startDay = start.day;
+  const endDay = end.day;
+  const year = end.year;
+  
+  if (start.month === end.month) {
+    return `${startMonth} ${startDay} - ${endDay}, ${year}`;
+  } else {
+    return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`;
+  }
+}
+
+/**
+ * Convert a PlainDate to a Date object at midnight UTC
+ */
+export function plainDateToUTC(plainDate: Temporal.PlainDate): Date {
+  return new Date(plainDate.toString() + 'T00:00:00.000Z');
+}

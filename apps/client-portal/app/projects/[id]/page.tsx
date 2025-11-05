@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { prisma } from "@freelance-os/database";
+import { WeeklySummaries } from "@/components/WeeklySummaries";
 
 interface TimeEntry {
   id: number;
@@ -215,6 +216,21 @@ export default async function ProjectDetailPage({
                 </dd>
               </div>
             </dl>
+          </div>
+        </div>
+
+        {/* Weekly Summaries */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              Weekly Summaries
+            </h2>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Time entries grouped by week with summaries
+            </p>
+          </div>
+          <div className="p-6">
+            <WeeklySummaries projectId={project.id} timeEntries={project.recentTimeEntries} />
           </div>
         </div>
 

@@ -89,6 +89,38 @@ export interface TimeEntryGrouped {
   entries: TimeEntry[];
 }
 
+// Weekly summary types
+export interface WeeklySummary {
+  id: number;
+  projectId: number;
+  weekStart: Date; // Monday of the week at 00:00:00 UTC
+  summary: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateWeeklySummaryInput {
+  projectId: number;
+  weekStart: Date;
+  summary: string;
+}
+
+export interface UpdateWeeklySummaryInput {
+  summary: string;
+}
+
+export interface WeeklySummaryWithStats {
+  id: number;
+  projectId: number;
+  weekStart: Date;
+  weekEnd: Date;
+  summary: string;
+  totalMinutes: number;
+  timeEntries: TimeEntry[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Invoice types
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
 

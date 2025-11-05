@@ -339,3 +339,83 @@ function mergeSessionsForAI(sessions: any[]): any[] {
 
   return merged;
 }
+
+/**
+ * Generate a client-friendly weekly summary based on time entry descriptions
+ */
+export async function generateWeeklySummary(params: {
+  projectId: number;
+  weekStart: string;
+  weekEnd: string;
+  entries: Array<{
+    date: string;
+    description: string | null;
+    hours: number;
+  }>;
+}): Promise<string> {
+  const model = await getAiModel();
+
+  // Fetch project details
+  const project = await prisma.project.findUnique({
+    where: { id: params.projectId },
+    select: {
+      name: true,
+      clientDescription: true,
+      privateNotes: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+
+  if (!project) {
+    throw new Error(`Project ${params.projectId} not found`);
+  }
+
+  const totalHours = params.entries.reduce((sum, e) => sum + e.hours, 0);
+  
+  // Build project context section
+  let projectContext = `Project: ${project.name}`;
+  if (project.clientDescription) {
+    projectContext += `\nProject Description: ${project.clientDescription}`;
+  }
+  if (project.privateNotes) {
+    projectContext += `\nInternal Notes: ${project.privateNotes}`;
+  }
+  if (project.startDate || project.endDate) {
+    projectContext += `\nProject Timeline:`;
+    if (project.startDate) {
+      projectContext += ` Started ${project.startDate.toISOString().split('T')[0]}`;
+    }
+    if (project.endDate) {
+      projectContext += `${project.startDate ? ',' : ''} Due ${project.endDate.toISOString().split('T')[0]}`;
+    }
+  }
+  
+  const prompt = `You are writing a professional weekly summary for a client invoice.
+
+${projectContext}
+Week: ${params.weekStart} to ${params.weekEnd}
+Total Hours: ${totalHours.toFixed(1)} hours
+
+Time Entries:
+${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
+
+Write a concise 1-2 sentence summary of the work accomplished this week. 
+- Use client-friendly, professional language (avoid technical jargon or shorthand)
+- Focus on outcomes and deliverables, not just activities
+- Be specific about what was accomplished
+- Do not sound like you're bragging or overselling, just state the facts
+- Write in past tense, do not say "I did" or "we did", just describe the work
+- Do not include the total hours (that's shown separately)
+- Do not use bullet points, write in paragraph form
+- If project timeline is provided, consider where this week falls in the overall project progress
+
+Summary:`;
+
+  const { text } = await generateText({
+    model,
+    prompt,
+  });
+
+  return text.trim();
+}

@@ -28,6 +28,18 @@ export interface InvoicePDFData {
     phone?: string | null;
     website?: string | null;
   };
+  // Optional time breakdown
+  timeBreakdown?: {
+    weekStart: string;
+    weekEnd: string;
+    summary?: string | null;
+    totalHours: number;
+    entries: Array<{
+      date: string;
+      description: string | null;
+      hours: number;
+    }>;
+  }[];
 }
 
 // Create styles
@@ -168,6 +180,61 @@ const styles = StyleSheet.create({
     borderLeft: 3,
     borderLeftColor: '#f59e0b',
   },
+  timeBreakdownSection: {
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  weekHeader: {
+    backgroundColor: '#f3f4f6',
+    padding: 10,
+    marginTop: 15,
+    marginBottom: 8,
+    borderRadius: 4,
+  },
+  weekTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 3,
+  },
+  weekHours: {
+    fontSize: 9,
+    color: '#6b7280',
+  },
+  weeklySummary: {
+    fontSize: 9,
+    color: '#4b5563',
+    backgroundColor: '#eff6ff',
+    padding: 8,
+    marginVertical: 6,
+    borderRadius: 3,
+    borderLeft: 2,
+    borderLeftColor: '#3b82f6',
+    lineHeight: 1.4,
+  },
+  timeEntry: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    marginBottom: 2,
+  },
+  timeEntryDate: {
+    fontSize: 9,
+    color: '#6b7280',
+    width: '20%',
+  },
+  timeEntryDescription: {
+    fontSize: 9,
+    color: '#1f2937',
+    width: '60%',
+  },
+  timeEntryHours: {
+    fontSize: 9,
+    color: '#1f2937',
+    textAlign: 'right',
+    width: '20%',
+  },
 });
 
 export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) => {
@@ -273,6 +340,46 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
         )}
 
         <View style={styles.divider} />
+
+        {/* Time Breakdown */}
+        {invoice.timeBreakdown && invoice.timeBreakdown.length > 0 && (
+          <View style={styles.timeBreakdownSection}>
+            <Text style={styles.label}>Time Breakdown</Text>
+            
+            {invoice.timeBreakdown.map((week, weekIndex) => (
+              <View key={weekIndex}>
+                <View style={styles.weekHeader}>
+                  <Text style={styles.weekTitle}>
+                    {formatDate(week.weekStart)} - {formatDate(week.weekEnd)}
+                  </Text>
+                  <Text style={styles.weekHours}>
+                    {week.totalHours.toFixed(1)} hours
+                  </Text>
+                </View>
+                
+                {week.summary && (
+                  <View style={styles.weeklySummary}>
+                    <Text>{week.summary}</Text>
+                  </View>
+                )}
+                
+                {week.entries.map((entry, entryIndex) => (
+                  <View key={entryIndex} style={styles.timeEntry}>
+                    <Text style={styles.timeEntryDate}>{entry.date}</Text>
+                    <Text style={styles.timeEntryDescription}>
+                      {entry.description || 'No description'}
+                    </Text>
+                    <Text style={styles.timeEntryHours}>
+                      {entry.hours.toFixed(1)}h
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+            
+            <View style={styles.divider} />
+          </View>
+        )}
 
         {/* Amount */}
         <View style={styles.amountSection}>
