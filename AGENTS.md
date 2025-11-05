@@ -1,25 +1,14 @@
 # Freelance-OS - Agent Instructions
 
-## ⛔ CRITICAL RULES - READ FIRST ⛔
+## Documentation Policy
 
-### 🚫 ABSOLUTELY NO DOCUMENTATION FILES 🚫
-
-**DO NOT CREATE ANY .md FILES EXCEPT:**
+**Only create .md files for:**
 - README.md (one per app/package - only if missing)
-- AGENTS.md (ONLY in `/`, `/apps/admin-dashboard/`, `/apps/client-portal/`, `/packages/database/`)
+- AGENTS.md (only in `/`, `/apps/admin-dashboard/`, `/apps/client-portal/`, `/packages/database/`)
 
-**FORBIDDEN FILES - NEVER CREATE THESE:**
-- ❌ Any GUIDE.md, SUMMARY.md, STATUS.md, TIMELINE.md, QUICKSTART.md
-- ❌ Any PHASE_*.md, FEATURE_*.md, IMPLEMENTATION_*.md  
-- ❌ Any SETUP.md, MIGRATION.md, QUICKREF.md, SYSTEM_STATUS.md
-- ❌ Any documentation files with dates, version numbers, or descriptive names
-- ❌ **ANY .md file not explicitly listed in the "allowed" list above**
+**Do not create:** GUIDE.md, SUMMARY.md, STATUS.md, FEATURE_*.md, IMPLEMENTATION_*.md, etc.
 
-**JUST IMPLEMENT THE CODE. NO DOCUMENTATION. NO SUMMARIES. NO GUIDES.**
-
-If the user asks "document this" → Add comments in the code, NOT a .md file.
-If you finish a feature → Say it's done, DON'T create a SUMMARY.md.
-If you want to explain something → Put it in this AGENTS.md or a code comment.
+If you need to document something, add comments in the code or update the relevant AGENTS.md file.
 
 > **Note**: This file contains high-level project architecture. For app/package-specific details, see:
 > - `apps/admin-dashboard/AGENTS.md` - Admin dashboard patterns
@@ -40,16 +29,16 @@ Freelance-OS is a **Turborepo monorepo** for managing freelance business operati
 - Always support dark mode
 - Prefer Server Components (default in Next.js 15+)
 - Use shared components from `@repo/ui` package when it makes sense
-- **Avoid modals** - Prefer inline editing, side panels, or page-based flows instead
+- Avoid modals - Prefer inline editing, side panels, or page-based flows instead
 
 ### Tailwind CSS Configuration
 
-**IMPORTANT**: This project uses **Tailwind CSS v4** with a unified configuration to prevent class purging issues.
+This project uses **Tailwind CSS v4** with a unified configuration to prevent class purging issues.
 
-- **Single source of truth**: `packages/tailwind-config/shared-styles.css` contains the base Tailwind config
-- **Content scanning**: Each app's `globals.css` uses `@source` to scan the UI package for classes
-- **No purging issues**: UI package classes are preserved because apps scan `packages/ui/src/**/*.{js,ts,jsx,tsx}`
-- **CSS linter warnings**: The `@source` and `@theme` directives will show "Unknown at rule" warnings in CSS linters - **this is expected and safe to ignore**
+- Single source of truth: `packages/tailwind-config/shared-styles.css` contains the base Tailwind config
+- Content scanning: Each app's `globals.css` uses `@source` to scan the UI package for classes
+- No purging issues: UI package classes are preserved because apps scan `packages/ui/src/**/*.{js,ts,jsx,tsx}`
+- CSS linter warnings: The `@source` and `@theme` directives will show "Unknown at rule" warnings in CSS linters - this is expected and safe to ignore
 
 Example from `apps/admin-dashboard/app/globals.css`:
 ```css
@@ -67,29 +56,29 @@ Example from `apps/admin-dashboard/app/globals.css`:
 
 ### DateTime Handling (Temporal API)
 
-**CRITICAL**: Use the Temporal API for all datetime operations to prevent hydration errors.
+Use the Temporal API for all datetime operations to prevent hydration errors.
 
-- **Never** use `new Date()` or `Date.now()` in components
-- **Server**: Always store/send UTC timestamps (ISO strings ending in 'Z')
-- **Client**: Convert to local timezone only for display
-- **Components**: Use `ClientDateTime`, `ClientDate`, `ClientTime` for rendering
-- **Utilities**: Import from `@/lib/datetime` (parseUTC, formatDateTime, etc.)
-- **Live updates**: Use `useNow()` hook for current time
+- Never use `new Date()` or `Date.now()` in components
+- Server: Always store/send UTC timestamps (ISO strings ending in 'Z')
+- Client: Convert to local timezone only for display
+- Components: Use `ClientDateTime`, `ClientDate`, `ClientTime` for rendering
+- Utilities: Import from `@/lib/datetime` (parseUTC, formatDateTime, etc.)
+- Live updates: Use `useNow()` hook for current time
 
 See `apps/admin-dashboard/DATETIME_GUIDE.md` for complete documentation.
 
 ### Packages
-- **`packages/database`** - Prisma schema + singleton client ⚠️ **Use this, never create new PrismaClient**
-- **`packages/types`** - Shared TypeScript types ⚠️ **Use these, not Prisma-generated types**
-- **`packages/ui`** - Shared React components (imported as `@repo/ui`)
-- **`packages/*-config`** - Shared configs (eslint, tailwind, typescript)
+- `packages/database` - Prisma schema + singleton client (use this, never create new PrismaClient)
+- `packages/types` - Shared TypeScript types (use these, not Prisma-generated types)
+- `packages/ui` - Shared React components (imported as `@repo/ui`)
+- `packages/*-config` - Shared configs (eslint, tailwind, typescript)
 
-### Critical Rules
+### Important Rules
 1. **Database**: Always `import { prisma } from '@freelance-os/database'` (never instantiate `new PrismaClient()`)
-2. **Types**: Import from `@freelance-os/types` (not `@prisma/client`)
-3. **UI Components**: Import from `@repo/ui` (e.g., `import { Button, EditButton } from '@repo/ui'`)
-4. **Client Portal Security**: ALL queries must filter by `session.user.clientId`
-5. **Workspaces**: All packages use `workspace:*` protocol
+2. **Client Portal Security**: ALL queries must filter by `session.user.clientId`
+3. Types: Import from `@freelance-os/types` (not `@prisma/client`)
+4. UI Components: Import from `@repo/ui` (e.g., `import { Button, EditButton } from '@repo/ui'`)
+5. Workspaces: All packages use `workspace:*` protocol
 
 ## Data Architecture
 
@@ -102,14 +91,14 @@ activity_summaries (standalone, external utility)
 ```
 
 ### Key Data Patterns
-- **Cascade deletes**: Deleting client removes all projects, time entries, invoices
-- **Duration units**: `time_entries` use minutes, `activity_sessions` use seconds
-- **Timestamps**: All dates are UTC (`@db.Timestamptz`)
-- **Invoice numbers**: Pattern `INV-YYYYMMDD-XXX`
+- Cascade deletes: Deleting client removes all projects, time entries, invoices
+- Duration units: `time_entries` use minutes, `activity_sessions` use seconds
+- Timestamps: All dates are UTC (`@db.Timestamptz`)
+- Invoice numbers: Pattern `INV-YYYYMMDD-XXX`
 
 ### Next.js 15+ Conventions
-- **Server Components**: Default, query DB directly in components
-- **Dynamic route params**: Must `await params` in API routes
+- Server Components: Default, query DB directly in components
+- Dynamic route params: Must `await params` in API routes
   ```typescript
   const { id } = await params; // Required in Next.js 15+
   ```
@@ -135,23 +124,26 @@ pnpm db:seed                # Load sample data
 1. Update schema in `packages/database/prisma/schema.prisma`
 2. Run `pnpm db:generate && pnpm db:push`
 3. Add types to `packages/types/src/index.ts`
-4. Implement in apps (see app-specific AGENTS.md files)
+4. Restart TypeScript server in VS Code to pick up new Prisma types
+   - Use Command Palette → "TypeScript: Restart TS Server"
+   - Or the `typescript.restartTsServer` command
+5. Implement in apps (see app-specific AGENTS.md files)
 
 ## Design Philosophy: Activity Sessions vs Time Entries
 
-**These are intentionally separate and independent** (like RescueTime vs Toggl):
+These are intentionally separate and independent (like RescueTime vs Toggl):
 
 ### `activity_sessions` - Automatic Tracking
 - Populated by external Go utility (direct PostgreSQL connection)
 - Raw computer activity data
-- **Read-only** from Next.js apps
+- Read-only from Next.js apps
 - Used for analytics and insights
 
 ### `time_entries` - Manual Billable Time
 - Created manually or via rules engine (future)
 - Linked to projects and clients
 - Used for invoicing
-- **NOT dependent** on activity_sessions
+- NOT dependent on activity_sessions
 
 ### Future Automation
 Rules will generate `time_entries` FROM `activity_sessions`, but they remain separate. Deleting one does NOT affect the other.
@@ -159,9 +151,9 @@ Rules will generate `time_entries` FROM `activity_sessions`, but they remain sep
 ## Deployment Architecture
 
 ### Technology Decisions
-- **Auth**: NextAuth.js for both apps (admin provider + email magic link)
-- **Charts**: D3.js for all visualizations (not Recharts/Chart.js)
-- **Deployment**: Docker on Coolify + Tailscale for database access
+- Auth: NextAuth.js for both apps (admin provider + email magic link)
+- Charts: D3.js for all visualizations (not Recharts/Chart.js)
+- Deployment: Docker on Coolify + Tailscale for database access
 
 ### Production Setup
 ```
@@ -217,7 +209,7 @@ cd packages/database && pnpm db:generate
 ### Conventions
 - ✅ Use Server Components (Next.js default)
 - ✅ Import from `@freelance-os/database` and `@freelance-os/types`
-- ✅ Client portal: ALWAYS filter by `session.user.clientId`
+- ✅ **Client portal: ALWAYS filter by `session.user.clientId`** (security critical)
 - ✅ Durations: minutes (time_entries), seconds (activity_sessions)
 - ✅ UTC timestamps everywhere
-- ✅ **DateTime handling**: Use Temporal API (see `apps/admin-dashboard/DATETIME_GUIDE.md`)
+- ✅ DateTime handling: Use Temporal API (see `apps/admin-dashboard/DATETIME_GUIDE.md`)

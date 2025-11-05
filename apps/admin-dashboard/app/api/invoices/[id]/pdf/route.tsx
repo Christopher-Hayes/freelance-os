@@ -45,8 +45,10 @@ export async function GET(
       );
     }
 
-    // Fetch company/freelancer settings
-    const settings = await prisma.setting.findFirst();
+    // Fetch company/freelancer settings (using key 'main' as per settings API)
+    const settings = await prisma.setting.findUnique({
+      where: { key: 'main' },
+    });
     const companyInfo = {
       name: settings?.companyName || 'Your Company',
       freelancerName: settings?.freelancerName,
