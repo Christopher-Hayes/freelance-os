@@ -47,10 +47,10 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
 }) {
   // Memoize the merged sessions calculation
   const mergedSessions = useMemo(() => mergeAdjacentSessions(sessions), [sessions]);
-  
+
   // Build color map based on app usage frequency
   const appColorMap = useMemo(() => buildAppColorMap(mergedSessions), [mergedSessions]);
-  
+
   // Memoize the overlap calculations
   const activityOverlapPositions = useMemo(
     () => calculateActivityOverlaps(mergedSessions),
@@ -148,7 +148,7 @@ export default function DayTimeline({
   onDateChange,
 }: DayTimelineProps) {
   const { jobs, createJob, refreshJobs } = useJobs();
-  
+
   // State
   const [sessions, setSessions] = useState<ActivitySessionType[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -168,7 +168,7 @@ export default function DayTimeline({
   const [justFinishedDragging, setJustFinishedDragging] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [isClient, setIsClient] = useState(false);
-  const [currentTime, setCurrentTime] = useState<Temporal.ZonedDateTime>(() => 
+  const [currentTime, setCurrentTime] = useState<Temporal.ZonedDateTime>(() =>
     Temporal.Now.zonedDateTimeISO()
   );
   const [creatingEntry, setCreatingEntry] = useState<{
@@ -208,19 +208,19 @@ export default function DayTimeline({
   useEffect(() => {
     const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
     const completedJobs = jobs.filter(
-      (job) => 
+      (job) =>
         job.type === "autofill_time_entries" &&
         job.status === "completed" &&
         job.parameters?.date === dateStr
     );
-    
+
     // Only refresh if we have NEW completed jobs (not already tracked)
     const newlyCompletedJobs = completedJobs.filter(job => !completedJobIdsRef.current.has(job.id));
-    
+
     if (newlyCompletedJobs.length > 0) {
       // Track these jobs so we don't refresh again for them
       newlyCompletedJobs.forEach(job => completedJobIdsRef.current.add(job.id));
-      
+
       // Refresh data when a job for this date completes
       fetchDayData();
     }
@@ -302,7 +302,7 @@ export default function DayTimeline({
 
         const timeSinceLastRefresh = Date.now() - lastRefreshTime;
         const fiveMinutesInMs = 5 * 60 * 1000;
-        
+
         if (timeSinceLastRefresh >= fiveMinutesInMs) {
           console.log('Auto-refreshing activity data after being away for', Math.round(timeSinceLastRefresh / 1000 / 60), 'minutes');
           fetchDayData();
@@ -681,10 +681,10 @@ export default function DayTimeline({
     setLoadingAutofill(true);
     try {
       const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-      
+
       // Create a background job instead of waiting for results
       await createJob("autofill_time_entries", { date: dateStr });
-      
+
       toast.info("Autofill job started! You'll be notified when it completes.");
     } catch (error: any) {
       console.error("Error starting autofill:", error);
@@ -712,7 +712,7 @@ export default function DayTimeline({
     setImportingRescueTime(true);
     try {
       const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-      
+
       const data = await importRescueTimeData(dateStr);
 
       if (data.sessionsImported > 0) {
@@ -744,7 +744,7 @@ export default function DayTimeline({
   // Render time entries with ghost entry
   const renderTimeEntries = () => {
     const entries = [...timeEntries];
-    
+
     if (ghostEntry) {
       entries.push({
         id: -1,
@@ -774,24 +774,24 @@ export default function DayTimeline({
 
     // Build a map of which entries can be merged
     const canMergeMap = new Map<number, number>(); // entryId -> nextEntryId to merge with
-    
+
     for (let i = 0; i < sortedEntries.length - 1; i++) {
       const currentEntry = sortedEntries[i]!;
       const nextEntry = sortedEntries[i + 1]!;
-      
+
       // Skip ghost entries
       if (currentEntry.id === -1 || nextEntry.id === -1) continue;
-      
+
       // Check if they're the same project
       if (currentEntry.projectId !== nextEntry.projectId) continue;
-      
+
       const currentEnd = Temporal.Instant.from(currentEntry.endTime);
       const nextStart = Temporal.Instant.from(nextEntry.startTime);
-      
+
       // Calculate gap in minutes
       const gapNs = nextStart.epochNanoseconds - currentEnd.epochNanoseconds;
       const gapMinutes = Number(gapNs / 60_000_000_000n);
-      
+
       // If gap is within threshold, mark as mergeable
       if (gapMinutes >= 0 && gapMinutes <= MERGE_THRESHOLD_MINUTES) {
         canMergeMap.set(currentEntry.id, nextEntry.id);
@@ -800,10 +800,10 @@ export default function DayTimeline({
 
     return entries.map((entry) => {
       const isGhost = entry.id === -1;
-      const position = isGhost 
+      const position = isGhost
         ? { column: 0, totalColumns: 1 }
         : (overlapPositions[entry.id] || { column: 0, totalColumns: 1 });
-      
+
       const canMerge = canMergeMap.has(entry.id);
       const nextEntryId = canMergeMap.get(entry.id);
 
@@ -850,7 +850,7 @@ export default function DayTimeline({
             style={{ cursor: 'ns-resize' }}
           />
         )}
-        
+
         <div className="grid grid-cols-5 gap-4">
           {/* Activity Sessions Column */}
           <div className="col-span-3 select-none">
@@ -893,15 +893,15 @@ export default function DayTimeline({
                 onScroll={handleActivityScroll}
               >
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
-                  <ActivitySessionsTimeline 
-                    sessions={sessions} 
-                    loading={loading} 
+                  <ActivitySessionsTimeline
+                    sessions={sessions}
+                    loading={loading}
                     onImportRescueTime={handleImportFromRescueTime}
                     importingRescueTime={importingRescueTime}
                   />
-                  <CurrentTimeLine 
-                    selectedDate={selectedDate} 
-                    isClient={isClient} 
+                  <CurrentTimeLine
+                    selectedDate={selectedDate}
+                    isClient={isClient}
                     currentTime={currentTime}
                   />
                 </div>
@@ -921,25 +921,25 @@ export default function DayTimeline({
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
               >
-                <svg 
+                <svg
                   className={`w-4 h-4 ${loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? 'animate-spin' : ''}`}
-                  fill="none" 
-                  stroke="currentColor" 
+                  fill="none"
+                  stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
                   {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? (
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   ) : (
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M13 10V3L4 14h7v7l9-11h-7z" 
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
                     />
                   )}
                 </svg>
@@ -966,9 +966,9 @@ export default function DayTimeline({
                   ) : (
                     <div className="relative ml-12">{renderTimeEntries()}</div>
                   )}
-                  <CurrentTimeLine 
-                    selectedDate={selectedDate} 
-                    isClient={isClient} 
+                  <CurrentTimeLine
+                    selectedDate={selectedDate}
+                    isClient={isClient}
                     currentTime={currentTime}
                   />
                 </div>

@@ -181,20 +181,26 @@ export async function GET(request: Request) {
     
     // 1. Most used app this week (Monday to reference date)
     // dayOfWeek: 1=Monday, 2=Tuesday, ..., 7=Sunday
-    // So subtract (dayOfWeek - 1) days to get to Monday
+    // So subtract (dayOfWeek - 1) days to get to Sunday
     const weekStart = referenceDate.subtract({ days: referenceDate.dayOfWeek - 1 });
-    const topAppThisWeek = await getMostUsedApp(weekStart, referenceDate);
+    const weekEnd = referenceDate.add({ days: 7 - referenceDate.dayOfWeek });
+    const topAppThisWeek = await getMostUsedApp(weekStart, weekEnd);
 
-    // 2. Hours recorded this month (from 1st to reference date)
+    // 2. Hours recorded this month
     const monthStart = Temporal.PlainDate.from({ 
       year: referenceDate.year, 
       month: referenceDate.month, 
       day: 1 
     });
-    const hoursThisMonth = await getHoursInRange(monthStart, referenceDate);
+    const monthEnd = Temporal.PlainDate.from({
+      year: referenceDate.year,
+      month: referenceDate.month,
+      day: referenceDate.daysInMonth,
+    });
+    const hoursThisMonth = await getHoursInRange(monthStart, monthEnd);
 
-    // 3. Project with most time spent this month (from 1st to reference date)
-    const topProjectThisMonth = await getTopProject(monthStart, referenceDate);
+    // 3. Project with most time spent this month
+    const topProjectThisMonth = await getTopProject(monthStart, monthEnd);
 
     return NextResponse.json({
       timeEntries,
