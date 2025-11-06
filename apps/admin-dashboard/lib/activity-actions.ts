@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@freelance-os/database";
+import { Temporal } from "@js-temporal/polyfill";
 
 interface RescueTimeResponse {
   notes: string;
@@ -135,4 +136,126 @@ export async function importRescueTimeData(date: string) {
     message: `Successfully imported ${sessions.length} activity sessions from RescueTime`,
     sessionsImported: sessions.length,
   };
+}
+
+/**
+ * Get the most used app for a date range
+ * @param startDate Temporal.PlainDate for the start of the range
+ * @param endDate Temporal.PlainDate for the end of the range (inclusive)
+ */
+export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
+  // Convert PlainDate to UTC Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+  
+  const sessions = await prisma.activitySession.findMany({
+    where: {
+      startTime: {
+        gte: new Date(startInstant.epochMilliseconds),
+        lte: new Date(endInstant.epochMilliseconds),
+      },
+    },
+  });
+
+  if (sessions.length === 0) {
+    return null;
+  }
+
+  // Group by app and sum duration
+  const appCounts: Record<string, number> = {};
+  sessions.forEach((session) => {
+    const app = session.appClass || 'Unknown';
+    appCounts[app] = (appCounts[app] || 0) + session.durationSeconds;
+  });
+
+  // Find the app with most time
+  const topApp = Object.entries(appCounts)
+    .sort((a, b) => b[1] - a[1])[0];
+
+  if (!topApp) {
+    return null;
+  }
+
+  return {
+    appClass: topApp[0],
+    hours: parseFloat((topApp[1] / 3600).toFixed(1)),
+  };
+}
+
+/**
+ * Get the project with most time spent in a date range
+ * @param startDate Temporal.PlainDate for the start of the range
+ * @param endDate Temporal.PlainDate for the end of the range (inclusive)
+ */
+export async function getTopProject(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
+  // Convert PlainDate to UTC Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+  
+  const projectTimes = await prisma.timeEntry.groupBy({
+    by: ['projectId'],
+    where: {
+      startTime: {
+        gte: new Date(startInstant.epochMilliseconds),
+        lte: new Date(endInstant.epochMilliseconds),
+      },
+    },
+    _sum: {
+      durationMinutes: true,
+    },
+    orderBy: {
+      _sum: {
+        durationMinutes: 'desc',
+      },
+    },
+    take: 1,
+  });
+
+  const firstProject = projectTimes[0];
+  if (!firstProject || !firstProject._sum.durationMinutes) {
+    return null;
+  }
+
+  const topProject = await prisma.project.findUnique({
+    where: { id: firstProject.projectId },
+    select: { name: true },
+  });
+
+  if (!topProject) {
+    return null;
+  }
+
+  return {
+    projectName: topProject.name,
+    hours: parseFloat((firstProject._sum.durationMinutes / 60).toFixed(1)),
+  };
+}
+
+/**
+ * Get total hours for time entries in a date range
+ * @param startDate Temporal.PlainDate for the start of the range
+ * @param endDate Temporal.PlainDate for the end of the range (inclusive)
+ */
+export async function getHoursInRange(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
+  // Convert PlainDate to UTC Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+  
+  const entries = await prisma.timeEntry.aggregate({
+    where: {
+      startTime: {
+        gte: new Date(startInstant.epochMilliseconds),
+        lte: new Date(endInstant.epochMilliseconds),
+      },
+    },
+    _sum: {
+      durationMinutes: true,
+    },
+  });
+
+  if (!entries._sum.durationMinutes) {
+    return 0;
+  }
+
+  return parseFloat((entries._sum.durationMinutes / 60).toFixed(1));
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
+import { getMostUsedApp, getTopProject, getHoursInRange } from "@/lib/activity-actions";
+import { Temporal } from "@js-temporal/polyfill";
 
 // ============================================================================
 // Types
@@ -45,6 +47,15 @@ export type TimeEntryListResponse = {
     totalMinutes: number;
     totalHours: number;
     count: number;
+    topAppThisWeek?: {
+      appClass: string;
+      hours: number;
+    } | null;
+    topProjectThisMonth?: {
+      projectName: string;
+      hours: number;
+    } | null;
+    hoursThisMonth?: number;
   };
 };
 
@@ -79,6 +90,7 @@ export async function GET(request: Request) {
     const clientId = searchParams.get("clientId");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
+    const contextDate = searchParams.get("contextDate"); // For summary calculations
 
     const where: any = {};
 
@@ -161,12 +173,38 @@ export async function GET(request: Request) {
     );
     const totalHours = (totalMinutes / 60).toFixed(2);
 
+    // Calculate additional metrics using Temporal
+    // Use contextDate if provided, otherwise use today
+    const referenceDate = contextDate 
+      ? Temporal.PlainDate.from(contextDate)
+      : Temporal.Now.plainDateISO();
+    
+    // 1. Most used app this week (Monday to reference date)
+    // dayOfWeek: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    // So subtract (dayOfWeek - 1) days to get to Monday
+    const weekStart = referenceDate.subtract({ days: referenceDate.dayOfWeek - 1 });
+    const topAppThisWeek = await getMostUsedApp(weekStart, referenceDate);
+
+    // 2. Hours recorded this month (from 1st to reference date)
+    const monthStart = Temporal.PlainDate.from({ 
+      year: referenceDate.year, 
+      month: referenceDate.month, 
+      day: 1 
+    });
+    const hoursThisMonth = await getHoursInRange(monthStart, referenceDate);
+
+    // 3. Project with most time spent this month (from 1st to reference date)
+    const topProjectThisMonth = await getTopProject(monthStart, referenceDate);
+
     return NextResponse.json({
       timeEntries,
       summary: {
         totalMinutes,
         totalHours: parseFloat(totalHours),
         count: timeEntries.length,
+        topAppThisWeek,
+        topProjectThisMonth,
+        hoursThisMonth,
       },
     });
   } catch (error) {

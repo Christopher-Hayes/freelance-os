@@ -6,7 +6,7 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
 import { APIFooter } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
-import { authFetch } from '@/lib/util';
+import { authFetch, formatAppTitle } from '@/lib/util';
 
 interface TimeEntry {
   id: number;
@@ -31,6 +31,15 @@ interface Summary {
   totalMinutes: number;
   totalHours: number;
   count: number;
+  topAppThisWeek?: {
+    appClass: string;
+    hours: number;
+  } | null;
+  topProjectThisMonth?: {
+    projectName: string;
+    hours: number;
+  } | null;
+  hoursThisMonth?: number;
 }
 
 interface Client {
@@ -204,7 +213,7 @@ export default function TimeEntriesPage() {
   // Fetch time entries based on filters
   useEffect(() => {
     fetchTimeEntries();
-  }, [selectedClientId, selectedProjectId, startDate, endDate]);
+  }, [selectedClientId, selectedProjectId, startDate, endDate, selectedDate]);
 
   const fetchTimeEntries = async () => {
     setLoading(true);
@@ -217,6 +226,9 @@ export default function TimeEntriesPage() {
       if (selectedProjectId) params.append("projectId", selectedProjectId);
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
+      
+      // Pass the selected date for summary card calculations
+      params.append("contextDate", selectedDate.toString());
 
       const response = await authFetch(`/api/time?${params}`);
       if (!response.ok) throw new Error("Failed to fetch time entries");
@@ -303,21 +315,30 @@ export default function TimeEntriesPage() {
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Hours</div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">Hours Logged This Month</div>
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {summary.totalHours.toFixed(2)}
+                {summary.hoursThisMonth?.toFixed(1) ?? '0'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                {selectedDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
               </div>
             </div>
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Entries</div>
-              <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                {summary.count}
+              <div className="text-sm text-gray-600 dark:text-gray-400">Top App This Week</div>
+              <div className="text-xl font-bold text-green-600 dark:text-green-400 truncate">
+                {summary.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : 'No data'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                {summary.topAppThisWeek ? `${summary.topAppThisWeek.hours} hours tracked` : 'No activity sessions'}
               </div>
             </div>
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Minutes</div>
-              <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                {summary.totalMinutes}
+              <div className="text-sm text-gray-600 dark:text-gray-400">Top Project This Month</div>
+              <div className="text-xl font-bold text-purple-600 dark:text-purple-400 truncate">
+                {summary.topProjectThisMonth?.projectName ?? 'No projects'}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                {summary.topProjectThisMonth ? `${summary.topProjectThisMonth.hours} hours in ${selectedDate.toLocaleString('en-US', { month: 'long'})}` : 'No time entries'}
               </div>
             </div>
           </div>
