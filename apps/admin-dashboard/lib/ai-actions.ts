@@ -477,9 +477,9 @@ Generate the weekly summary now:`,
           emails: z.array(z.string()).describe('Client email addresses to search from'),
         }),
         execute: async ({ limit, emails }: { limit?: number; emails: string[] }) => {
-          const results = await searchEmailsByDateRange(weekStartInstant, weekEndInstant, limit || 5);
+          const results = await searchEmailsByDateRange(weekStartInstant, weekEndInstant, limit || 5, emails);
           if (results.length === 0) {
-            return { count: 0, message: `No emails found from client addresses` };
+            return { count: 0, message: `No emails found from client addresses: ${emails.join(', ')}` };
           }
           console.log("searchEmailsFromClient results:", results);
           return {

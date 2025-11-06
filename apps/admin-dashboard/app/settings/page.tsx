@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
 import { authFetch } from '@/lib/util';
+import { fetchMailboxes } from '@/lib/jmap-actions';
+import type { MailboxInfo } from '@/lib/jmap-provider';
+import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
 
 const MASK_VALUE = "••••••••";
 
@@ -28,7 +32,10 @@ export default function SettingsPage() {
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
-  const [jmapEnabled, setJmapEnabled] = useState(false);
+  const [canReadMailbox, setCanReadMailbox] = useState(false);
+  const [jmapAllowedMailboxes, setJmapAllowedMailboxes] = useState<string[]>([]);
+  const [availableMailboxes, setAvailableMailboxes] = useState<MailboxInfo[]>([]);
+  const [loadingMailboxes, setLoadingMailboxes] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [freelancerName, setFreelancerName] = useState("");
   const [freelancerEmail, setFreelancerEmail] = useState("");
@@ -75,7 +82,8 @@ export default function SettingsPage() {
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
         setJmapToken(data.jmapToken || "");
-        setJmapEnabled(data.jmapEnabled || false);
+        setCanReadMailbox(data.canReadMailbox || false);
+        setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
         // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
@@ -211,8 +219,31 @@ export default function SettingsPage() {
   };
 
   const handleJmapEnabledChange = (checked: boolean) => {
-    setJmapEnabled(checked);
-    saveSetting("jmapEnabled", String(checked)); // Convert boolean to string for API
+    setCanReadMailbox(checked);
+    saveSetting("canReadMailbox", String(checked)); // Convert boolean to string for API
+  };
+
+  const handleJmapAllowedMailboxesChange = (mailboxIds: string[]) => {
+    setJmapAllowedMailboxes(mailboxIds);
+    saveSetting("jmapAllowedMailboxes", JSON.stringify(mailboxIds));
+  };
+
+  const handleRefreshMailboxes = async () => {
+    setLoadingMailboxes(true);
+    try {
+      const mailboxes = await fetchMailboxes();
+      setAvailableMailboxes(mailboxes);
+      if (mailboxes.length === 0) {
+        toast.error("No mailboxes found. Please check your JMAP configuration.");
+      } else {
+        toast.success(`Found ${mailboxes.length} mailbox(es)`);
+      }
+    } catch (error) {
+      console.error("Error fetching mailboxes:", error);
+      toast.error("Failed to fetch mailboxes");
+    } finally {
+      setLoadingMailboxes(false);
+    }
   };
 
   const handleCompanyNameChange = (value: string) => {
@@ -633,42 +664,159 @@ export default function SettingsPage() {
             <div className="flex items-start">
               <div className="flex items-center h-5">
                 <input
-                  id="jmap_enabled"
+                  id="can_read_mailbox"
                   type="checkbox"
-                  checked={jmapEnabled}
+                  checked={canReadMailbox}
                   onChange={(e) => handleJmapEnabledChange(e.target.checked)}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
                 />
               </div>
               <div className="ml-3">
-                <label htmlFor="jmap_enabled" className="font-medium text-gray-700 dark:text-gray-300">
-                  Allow AI to search for emails via JMAP
+                <label htmlFor="can_read_mailbox" className="font-medium text-gray-700 dark:text-gray-300">
+                  Allow AI to read emails via JMAP
                 </label>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy.
                 </p>
               </div>
             </div>
-            {jmapEnabled && (
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
-                <div className="flex items-start">
-                  <div className="shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Privacy Warning
-                    </h3>
-                    <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      <p>
-                        When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
-                      </p>
+            {canReadMailbox && (
+              <>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+                  <div className="flex items-start">
+                    <div className="shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        Privacy Warning
+                      </h3>
+                      <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
+                        <p>
+                          When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
+                        </p>
+                        <p>
+                          In the field below, you can restrict which folders AI is allowed to access. Leaving it empty will allow AI to search all email folders.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      Restrict JMAP to Folders (Optional)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRefreshMailboxes}
+                      disabled={loadingMailboxes}
+                      className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loadingMailboxes ? "Loading..." : "Refresh Mailboxes"}
+                    </button>
+                  </div>
+                  
+                  <Combobox
+                    multiple
+                    by="id"
+                    value={availableMailboxes.filter(m => jmapAllowedMailboxes.includes(m.id))}
+                    onChange={(selected: MailboxInfo[]) => {
+                      handleJmapAllowedMailboxesChange(selected.map(m => m.id));
+                    }}
+                  >
+                    <div className="relative">
+                      <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
+                        <span className="flex flex-wrap gap-1">
+                          {jmapAllowedMailboxes.length === 0 ? (
+                            <span className="text-gray-500 dark:text-gray-400">
+                              {availableMailboxes.length === 0 ? "Click 'Refresh Mailboxes' first" : "Select folders to restrict (or leave empty for all)"}
+                            </span>
+                          ) : (
+                            availableMailboxes
+                              .filter(m => jmapAllowedMailboxes.includes(m.id))
+                              .map(mailbox => (
+                                <span
+                                  key={mailbox.id}
+                                  className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
+                                >
+                                  {mailbox.name}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleJmapAllowedMailboxesChange(
+                                        jmapAllowedMailboxes.filter(id => id !== mailbox.id)
+                                      );
+                                    }}
+                                    className="hover:text-blue-900 dark:hover:text-blue-100"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))
+                          )}
+                        </span>
+                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                          <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                        </span>
+                      </ComboboxButton>
+                      
+                      <ComboboxOptions
+                        className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
+                      >
+                        {availableMailboxes.length === 0 ? (
+                          <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                            Click "Refresh Mailboxes" to load available folders
+                          </div>
+                        ) : (
+                          availableMailboxes
+                            // Sort by email count
+                            .sort((a, b) => b.totalEmails - a.totalEmails)
+                            // Put selected mailboxes at the top
+                            .sort((a, b) => {
+                              const aSelected = jmapAllowedMailboxes.includes(a.id) ? 1 : 0;
+                              const bSelected = jmapAllowedMailboxes.includes(b.id) ? 1 : 0;
+                              return bSelected - aSelected;
+                            })
+                            .map((mailbox) => (
+                              <ComboboxOption
+                                key={mailbox.id}
+                                value={mailbox}
+                                className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
+                              >
+                                {({ selected }) => (
+                                  <>
+                                    <span className="block truncate font-normal group-data-selected:font-medium">
+                                      {mailbox.name} {mailbox.role ? `(${mailbox.role})` : ''} - {mailbox.totalEmails} emails
+                                    </span>
+                                    {selected && (
+                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
+                                        <Check className="h-4 w-4" aria-hidden="true" />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </ComboboxOption>
+                            ))
+                        )}
+                      </ComboboxOptions>
+                    </div>
+                  </Combobox>
+                  
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {jmapAllowedMailboxes.length === 0 
+                      ? "AI can search all mailboxes by default. Select specific folders to restrict access."
+                      : `AI can only search ${jmapAllowedMailboxes.length} selected folder(s). Click a tag to remove it.`
+                    }
+                  </p>
+                </div>
+              </>
             )}
             <div>
               <label

@@ -13,12 +13,21 @@ async function getJmapClient(): Promise<JamClient | null> {
     where: { key: "main" },
   });
   
-  if (!settings?.jmapEnabled || !settings.jmapToken || !settings.jmapHostname) {
+  console.log("JMAP Settings Check:", {
+    canReadMailbox: settings?.canReadMailbox,
+    hasToken: !!settings?.jmapToken,
+    hasHostname: !!settings?.jmapHostname,
+  });
+  
+  if (!settings?.canReadMailbox || !settings.jmapToken || !settings.jmapHostname) {
+    console.log("JMAP not fully configured - returning null client");
     return null;
   }
 
   // Construct session URL from hostname
   const sessionUrl = `https://${settings.jmapHostname}/.well-known/jmap`;
+  
+  console.log("Creating JMAP client with sessionUrl:", sessionUrl);
   
   const client = new JamClient({
     sessionUrl,
@@ -26,6 +35,23 @@ async function getJmapClient(): Promise<JamClient | null> {
   });
 
   return client;
+}
+
+/**
+ * Get allowed mailbox IDs from settings
+ * Returns null if all mailboxes are allowed (default behavior)
+ */
+async function getAllowedMailboxes(): Promise<string[] | null> {
+  const settings = await prisma.setting.findUnique({
+    where: { key: "main" },
+  });
+  
+  // If no mailboxes specified, allow all (return null means no filter)
+  if (!settings?.jmapAllowedMailboxes || settings.jmapAllowedMailboxes.length === 0) {
+    return null;
+  }
+  
+  return settings.jmapAllowedMailboxes;
 }
 
 export interface EmailSearchResult {
@@ -49,6 +75,13 @@ export interface EmailResult {
   threadId: string;
 }
 
+export interface MailboxInfo {
+  id: string;
+  name: string;
+  role: string | null;
+  totalEmails: number;
+}
+
 /**
  * Search emails within a date range using JMAP
  * Returns empty array if JMAP is not configured or disabled
@@ -56,7 +89,8 @@ export interface EmailResult {
 export async function searchEmailsByDateRange(
   startInstant: Temporal.Instant,
   endInstant: Temporal.Instant,
-  limit: number = 50
+  limit: number = 50,
+  fromEmails?: string[]
 ): Promise<EmailSearchResult[]> {
   const client = await getJmapClient();
   
@@ -67,17 +101,60 @@ export async function searchEmailsByDateRange(
 
   try {
     const accountId = await client.getPrimaryAccount();
+    const allowedMailboxes = await getAllowedMailboxes();
     
-    // Search for emails in the date range
+    console.log("JMAP Search - accountId:", accountId);
+    console.log("JMAP Search - allowedMailboxes:", allowedMailboxes);
+    console.log("JMAP Search - date range:", {
+      after: startInstant.toString(),
+      before: endInstant.toString(),
+    });
+    console.log("JMAP Search - fromEmails:", fromEmails);
+    
+    // Build the base filter with date range
+    const baseFilter: any = {
+      after: startInstant.toString(),
+      before: endInstant.toString(),
+    };
+
+    // Add optional from address filtering
+    if (fromEmails && fromEmails.length > 0) {
+      // JMAP 'from' field supports text search
+      baseFilter.from = fromEmails.join(" OR ");
+    }
+
+    // Build the final filter with mailbox restrictions using JMAP FilterOperator
+    let filter: any;
+    if (!allowedMailboxes || allowedMailboxes.length === 0) {
+      // No mailbox filtering
+      filter = baseFilter;
+    } else if (allowedMailboxes.length === 1) {
+      // Single mailbox - use inMailbox property directly
+      filter = {
+        ...baseFilter,
+        inMailbox: allowedMailboxes[0],
+      };
+    } else {
+      // Multiple mailboxes - use FilterOperator with OR conditions
+      // Each condition combines the base filter with a specific mailbox
+      filter = {
+        operator: "OR",
+        conditions: allowedMailboxes.map((mailboxId) => ({
+          ...baseFilter,
+          inMailbox: mailboxId,
+        })),
+      };
+    }
+    
+    console.log("JMAP Search - final filter:", JSON.stringify(filter, null, 2));
+
+    // Search for emails with the constructed filter
     // Note: Using requestMany instead of client.api because Fastmail requires
     // explicit urn:ietf:params:jmap:core capability
     const [{ emailIds, emails }] = await client.requestMany((t) => {
       const emailIds = t.Email.query({
         accountId,
-        filter: {
-          after: startInstant.toString(),
-          before: endInstant.toString(),
-        },
+        filter,
         sort: [{ property: "receivedAt", isAscending: false }],
         limit,
       });
@@ -104,6 +181,8 @@ export async function searchEmailsByDateRange(
       threadId: email.threadId || email.id,
     }));
 
+    console.log(`JMAP Search - found ${results.length} emails`);
+
     return results;
   } catch (error) {
     console.error("Error searching emails via JMAP:", error);
@@ -129,17 +208,43 @@ export async function searchEmailsByKeyword(
 
   try {
     const accountId = await client.getPrimaryAccount();
+    const allowedMailboxes = await getAllowedMailboxes();
+    
+    // Build the base filter with keyword and date range
+    const baseFilter: any = {
+      text: keyword,
+      after: startInstant.toString(),
+      before: endInstant.toString(),
+    };
+
+    // Build the final filter with mailbox restrictions using JMAP FilterOperator
+    let filter: any;
+    if (!allowedMailboxes || allowedMailboxes.length === 0) {
+      // No mailbox filtering
+      filter = baseFilter;
+    } else if (allowedMailboxes.length === 1) {
+      // Single mailbox - use inMailbox property directly
+      filter = {
+        ...baseFilter,
+        inMailbox: allowedMailboxes[0],
+      };
+    } else {
+      // Multiple mailboxes - use FilterOperator with OR conditions
+      filter = {
+        operator: "OR",
+        conditions: allowedMailboxes.map((mailboxId) => ({
+          ...baseFilter,
+          inMailbox: mailboxId,
+        })),
+      };
+    }
     
     // Note: Using requestMany instead of client.api because Fastmail requires
     // explicit urn:ietf:params:jmap:core capability
     const [{ emailIds, emails }] = await client.requestMany((t) => {
       const emailIds = t.Email.query({
         accountId,
-        filter: {
-          text: keyword,
-          after: startInstant.toString(),
-          before: endInstant.toString(),
-        },
+        filter,
         sort: [{ property: "receivedAt", isAscending: false }],
         limit,
       });
@@ -302,5 +407,42 @@ export async function isJmapEnabled(): Promise<boolean> {
     where: { key: "main" },
   });
   
-  return !!(settings?.jmapEnabled && settings.jmapToken && settings.jmapHostname);
+  return !!(settings?.canReadMailbox && settings.jmapToken && settings.jmapHostname);
+}
+
+/**
+ * Get all available mailboxes from JMAP server
+ * Returns empty array if JMAP is not configured or disabled
+ */
+export async function getMailboxes(): Promise<MailboxInfo[]> {
+  const client = await getJmapClient();
+  
+  if (!client) {
+    console.log("JMAP not enabled or configured, skipping getMailboxes");
+    return [];
+  }
+
+  try {
+    const accountId = await client.getPrimaryAccount();
+    
+    const [mailboxes] = await client.api.Mailbox.get({
+      accountId,
+      properties: ["id", "name", "role", "totalEmails"],
+    }, // @ts-ignore TS bug
+    {
+      using: ["urn:ietf:params:jmap:core"],
+    });
+
+    const results: MailboxInfo[] = mailboxes.list.flatMap((e) => e).map((mailbox) => ({
+      id: mailbox.id,
+      name: mailbox.name || "(Unknown)",
+      role: mailbox.role || null,
+      totalEmails: mailbox.totalEmails || 0,
+    }));
+
+    return results;
+  } catch (error) {
+    console.error("Error fetching mailboxes via JMAP:", error);
+    return [];
+  }
 }

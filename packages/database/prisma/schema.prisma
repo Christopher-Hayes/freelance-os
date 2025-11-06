@@ -281,11 +281,12 @@ model Setting {
   openaiKey       String?     @map("openai_key") @db.Text
   googleApiKey    String?     @map("google_api_key") @db.Text
   aiProvider      AiProvider? @default(openai) @map("ai_provider")
-  jmapToken       String?     @map("jmap_token") @db.Text
-  jmapUsername    String?     @map("jmap_username") @db.Text
-  jmapHostname    String?     @map("jmap_hostname") @db.Text
-  jmapEnabled     Boolean     @default(false) @map("jmap_enabled") // Allow AI to search emails via JMAP
-  companyName     String?     @map("company_name") @db.Text
+  jmapToken              String?  @map("jmap_token") @db.Text
+  jmapUsername           String?  @map("jmap_username") @db.Text
+  jmapHostname           String?  @map("jmap_hostname") @db.Text
+  canReadMailbox         Boolean  @default(false) @map("can_read_mailbox") // Allow AI to read emails via JMAP
+  jmapAllowedMailboxes   String[] @default([]) @map("jmap_allowed_mailboxes") // Mailbox IDs AI can search (empty = all mailboxes)
+  companyName            String?  @map("company_name") @db.Text
   freelancerName  String?     @map("freelancer_name") @db.Text
   freelancerEmail String?     @map("freelancer_email") @db.Text
   address         String?     @db.Text

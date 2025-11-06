@@ -38,7 +38,8 @@ export async function GET() {
       
       // Non-sensitive fields - safe to expose
       aiProvider: setting.aiProvider || "openai",
-      jmapEnabled: setting.jmapEnabled || false,
+      canReadMailbox: setting.canReadMailbox || false,
+      jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",
@@ -73,7 +74,8 @@ export async function PUT(request: Request) {
       openaiKey, 
       googleApiKey, 
       aiProvider,
-      jmapEnabled,
+      canReadMailbox,
+      jmapAllowedMailboxes,
       jmapToken, 
       jmapUsername, 
       jmapHostname,
@@ -113,7 +115,13 @@ export async function PUT(request: Request) {
     
     // Non-sensitive fields can be updated normally
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
-    if (jmapEnabled !== undefined) updateData.jmapEnabled = jmapEnabled === "true" || jmapEnabled === true;
+    if (canReadMailbox !== undefined) updateData.canReadMailbox = canReadMailbox === "true" || canReadMailbox === true;
+    if (jmapAllowedMailboxes !== undefined) {
+      // Parse if it's a JSON string, otherwise use as-is
+      updateData.jmapAllowedMailboxes = typeof jmapAllowedMailboxes === 'string' 
+        ? JSON.parse(jmapAllowedMailboxes) 
+        : (jmapAllowedMailboxes || []);
+    }
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
     if (companyName !== undefined) updateData.companyName = companyName || null;
@@ -134,7 +142,10 @@ export async function PUT(request: Request) {
         openaiKey: openaiKey && openaiKey !== MASK_VALUE ? openaiKey : null,
         googleApiKey: googleApiKey && googleApiKey !== MASK_VALUE ? googleApiKey : null,
         aiProvider: (aiProvider as AiProvider) || "openai",
-        jmapEnabled: jmapEnabled === "true" || jmapEnabled === true || false,
+        canReadMailbox: canReadMailbox === "true" || canReadMailbox === true || false,
+        jmapAllowedMailboxes: typeof jmapAllowedMailboxes === 'string' 
+          ? JSON.parse(jmapAllowedMailboxes) 
+          : (jmapAllowedMailboxes || []),
         jmapToken: jmapToken && jmapToken !== MASK_VALUE ? jmapToken : null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
@@ -154,7 +165,8 @@ export async function PUT(request: Request) {
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
       aiProvider: setting.aiProvider || "openai",
-      jmapEnabled: setting.jmapEnabled || false,
+      canReadMailbox: setting.canReadMailbox || false,
+      jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
       companyName: setting.companyName || "",
