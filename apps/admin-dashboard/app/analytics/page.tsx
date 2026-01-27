@@ -7,7 +7,6 @@ import WeeklyTrendChart from './components/WeeklyTrendChart';
 import { formatAppTitle, authFetch } from '@/lib/util';
 import { APIFooter } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
-import { authFetch } from '@/lib/util';
 
 interface SummaryData {
   totalHours: number;

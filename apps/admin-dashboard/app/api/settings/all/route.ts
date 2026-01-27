@@ -4,6 +4,7 @@ import type { AiProvider } from "@freelance-os/types";
 
 // Helper to mask sensitive values
 const MASK_VALUE = "••••••••";
+const OPENAI_KEY_REGEX = /^(sk|rk)-/;
 
 function maskIfPresent(value: string | null): string {
   return value ? MASK_VALUE : "";
@@ -91,6 +92,21 @@ export async function PUT(request: Request) {
     if (aiProvider !== undefined && !["openai", "gemini"].includes(aiProvider)) {
       return NextResponse.json(
         { error: "Invalid AI provider" },
+        { status: 400 }
+      );
+    }
+
+    if (
+      openaiKey !== undefined &&
+      openaiKey !== MASK_VALUE &&
+      openaiKey &&
+      !OPENAI_KEY_REGEX.test(openaiKey)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "OpenAI API key looks invalid. It should start with 'sk-' or 'rk-'.",
+        },
         { status: 400 }
       );
     }

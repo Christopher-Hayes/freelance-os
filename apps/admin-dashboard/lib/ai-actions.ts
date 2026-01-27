@@ -579,3 +579,132 @@ Please analyze these entries, search emails if helpful, then provide the final w
 
   return result.text.trim();
 }
+
+/**
+ * Generate description for a single time entry based on overlapping activities
+ * This is called directly from the TimeEntryCreationDialog component
+ */
+export async function generateTimeEntryDescription(params: {
+  projectId: number;
+  startTime: string; // ISO timestamp (Instant format)
+  endTime: string;   // ISO timestamp (Instant format)
+}): Promise<string> {
+  const model = await getAiModel();
+
+  // Fetch project details
+  const project = await prisma.project.findUnique({
+    where: { id: params.projectId },
+    select: {
+      name: true,
+      clientDescription: true,
+      privateNotes: true,
+      client: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!project) {
+    throw new Error(`Project ${params.projectId} not found`);
+  }
+
+  // Parse timestamps using Temporal and convert to Date for Prisma
+  const startInstant = Temporal.Instant.from(params.startTime);
+  const endInstant = Temporal.Instant.from(params.endTime);
+
+  // Fetch activity sessions that overlap with this time entry
+  const sessions = await prisma.activitySession.findMany({
+    where: {
+      OR: [
+        // Session starts during the time entry
+        {
+          startTime: {
+            gte: new Date(startInstant.epochMilliseconds),
+            lt: new Date(endInstant.epochMilliseconds),
+          },
+        },
+        // Session ends during the time entry
+        {
+          endTime: {
+            gt: new Date(startInstant.epochMilliseconds),
+            lte: new Date(endInstant.epochMilliseconds),
+          },
+        },
+        // Session completely encompasses the time entry
+        {
+          startTime: {
+            lte: new Date(startInstant.epochMilliseconds),
+          },
+          endTime: {
+            gte: new Date(endInstant.epochMilliseconds),
+          },
+        },
+      ],
+    },
+    orderBy: { startTime: "asc" },
+  });
+
+  if (sessions.length === 0) {
+    return "Work on project"; // Fallback if no activity data
+  }
+
+  // Merge sessions to reduce data volume
+  const mergedSessions = mergeSessionsForAI(
+    sessions.map((s) => ({
+      id: s.id,
+      startTime: s.startTime.toISOString(),
+      endTime: s.endTime.toISOString(),
+      appClass: s.appClass,
+      windowTitle: s.windowTitle,
+      durationSeconds: s.durationSeconds,
+    }))
+  );
+
+  // Sort by duration and take top 10
+  const topSessions = mergedSessions
+    .sort((a, b) => b.durationSeconds - a.durationSeconds)
+    .slice(0, 10);
+
+  // Build project context
+  let projectContext = `Project: ${project.name}`;
+  projectContext += `\nClient: ${project.client.name}`;
+  if (project.clientDescription) {
+    projectContext += `\nProject Description: ${project.clientDescription}`;
+  }
+  if (project.privateNotes) {
+    projectContext += `\nMatching hints: ${project.privateNotes}`;
+  }
+
+  const { text } = await generateText({
+    model,
+    prompt: `You are a helpful assistant that analyzes computer activity and generates concise descriptions for time entries.
+
+${projectContext}
+
+Time Entry Period: ${params.startTime} to ${params.endTime}
+
+Activity Sessions during this period (sorted by duration):
+${topSessions
+  .map(
+    (s) => `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes)`
+  )
+  .join("\n")}
+
+Based on these activity sessions, generate a SINGLE, concise description (5-10 words) for what was worked on during this time entry.
+
+Guidelines:
+- Be specific about what was accomplished or worked on
+- Use professional, client-friendly language
+- Focus on the most significant activities by duration
+- Avoid generic phrases like "worked on project" or "coding"
+- If window titles indicate specific features or tasks, mention them
+- Keep it brief and actionable
+- Do not use first person ("I did X"), just describe the work
+
+Provide ONLY the description text, no preamble or explanation.`,
+  });
+
+  return text.trim();
+}

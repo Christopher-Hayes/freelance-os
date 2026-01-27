@@ -203,7 +203,7 @@ const TimeEntryBar = memo(function TimeEntryBar({
                 onDelete={onDelete}
               />
             ) : (
-              <div className="py-2 text-xs flex flex-col gap-0.5">
+              <div className="py-2 text-xs flex flex-col gap-0.5 select-none">
                 <div className="truncate flex gap-1" style={{ color: isDragging ? colorScheme.text : colorScheme.text }}>
                   <span className="font-semibold">{entry.project.name}</span>
                   <span className="opacity-60">({entry.project.client.name})</span>

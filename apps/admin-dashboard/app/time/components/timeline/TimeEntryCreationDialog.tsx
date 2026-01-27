@@ -2,6 +2,8 @@
 
 import { Temporal } from "@/lib/temporal-polyfill";
 import { useState } from "react";
+import { generateTimeEntryDescription } from "@/lib/ai-actions";
+import { toast } from "@repo/ui";
 
 interface Project {
   id: number;
@@ -31,6 +33,8 @@ export default function TimeEntryCreationDialog({
   onCancel,
 }: TimeEntryCreationDialogProps) {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
+  const [loadingAutofill, setLoadingAutofill] = useState(false);
 
   const formatTime = (time: Temporal.ZonedDateTime): string => {
     return time.toLocaleString('en-US', {
@@ -46,6 +50,28 @@ export default function TimeEntryCreationDialog({
   // Get the selected project to check if it tracks billable
   const selectedProject = projects.find((p) => p.id === parseInt(selectedProjectId));
   const showBillableToggle = selectedProject?.billable ?? true;
+
+  const handleAutofill = async () => {
+    if (!selectedProjectId) {
+      toast.error("Please select a project first");
+      return;
+    }
+
+    setLoadingAutofill(true);
+    try {
+      const generatedDescription = await generateTimeEntryDescription({
+        projectId: parseInt(selectedProjectId),
+        startTime: startTime.toInstant().toString(),
+        endTime: endTime.toInstant().toString(),
+      });
+      setDescription(generatedDescription);
+    } catch (error) {
+      console.error("Error generating description:", error);
+      toast.error("Failed to generate description");
+    } finally {
+      setLoadingAutofill(false);
+    }
+  };
 
   return (
     <>
@@ -87,11 +113,39 @@ export default function TimeEntryCreationDialog({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAutofill}
+                  disabled={loadingAutofill || !selectedProjectId}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!selectedProjectId ? "Select a project first" : "Use AI to generate description based on activity"}
+                >
+                  <svg
+                    className={`w-3 h-3 ${loadingAutofill ? 'animate-spin' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    {loadingAutofill ? (
+                      <>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </>
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    )}
+                  </svg>
+                  {loadingAutofill ? "Generating..." : "Autofill"}
+                </button>
+              </div>
               <textarea
                 name="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
                 rows={3}
                 placeholder="What did you work on?"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded focus:outline-none focus:ring-2 focus:ring-green-500"

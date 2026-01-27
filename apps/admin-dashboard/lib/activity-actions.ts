@@ -18,15 +18,15 @@ export async function importRescueTimeData(date: string) {
   }
 
   // Get RescueTime API key from settings
-  const apiKeySetting = await prisma.setting.findUnique({
-    where: { key: "rescuetime_api_key" },
+  const settings = await prisma.setting.findUnique({
+    where: { key: "main" },
   });
 
-  if (!apiKeySetting || !apiKeySetting.value) {
+  const apiKey = settings?.rescuetimeKey || settings?.value || null;
+
+  if (!apiKey) {
     throw new Error("RescueTime API key not configured. Please add it in Settings.");
   }
-
-  const apiKey = apiKeySetting.value;
 
   // Build RescueTime API URL
   // We want document-level data (shows individual files/pages) with 5-minute granularity

@@ -4,6 +4,8 @@ import { prisma } from "@freelance-os/database";
 import type { AiProvider } from "@freelance-os/types";
 import type { LanguageModel } from "ai";
 
+const OPENAI_KEY_REGEX = /^(sk|rk)-/;
+
 /**
  * Get the configured AI model based on settings
  * @returns The configured AI model instance
@@ -34,6 +36,12 @@ export async function getAiModel(): Promise<LanguageModel> {
       const openaiKey = setting?.openaiKey;
       if (!openaiKey) {
         throw new Error("OpenAI API key not configured. Please add it in Settings.");
+      }
+
+      if (!OPENAI_KEY_REGEX.test(openaiKey)) {
+        throw new Error(
+          "OpenAI API key looks invalid. It should start with 'sk-' or 'rk-'. Please update it in Settings."
+        );
       }
       
       // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
