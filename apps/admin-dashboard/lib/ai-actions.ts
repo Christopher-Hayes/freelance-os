@@ -6,7 +6,8 @@ import { getAiModel } from "@/lib/ai-provider";
 import { prisma } from "@freelance-os/database";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { headers } from 'next/headers';
-import { searchEmailsByKeyword, searchEmailsByDateRange, isJmapEnabled, getFullEmailById, getEmailThreadById } from "@/lib/jmap-provider";
+import { isJmapEnabled } from "@/lib/jmap-provider";
+import { createEmailSearchTools, createSentEmailTools } from "@/lib/jmap-actions";
 
 /**
  * Generate code snippet for API endpoint using AI
@@ -150,6 +151,7 @@ export async function generateAutofillSuggestions(params: {
           client: {
             select: {
               name: true,
+              email: true,
             },
           },
         },
@@ -162,6 +164,7 @@ export async function generateAutofillSuggestions(params: {
           client: {
             select: {
               name: true,
+              email: true,
             },
           },
         },
@@ -198,6 +201,7 @@ export async function generateAutofillSuggestions(params: {
     clientDescription: p.clientDescription,
     privateNotes: p.privateNotes,
     clientName: p.client.name,
+    clientEmail: p.client.email,
     status: p.status,
     billable: p.billable,
   }));
@@ -223,10 +227,11 @@ export async function generateAutofillSuggestions(params: {
   });
 
   const aiModel = await getAiModel();
-  const { object } = await generateObject({
-    model: aiModel,
-    schema: autofillResponseSchema,
-    prompt: `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
+
+  // Check if JMAP is available for sent email analysis
+  const jmapIsEnabled = await isJmapEnabled();
+
+  const basePrompt = `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
 
 Today's date: ${params.date} (in ${localTz} timezone)
 UTC time range for this date: ${startInstant.toString()} to ${endInstant.toString()}
@@ -234,7 +239,7 @@ UTC time range for this date: ${startInstant.toString()} to ${endInstant.toStrin
 CRITICAL: All timestamps you return MUST use the EXACT UTC times from the activity sessions below.
 
 Available Projects:
-${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName})${p.clientDescription ? `\n  Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Matching hints: ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
+${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName}, Email: ${p.clientEmail})${p.clientDescription ? `\n  Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Matching hints: ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
 ${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
 ${existingEntriesInfo.map((e) => {
@@ -260,11 +265,97 @@ Guidelines:
 - Ignore casual web browsing unless window titles clearly indicate project work
 - It's better to over report time than underreport.
 - Entries should be at minimum 15 minutes long
-- Keep descriptions concise but informative`,
+- Keep descriptions concise but informative`;
+
+  if (!jmapIsEnabled) {
+    // No email access — use simple generateObject
+    const { object } = await generateObject({
+      model: aiModel,
+      schema: autofillResponseSchema,
+      prompt: basePrompt,
+    });
+
+    return {
+      suggestions: object.suggestions,
+      activityCount: sessions.length,
+      mergedCount: sortedByDuration.length,
+    };
+  }
+
+  // Use an agent with sent email tools for richer context
+  const sentEmailTools = createSentEmailTools(startInstant, endInstant);
+
+  const autofillAgent = new Agent({
+    model: aiModel,
+    stopWhen: stepCountIs(8),
+    tools: {
+      ...sentEmailTools,
+    },
   });
 
+  const result = await autofillAgent.generate({
+    system: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
+
+Your process:
+1. Review the activity sessions and available projects
+2. Search the user's sent emails for the day to discover client correspondence
+3. For important-looking emails, estimate how long the user spent composing them
+4. Combine activity data AND email data to produce comprehensive time entry suggestions
+
+Email strategy:
+- First, search all sent emails for the day to see who the user corresponded with
+- Match sent emails to projects by comparing recipient addresses with client emails
+- Use estimateEmailTime to gauge composition effort for significant emails
+- Create time entries for email correspondence (e.g. "Client correspondence: discussed X")
+- Email time entries should use the email's sent timestamp as a reference point
+
+IMPORTANT: After gathering email context, output your final answer as a valid JSON object matching this schema:
+${JSON.stringify(autofillResponseSchema.shape, null, 2)}
+
+The suggestions array must contain objects with: projectId (number), description (string), startTime (ISO string), endTime (ISO string), billable (boolean).`,
+    prompt: `${basePrompt}
+
+You have access to tools that can search the user's Sent folder for emails sent today and estimate how long each email took to compose. Use them to discover additional billable work from client correspondence.
+
+After using the tools, provide your final suggestions as a JSON object with a "suggestions" array.`,
+  });
+
+  // Parse the structured output from the agent's text response
+  let suggestions: Array<{
+    projectId: number;
+    description: string;
+    startTime: string;
+    endTime: string;
+    billable: boolean;
+  }> = [];
+
+  try {
+    // Extract JSON from the agent's response
+    const jsonMatch = result.text.match(/\{[\s\S]*"suggestions"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = autofillResponseSchema.parse(JSON.parse(jsonMatch[0]));
+      suggestions = parsed.suggestions;
+    }
+  } catch (parseError) {
+    console.error("Failed to parse agent suggestions, falling back to generateObject:", parseError);
+    // Fallback: re-run with generateObject using the agent's gathered context
+    const { object } = await generateObject({
+      model: aiModel,
+      schema: autofillResponseSchema,
+      prompt: `${basePrompt}
+
+Additional context from email analysis:
+${result.text}
+
+Based on ALL the above (activity sessions AND email context), generate the final time entry suggestions.`,
+    });
+    suggestions = object.suggestions;
+  }
+
+  console.log(`Autofill agent used ${result.toolCalls?.length || 0} tool calls`);
+
   return {
-    suggestions: object.suggestions,
+    suggestions,
     activityCount: sessions.length,
     mergedCount: sortedByDuration.length,
   };
@@ -445,95 +536,8 @@ Generate the weekly summary now:`,
 
   const summaryAgent = new Agent({
     model: model,
-    stopWhen: stepCountIs(10), // Allow up to 10 steps
-    tools: {
-      searchEmailsByKeyword: tool({
-        description: 'Search for emails containing specific keywords within the week. Use this to find project communications that provide context for vague time entries.',
-        inputSchema: z.object({
-          keyword: z.string().describe('Search keyword (project name, feature, client name). One or two words preferred.'),
-          limit: z.number().optional().default(5).describe('Max results'),
-        }),
-        execute: async ({ keyword, limit }: { keyword: string; limit?: number }) => {
-          const results = await searchEmailsByKeyword(keyword, weekStartInstant, weekEndInstant, limit || 5);
-          if (results.length === 0) {
-            return { count: 0, message: `No emails found for "${keyword}"` };
-          }
-          console.log(`searchEmailsByKeyword results for "${keyword}":`, results);
-          return {
-            count: results.length,
-            emails: results.map(e => ({
-              date: e.date.toISOString().split('T')[0],
-              from: e.from,
-              subject: e.subject,
-              preview: e.preview.substring(0, 150),
-            })),
-          };
-        },
-      }),
-      searchEmailsFromClient: tool({
-        description: 'Search for emails from the client within the week. Use this to find direct communications that provide context for time entries.',
-        inputSchema: z.object({
-          limit: z.number().optional().default(5).describe('Max results'),
-          emails: z.array(z.string()).describe('Client email addresses to search from'),
-        }),
-        execute: async ({ limit, emails }: { limit?: number; emails: string[] }) => {
-          const results = await searchEmailsByDateRange(weekStartInstant, weekEndInstant, limit || 5, emails);
-          if (results.length === 0) {
-            return { count: 0, message: `No emails found from client addresses: ${emails.join(', ')}` };
-          }
-          console.log("searchEmailsFromClient results:", results);
-          return {
-            count: results.length,
-            emails: results.map(e => ({
-              date: e.date.toISOString().split('T')[0],
-              from: e.from,
-              subject: e.subject,
-              preview: e.preview.substring(0, 150),
-            })),
-          };
-        },
-      }),
-      getFullEmailThread: tool({
-        description: 'Retrieve the full email thread for a specific email by its ID. Use this to get complete context from important email conversations.',
-        inputSchema: z.object({
-          threadId: z.string().describe('The unique identifier of the email thread to retrieve'),
-        }),
-        execute: async ({ threadId }: { threadId: string }) => {
-          const emails = await getEmailThreadById(threadId);
-          if (!emails) {
-            return { message: `Email thread with ID ${threadId} not found` };
-          }
-          console.log("Fetched all emails in thread ID:", threadId);
-          return {
-            emails: emails.map(e => ({
-              date: e.date.toISOString().split('T')[0],
-              from: e.from,
-              subject: e.subject,
-              body: e.body,
-            })),
-          };
-        },
-      }),
-      getFullEmailContent: tool({
-        description: 'Retrieve the full content of a specific email by its ID. Use this to get detailed context from important emails.',
-        inputSchema: z.object({
-          emailId: z.string().describe('The unique identifier of the email to retrieve'),
-        }),
-        execute: async ({ emailId }: { emailId: string }) => {
-          const email = await getFullEmailById(emailId);
-          if (!email) {
-            return { message: `Email with ID ${emailId} not found` };
-          }
-          console.log("Fetched full email content for ID:", emailId);
-          return {
-            date: email.date.toISOString().split('T')[0],
-            from: email.from,
-            subject: email.subject,
-            body: email.body,
-          };
-        },
-      }),
-    },
+    stopWhen: stepCountIs(10),
+    tools: createEmailSearchTools(weekStartInstant, weekEndInstant),
   });
 
   // Use generateText with tools for intelligent email gathering

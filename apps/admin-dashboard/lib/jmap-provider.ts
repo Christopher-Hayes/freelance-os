@@ -58,9 +58,11 @@ export interface EmailSearchResult {
   id: string;
   subject: string;
   from: string;
+  to?: string[];
   date: Date;
   preview: string;
   threadId: string;
+  sizeBytes?: number;
 }
 
 export interface EmailResult {
@@ -396,6 +398,98 @@ export async function getFullEmailById(emailId: string): Promise<EmailResult | n
   } catch (error) {
     console.error("Error fetching full email via JMAP:", error);
     return null;
+  }
+}
+
+/**
+ * Search the user's Sent mailbox for emails within a date range
+ * Optionally filter by recipient email addresses (to find emails sent to specific clients)
+ * Returns empty array if JMAP is not configured, disabled, or no Sent mailbox found
+ */
+export async function searchSentEmails(
+  startInstant: Temporal.Instant,
+  endInstant: Temporal.Instant,
+  limit: number = 50,
+  toEmails?: string[]
+): Promise<EmailSearchResult[]> {
+  const client = await getJmapClient();
+
+  if (!client) {
+    console.log("JMAP not enabled or configured, skipping sent email search");
+    return [];
+  }
+
+  try {
+    const accountId = await client.getPrimaryAccount();
+
+    // Find the Sent mailbox by role
+    const [mailboxes] = await client.api.Mailbox.get({
+      accountId,
+      properties: ["id", "name", "role"],
+    }, // @ts-ignore TS bug
+    {
+      using: ["urn:ietf:params:jmap:core"],
+    });
+
+    const sentMailbox = mailboxes.list
+      .flatMap((e) => e)
+      .find((m) => m.role === "sent");
+
+    if (!sentMailbox) {
+      console.log("No Sent mailbox found");
+      return [];
+    }
+
+    console.log("JMAP Sent Search - sentMailboxId:", sentMailbox.id);
+
+    // Build filter scoped to the Sent mailbox
+    const filter: any = {
+      inMailbox: sentMailbox.id,
+      after: startInstant.toString(),
+      before: endInstant.toString(),
+    };
+
+    // Add optional recipient filtering
+    if (toEmails && toEmails.length > 0) {
+      filter.to = toEmails.join(" OR ");
+    }
+
+    const [{ emailIds, emails }] = await client.requestMany((t) => {
+      const emailIds = t.Email.query({
+        accountId,
+        filter,
+        sort: [{ property: "receivedAt", isAscending: false }],
+        limit,
+      });
+
+      const emails = t.Email.get({
+        accountId,
+        ids: emailIds.$ref("/ids"),
+        properties: ["id", "subject", "from", "to", "receivedAt", "preview", "threadId", "size"],
+      });
+
+      return { emailIds, emails };
+    }, {
+      using: ["urn:ietf:params:jmap:core"],
+    });
+
+    const results: EmailSearchResult[] = emails.list.map((email) => ({
+      id: email.id,
+      subject: email.subject || "(No subject)",
+      from: email.from?.[0]?.email || "unknown",
+      to: email.to?.map((addr: any) => addr.email) || [],
+      date: new Date(email.receivedAt || new Date()),
+      preview: email.preview || "",
+      threadId: email.threadId || email.id,
+      sizeBytes: email.size || 0,
+    }));
+
+    console.log(`JMAP Sent Search - found ${results.length} sent emails`);
+
+    return results;
+  } catch (error) {
+    console.error("Error searching sent emails via JMAP:", error);
+    return [];
   }
 }
 
