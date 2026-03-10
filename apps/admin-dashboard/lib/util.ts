@@ -71,6 +71,7 @@ const APP_NAME_OVERRIDES: Record<string, string> = {
   'nautilus': 'Files',
   'systemmonitor': 'System Monitor',
   'ptyxis': 'Terminal',
+  'Soffice': 'LibreOffice',
 };
 
 export function formatAppTitle(appClass: string): string {
@@ -91,12 +92,10 @@ export function formatAppTitle(appClass: string): string {
     }
   }
 
-  // If it's in org.example.example format, take last part
-  if (appName.includes('.')) {
+  // If it's in a org.example.example type of format, then take the last part
+  if (appName.includes('.') && appName.split('.').length >= 2) {
     const parts = appName.split('.');
-    if (parts.length >= 2 && parts[parts.length - 1] === parts[parts.length - 2]) {
-      appName = parts[parts.length - 1]!;
-    }
+    appName = parts[parts.length - 1]!;
   }
 
   // If there are any hyphens, replace them with spaces and capitalize words

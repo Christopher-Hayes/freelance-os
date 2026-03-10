@@ -27,6 +27,13 @@ export const APP_COLORS = [
   '#0EA5E9', // sky
 ];
 
+export interface SubSession {
+  startTime: string;
+  endTime: string;
+  windowTitle: string | null;
+  durationSeconds: number;
+}
+
 export interface ActivitySession {
   id: number;
   startTime: string;
@@ -34,6 +41,17 @@ export interface ActivitySession {
   appClass: string;
   windowTitle: string | null;
   durationSeconds: number;
+  /** Original sub-sessions before merging. Present when multiple sessions were merged. */
+  subSessions?: SubSession[];
+}
+
+export interface IntervalBreakdown {
+  /** The start of this 15-minute interval as an ISO string */
+  intervalStart: string;
+  /** Formatted time label, e.g. "5:45 PM" */
+  timeLabel: string;
+  /** The dominant window title in this interval */
+  title: string;
 }
 
 export interface TimeEntry {
@@ -220,6 +238,14 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
   for (const session of sortedSessions) {
     const currentStart = Temporal.Instant.from(session.startTime);
     const currentEnd = Temporal.Instant.from(session.endTime);
+
+    // Build a sub-session entry for this individual session
+    const thisSubSession: SubSession = {
+      startTime: session.startTime,
+      endTime: session.endTime,
+      windowTitle: session.windowTitle,
+      durationSeconds: session.durationSeconds,
+    };
     
     // Find the most recent session of the same app to merge with
     // Search backwards to find the closest match in time
@@ -251,7 +277,14 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
       const existingEndInstant = Temporal.Instant.from(existing.endTime);
       const newDurationNs = existingEndInstant.epochNanoseconds - existingStart.epochNanoseconds;
       existing.durationSeconds = Math.floor(Number(newDurationNs) / 1_000_000_000);
+
+      // Accumulate sub-sessions
+      if (!existing.subSessions) {
+        existing.subSessions = [];
+      }
+      existing.subSessions.push(thisSubSession);
       
+      // Still update the combined windowTitle for tooltip/fallback
       if (session.windowTitle && session.windowTitle !== existing.windowTitle) {
         const currentTitle = existing.windowTitle || '';
         const newTitle = session.windowTitle;
@@ -261,9 +294,118 @@ export function mergeAdjacentSessions(sessions: ActivitySession[]): ActivitySess
         }
       }
     } else {
-      merged.push({ ...session });
+      merged.push({ ...session, subSessions: [thisSubSession] });
     }
   }
   
   return merged;
+}
+
+/** Minimum duration (in minutes) for a merged session to use the interval breakdown UI */
+export const INTERVAL_BREAKDOWN_THRESHOLD_MINUTES = 30;
+/** Size of each interval chunk in minutes */
+export const INTERVAL_CHUNK_MINUTES = 15;
+/** Minimum space (in minutes) to reserve at the top for the app title header */
+export const INTERVAL_HEADER_RESERVE_MINUTES = 20;
+
+/**
+ * Strip the trailing app name from a window title.
+ * e.g. "Discord | #general-chat - Firefox" → "Discord | #general-chat"
+ */
+function stripTrailingAppName(title: string): string {
+  const lastDash = title.lastIndexOf(' - ');
+  if (lastDash > 0) {
+    return title.slice(0, lastDash);
+  }
+  return title;
+}
+
+/**
+ * Compute 15-minute interval breakdowns for a merged session.
+ * For each interval, finds the sub-session with the highest overlap duration
+ * and returns its window title.
+ *
+ * Skips the first ~20 minutes to leave room for the app title header.
+ */
+export function computeIntervalBreakdown(
+  sessionStartISO: string,
+  sessionEndISO: string,
+  subSessions: SubSession[],
+): IntervalBreakdown[] {
+  const tz = Temporal.Now.timeZoneId();
+  const sessionStart = Temporal.Instant.from(sessionStartISO).toZonedDateTimeISO(tz);
+  const sessionEnd = Temporal.Instant.from(sessionEndISO).toZonedDateTimeISO(tz);
+
+  // Find the first 15-minute-aligned boundary that is at least INTERVAL_HEADER_RESERVE_MINUTES
+  // into the session (to leave room for the app title).
+  const startPlusReserve = sessionStart.add({ minutes: INTERVAL_HEADER_RESERVE_MINUTES });
+
+  // Align to next 15-minute boundary
+  const reserveMinute = startPlusReserve.minute;
+  const nextAlignedMinute = Math.ceil(reserveMinute / INTERVAL_CHUNK_MINUTES) * INTERVAL_CHUNK_MINUTES;
+  let firstInterval: Temporal.ZonedDateTime;
+  if (nextAlignedMinute >= 60) {
+    // Roll to the next hour
+    firstInterval = startPlusReserve
+      .add({ hours: 1 })
+      .with({ minute: 0, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
+  } else {
+    firstInterval = startPlusReserve
+      .with({ minute: nextAlignedMinute, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
+  }
+
+  const intervals: IntervalBreakdown[] = [];
+  let current = firstInterval;
+
+  while (Temporal.ZonedDateTime.compare(current, sessionEnd) < 0) {
+    const intervalEnd = current.add({ minutes: INTERVAL_CHUNK_MINUTES });
+
+    // Clamp interval end to session end
+    const effectiveEnd = Temporal.ZonedDateTime.compare(intervalEnd, sessionEnd) > 0
+      ? sessionEnd
+      : intervalEnd;
+
+    // Find the sub-session with the most overlap in this interval
+    let bestTitle = '';
+    let bestOverlap = 0;
+
+    for (const sub of subSessions) {
+      const subStart = Temporal.Instant.from(sub.startTime).toZonedDateTimeISO(tz);
+      const subEnd = Temporal.Instant.from(sub.endTime).toZonedDateTimeISO(tz);
+
+      // Calculate overlap between [current, effectiveEnd] and [subStart, subEnd]
+      const overlapStart = Temporal.ZonedDateTime.compare(current, subStart) > 0 ? current : subStart;
+      const overlapEnd = Temporal.ZonedDateTime.compare(effectiveEnd, subEnd) < 0 ? effectiveEnd : subEnd;
+
+      if (Temporal.ZonedDateTime.compare(overlapStart, overlapEnd) < 0) {
+        const overlapNs = overlapEnd.epochNanoseconds - overlapStart.epochNanoseconds;
+        const overlapSeconds = Number(overlapNs / 1_000_000_000n);
+
+        if (overlapSeconds > bestOverlap) {
+          bestOverlap = overlapSeconds;
+          bestTitle = sub.windowTitle ? stripTrailingAppName(sub.windowTitle) : '';
+        }
+      }
+    }
+
+    if (bestTitle) {
+      // Format time label, e.g. "5:45 PM"
+      const hour = current.hour;
+      const minute = current.minute;
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const displayMinute = minute.toString().padStart(2, '0');
+      const timeLabel = `${displayHour}:${displayMinute} ${period}`;
+
+      intervals.push({
+        intervalStart: current.toString(),
+        timeLabel,
+        title: bestTitle,
+      });
+    }
+
+    current = intervalEnd;
+  }
+
+  return intervals;
 }
