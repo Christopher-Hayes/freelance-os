@@ -110,6 +110,20 @@ export async function PUT(
         email: body.email,
         company: body.company || null,
       },
+      include: {
+        projects: {
+          orderBy: { createdAt: 'desc' },
+        },
+        invoices: {
+          orderBy: { issueDate: 'desc' },
+        },
+        _count: {
+          select: {
+            projects: true,
+            invoices: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json(client);

@@ -351,6 +351,11 @@ export function WeeklySummaries({
               ))}
             </div>
 
+            {/* Hour total */}
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-4">
+              Total: {hours} {parseFloat(hours) === 1 ? 'hour' : 'hours'}
+            </div>
+
             {/* Summary section */}
             {isEditing ? (
               <div className="bg-gray-50 dark:bg-gray-900 rounded p-4 border border-gray-200 dark:border-gray-700">
