@@ -9,6 +9,15 @@ interface RescueTimeResponse {
   rows: (string | number)[][];
 }
 
+async function getHiddenAppClasses(): Promise<Set<string>> {
+  const settings = await prisma.setting.findUnique({
+    where: { key: 'main' },
+    select: { hiddenAppClasses: true },
+  });
+
+  return new Set((settings?.hiddenAppClasses || []).map((app) => app.toLowerCase()));
+}
+
 /**
  * Import activity data from RescueTime API
  */
@@ -148,6 +157,8 @@ export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Tem
   const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
   const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
   
+  const hiddenAppClasses = await getHiddenAppClasses();
+
   const sessions = await prisma.activitySession.findMany({
     where: {
       startTime: {
@@ -161,9 +172,17 @@ export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Tem
     return null;
   }
 
+  const visibleSessions = sessions.filter(
+    (session) => !hiddenAppClasses.has((session.appClass || 'Unknown').toLowerCase())
+  );
+
+  if (visibleSessions.length === 0) {
+    return null;
+  }
+
   // Group by app and sum duration
   const appCounts: Record<string, number> = {};
-  sessions.forEach((session) => {
+  visibleSessions.forEach((session) => {
     const app = session.appClass || 'Unknown';
     appCounts[app] = (appCounts[app] || 0) + session.durationSeconds;
   });

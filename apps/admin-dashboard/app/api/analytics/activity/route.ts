@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 
+async function getHiddenAppClasses(): Promise<Set<string>> {
+  const settings = await prisma.setting.findUnique({
+    where: { key: 'main' },
+    select: { hiddenAppClasses: true },
+  });
+
+  return new Set((settings?.hiddenAppClasses || []).map((app) => app.toLowerCase()));
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -16,6 +25,8 @@ export async function GET(request: Request) {
       ? new Date(startDate) 
       : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+    const hiddenAppClasses = await getHiddenAppClasses();
+
     // Query activity sessions within date range
     const sessions = await prisma.activitySession.findMany({
       where: {
@@ -29,11 +40,15 @@ export async function GET(request: Request) {
       },
     });
 
+    const visibleSessions = sessions.filter(
+      (session) => !hiddenAppClasses.has((session.appClass || 'Unknown').toLowerCase())
+    );
+
     // Group by date and app_class
     const dailyActivity: Record<string, Record<string, number>> = {};
     const appTotals: Record<string, number> = {};
 
-    sessions.forEach((session) => {
+  visibleSessions.forEach((session) => {
       const dateKey = session.startTime.toISOString().split('T')[0] || '';
       const app = session.appClass || 'Unknown';
       const hours = session.durationSeconds / 3600;
@@ -63,7 +78,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       dailyData,
       topApps,
-      totalSessions: sessions.length,
+  totalSessions: visibleSessions.length,
       dateRange: {
         start: start.toISOString(),
         end: end.toISOString(),

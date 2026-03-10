@@ -3,6 +3,7 @@ import { ActivitySession } from '@/app/time/components/timeline/utils';
 import { Temporal } from '@/lib/temporal-polyfill';
 
 const APP_TITLE_RENAMES_STORAGE_KEY = 'appTitleRenames';
+const HIDDEN_APP_CLASSES_STORAGE_KEY = 'hiddenAppClasses';
 
 /**
  * Fetch wrapper that redirects to login on 401 Unauthorized
@@ -114,6 +115,43 @@ function getUserAppTitleRenames(): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function getStoredStringList(storageKey: string): string[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const stored = window.localStorage.getItem(storageKey);
+    if (!stored) {
+      return [];
+    }
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function getHiddenAppClasses(): Set<string> {
+  return new Set(getStoredStringList(HIDDEN_APP_CLASSES_STORAGE_KEY).map((entry) => entry.toLowerCase()));
+}
+
+export function isAppHidden(appClass: string): boolean {
+  if (!appClass) {
+    return false;
+  }
+
+  return getHiddenAppClasses().has(appClass.toLowerCase());
 }
 
 export function formatAppTitle(appClass: string): string {

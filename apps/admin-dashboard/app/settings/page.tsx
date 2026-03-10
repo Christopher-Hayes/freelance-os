@@ -11,6 +11,7 @@ import { Check, ChevronsUpDown, X } from 'lucide-react';
 
 const MASK_VALUE = "••••••••";
 const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
+const HIDDEN_APP_CLASSES_STORAGE_KEY = "hiddenAppClasses";
 
 // Demo permissions available for API keys
 const availablePermissions = [
@@ -31,6 +32,7 @@ export default function SettingsPage() {
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
   const [appTitleRenamesText, setAppTitleRenamesText] = useState("");
+  const [hiddenAppClassesText, setHiddenAppClassesText] = useState("");
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
@@ -59,6 +61,7 @@ export default function SettingsPage() {
   const openaiTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const googleTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const appTitleRenamesTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const hiddenAppClassesTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -82,6 +85,14 @@ export default function SettingsPage() {
     window.localStorage.setItem(APP_TITLE_RENAMES_STORAGE_KEY, JSON.stringify(entries));
   };
 
+  const persistHiddenAppClasses = (entries: string[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(HIDDEN_APP_CLASSES_STORAGE_KEY, JSON.stringify(entries));
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await authFetch("/api/settings/all");
@@ -92,9 +103,12 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
-  const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
-  setAppTitleRenamesText(appTitleRenames.join("\n"));
-  persistAppTitleRenames(appTitleRenames);
+    const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
+    setAppTitleRenamesText(appTitleRenames.join("\n"));
+    persistAppTitleRenames(appTitleRenames);
+    const hiddenAppClasses = Array.isArray(data.hiddenAppClasses) ? data.hiddenAppClasses : [];
+    setHiddenAppClassesText(hiddenAppClasses.join("\n"));
+    persistHiddenAppClasses(hiddenAppClasses);
         setJmapToken(data.jmapToken || "");
         setCanReadMailbox(data.canReadMailbox || false);
         setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
@@ -135,6 +149,11 @@ export default function SettingsPage() {
       if (field === "appTitleRenames") {
         const payload = typeof value === "string" ? JSON.parse(value) : [];
         persistAppTitleRenames(Array.isArray(payload) ? payload : []);
+      }
+
+      if (field === "hiddenAppClasses") {
+        const payload = typeof value === "string" ? JSON.parse(value) : [];
+        persistHiddenAppClasses(Array.isArray(payload) ? payload : []);
       }
 
       toast.success("Saved successfully");
@@ -211,6 +230,23 @@ export default function SettingsPage() {
         .filter(Boolean);
 
       saveSetting("appTitleRenames", JSON.stringify(lines));
+    }, 1000);
+  };
+
+  const handleHiddenAppClassesChange = (value: string) => {
+    setHiddenAppClassesText(value);
+
+    if (hiddenAppClassesTimerRef.current) {
+      clearTimeout(hiddenAppClassesTimerRef.current);
+    }
+
+    hiddenAppClassesTimerRef.current = setTimeout(() => {
+      const lines = value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      saveSetting("hiddenAppClasses", JSON.stringify(lines));
     }, 1000);
   };
 
@@ -571,6 +607,34 @@ export default function SettingsPage() {
               />
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                 One rename per line using <code className="rounded bg-gray-100 dark:bg-gray-700 px-1 py-0.5">rawAppClass=Display Name</code>. These are cosmetic only and override the built-in formatting when present.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Hidden Apps
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="hidden_app_classes"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Hide App Classes From Timeline and Analytics
+              </label>
+              <textarea
+                id="hidden_app_classes"
+                value={hiddenAppClassesText}
+                onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
+                placeholder={"Easyeffects\nSteam"}
+                rows={5}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                One raw app class per line. Hidden apps won&apos;t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged.
               </p>
             </div>
           </div>

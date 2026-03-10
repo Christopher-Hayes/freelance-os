@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 
+async function getHiddenAppClasses(): Promise<Set<string>> {
+  const settings = await prisma.setting.findUnique({
+    where: { key: 'main' },
+    select: { hiddenAppClasses: true },
+  });
+
+  return new Set((settings?.hiddenAppClasses || []).map((app) => app.toLowerCase()));
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -16,6 +25,8 @@ export async function GET(request: Request) {
       ? new Date(startDate) 
       : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+    const hiddenAppClasses = await getHiddenAppClasses();
+
     // Get sessions in date range
     const sessions = await prisma.activitySession.findMany({
       where: {
@@ -26,8 +37,12 @@ export async function GET(request: Request) {
       },
     });
 
+    const visibleSessions = sessions.filter(
+      (session) => !hiddenAppClasses.has((session.appClass || 'Unknown').toLowerCase())
+    );
+
     // Calculate summary statistics
-    const totalDurationSeconds = sessions.reduce(
+    const totalDurationSeconds = visibleSessions.reduce(
       (sum, session) => sum + session.durationSeconds,
       0
     );
@@ -35,7 +50,7 @@ export async function GET(request: Request) {
 
     // Find most used app
     const appCounts: Record<string, { duration: number; sessions: number }> = {};
-    sessions.forEach((session) => {
+  visibleSessions.forEach((session) => {
       const app = session.appClass || 'Unknown';
       if (!appCounts[app]) {
         appCounts[app] = { duration: 0, sessions: 0 };
@@ -49,7 +64,7 @@ export async function GET(request: Request) {
 
     // Calculate weekly breakdown
     const weeks: Record<string, number> = {};
-    sessions.forEach((session) => {
+  visibleSessions.forEach((session) => {
       const weekStart = getWeekStart(session.startTime);
       const weekKey = weekStart.toISOString().split('T')[0] || '';
       weeks[weekKey] = (weeks[weekKey] || 0) + session.durationSeconds / 3600;
@@ -68,7 +83,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       totalHours: parseFloat(totalHours.toFixed(2)),
-      totalSessions: sessions.length,
+  totalSessions: visibleSessions.length,
       avgDailyHours: parseFloat(avgDailyHours.toFixed(2)),
       mostUsedApp: mostUsedApp
         ? {

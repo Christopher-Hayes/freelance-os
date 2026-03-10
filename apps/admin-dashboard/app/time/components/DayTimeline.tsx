@@ -30,7 +30,7 @@ import {
   calculateTimeEntryOverlaps,
   type OverlapPosition,
 } from "./timeline/overlapCalculations";
-import { debounce, throttle } from "@/lib/util";
+import { debounce, throttle, isAppHidden } from "@/lib/util";
 import { authFetch } from '@/lib/util';
 
 // Memoized component for activity sessions timeline - only re-renders when sessions change
@@ -197,6 +197,11 @@ export default function DayTimeline({
   const overlapPositions = useMemo(
     () => calculateTimeEntryOverlaps(timeEntries, draggedTimes),
     [timeEntries, draggedTimes]
+  );
+
+  const visibleSessions = useMemo(
+    () => sessions.filter((session) => !isAppHidden(session.appClass)),
+    [sessions]
   );
 
   // Effects
@@ -930,7 +935,7 @@ export default function DayTimeline({
               >
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
                   <ActivitySessionsTimeline
-                    sessions={sessions}
+                    sessions={visibleSessions}
                     loading={loading}
                     onImportRescueTime={handleImportFromRescueTime}
                     importingRescueTime={importingRescueTime}
