@@ -1,14 +1,16 @@
 "use server";
 
-import { tool } from "ai";
+import { tool, generateObject } from "ai";
 import { z } from "zod";
 import { Temporal } from "@/lib/temporal-polyfill";
+import { getAiModel } from "@/lib/ai-provider";
 import {
   getMailboxes as getMailboxesFromProvider,
   searchEmailsByKeyword,
   searchEmailsByDateRange,
   searchSentEmails,
   getFullEmailById,
+  getSentEmailById,
   getEmailThreadById,
   type MailboxInfo,
 } from "@/lib/jmap-provider";
@@ -28,22 +30,85 @@ export async function fetchMailboxes(): Promise<MailboxInfo[]> {
 }
 
 /**
- * Estimate how long it took to compose an email based on its content length.
- * Returns estimated minutes spent reading and writing the email.
+ * Strip quoted/forwarded content from an email body so the AI only
+ * sees the new text the user actually wrote.
  *
- * Heuristic:
- * - Very short reply (< 500 chars): ~15 minutes (reading + quick response)
- * - Short reply (500-1500 chars): ~20 minutes
- * - Medium email (1500-4000 chars): ~30 minutes
- * - Detailed email (4000-8000 chars): ~45 minutes
- * - Long/complex email (> 8000 chars): ~60 minutes
+ * Removes:
+ * - Lines starting with > (quoted reply blocks)
+ * - Common forwarded-message headers ("---------- Forwarded message ---------")
+ * - Trailing "On <date>, <name> wrote:" attribution lines
  */
-export async function estimateEmailCompositionMinutes(bodyLength: number): Promise<number> {
-  if (bodyLength < 500) return Promise.resolve(15);
-  if (bodyLength < 1500) return Promise.resolve(20);
-  if (bodyLength < 4000) return Promise.resolve(30);
-  if (bodyLength < 8000) return Promise.resolve(45);
-  return Promise.resolve(60);
+function stripQuotedContent(body: string): string {
+  const lines = body.split("\n");
+  const stripped: string[] = [];
+  let inForwardedBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Detect forwarded message delimiter
+    if (/^-{3,}\s*(forwarded|original)\s+message\s*-{3,}/i.test(trimmed)) {
+      inForwardedBlock = true;
+      break;
+    }
+
+    // Skip quoted lines ("> text")
+    if (trimmed.startsWith(">")) continue;
+
+    // Skip "On <date>, <name> wrote:" attribution (often spans 1-2 lines)
+    if (/^on .{5,}, .+ wrote:$/i.test(trimmed)) continue;
+
+    if (!inForwardedBlock) {
+      stripped.push(line);
+    }
+  }
+
+  return stripped.join("\n").trim();
+}
+
+/**
+ * Use the AI to estimate how long the user spent composing the new
+ * portion of a sent email (excluding any quoted/forwarded content).
+ */
+async function estimateEmailCompositionMinutes(
+  subject: string,
+  newBodyText: string,
+  originalBodyLength: number,
+): Promise<{ minutes: number; reasoning: string }> {
+  const model = await getAiModel();
+
+  const { object } = await generateObject({
+    model,
+    schema: z.object({
+      estimatedMinutes: z
+        .number()
+        .int()
+        .describe("Estimated minutes spent composing this email (5–120)"),
+      reasoning: z
+        .string()
+        .describe("One sentence explaining the estimate"),
+    }),
+    prompt: `You are estimating how long a freelancer spent composing a sent email.
+
+Subject: ${subject}
+New text written (quoted/forwarded content already stripped):
+---
+${newBodyText.substring(0, 2000)}
+---
+Original full body length: ${originalBodyLength} chars
+Stripped body length: ${newBodyText.length} chars
+
+Consider:
+- Only the NEW text the person wrote (already stripped of quotes/forwards)
+- Time to read the incoming message before replying
+- Complexity and thoughtfulness of the response
+- Short acknowledgements are 5–10 min; detailed technical responses 30–60 min
+- A forwarded message with a brief note is 5–10 min
+
+Return a realistic estimate between 5 and 120 minutes.`,
+  });
+
+  return { minutes: object.estimatedMinutes, reasoning: object.reasoning };
 }
 
 // ──────────────────────────────────────────────────
@@ -264,15 +329,22 @@ export async function createSentEmailTools(
           .describe("The ID of the sent email to analyze"),
       }),
       execute: async ({ emailId }: { emailId: string }) => {
-        const email = await getFullEmailById(emailId);
+        const email = await getSentEmailById(emailId);
         if (!email) {
           return { message: `Email with ID ${emailId} not found` };
         }
-        const bodyLength = email.body?.length || 0;
-        const estimatedMinutes = estimateEmailCompositionMinutes(bodyLength);
+
+        const fullBody = email.body || "";
+        const newBody = stripQuotedContent(fullBody);
+        const { minutes: estimatedMinutes, reasoning } = await estimateEmailCompositionMinutes(
+          email.subject,
+          newBody,
+          fullBody.length,
+        );
 
         console.log(
-          `estimateEmailTime for "${email.subject}": ${bodyLength} chars → ${estimatedMinutes} min`
+          `estimateEmailTime for "${email.subject}": ${fullBody.length} chars total, ` +
+          `${newBody.length} chars new text → ${estimatedMinutes} min (${reasoning})`
         );
 
         return {
@@ -281,9 +353,9 @@ export async function createSentEmailTools(
           from: email.from,
           to: email.to,
           subject: email.subject,
-          bodyLengthChars: bodyLength,
+          newBodyLengthChars: newBody.length,
           estimatedCompositionMinutes: estimatedMinutes,
-          preview: email.body?.substring(0, 300) || "",
+          reasoning,
         };
       },
     }),

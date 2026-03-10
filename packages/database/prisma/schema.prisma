@@ -265,11 +265,87 @@ model AiJob {
   startedAt   DateTime?   @map("started_at") @db.Timestamptz
   completedAt DateTime?   @map("completed_at") @db.Timestamptz
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  telemetryRuns AiTelemetryRun[]
   
   @@index([type, status])
   @@index([status])
   @@index([createdAt])
   @@map("ai_jobs")
+}
+
+model AiTelemetryRun {
+  id                 Int                     @id @default(autoincrement())
+  jobId               Int                     @map("job_id")
+  functionId          String                  @map("function_id") @db.VarChar(255)
+  operation           String                  @default("generateText") @db.VarChar(100)
+  modelProvider       String?                 @map("model_provider") @db.VarChar(100)
+  modelId             String?                 @map("model_id") @db.VarChar(255)
+  status              String                  @default("started") @db.VarChar(50)
+  metadata            Json?
+  inputPreview        String?                 @map("input_preview") @db.Text
+  outputPreview       String?                 @map("output_preview") @db.Text
+  responseText        String?                 @map("response_text") @db.Text
+  finishReason        String?                 @map("finish_reason") @db.VarChar(100)
+  promptTokens        Int?                    @map("prompt_tokens")
+  completionTokens    Int?                    @map("completion_tokens")
+  totalTokens         Int?                    @map("total_tokens")
+  totalDurationMs     Int?                    @map("total_duration_ms")
+  error               String?                 @db.Text
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  job                 AiJob                   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  steps               AiTelemetryStep[]
+  toolCalls           AiTelemetryToolCall[]
+
+  @@index([jobId, createdAt])
+  @@index([functionId])
+  @@index([status])
+  @@map("ai_telemetry_runs")
+}
+
+model AiTelemetryStep {
+  id                 Int             @id @default(autoincrement())
+  telemetryRunId     Int             @map("telemetry_run_id")
+  stepNumber         Int             @map("step_number")
+  modelProvider      String?         @map("model_provider") @db.VarChar(100)
+  modelId            String?         @map("model_id") @db.VarChar(255)
+  finishReason       String?         @map("finish_reason") @db.VarChar(100)
+  promptTokens       Int?            @map("prompt_tokens")
+  completionTokens   Int?            @map("completion_tokens")
+  totalTokens        Int?            @map("total_tokens")
+  durationMs         Int?            @map("duration_ms")
+  promptPreview      String?         @map("prompt_preview") @db.Text
+  outputPreview      String?         @map("output_preview") @db.Text
+  providerMetadata   Json?           @map("provider_metadata")
+  toolCallsJson      Json?           @map("tool_calls_json")
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  telemetryRun       AiTelemetryRun  @relation(fields: [telemetryRunId], references: [id], onDelete: Cascade)
+
+  @@unique([telemetryRunId, stepNumber])
+  @@index([telemetryRunId])
+  @@map("ai_telemetry_steps")
+}
+
+model AiTelemetryToolCall {
+  id                 Int             @id @default(autoincrement())
+  telemetryRunId     Int             @map("telemetry_run_id")
+  toolCallId         String?         @map("tool_call_id") @db.VarChar(255)
+  toolName           String          @map("tool_name") @db.VarChar(255)
+  stepNumber         Int?            @map("step_number")
+  success            Boolean         @default(true)
+  durationMs         Int?            @map("duration_ms")
+  argsJson           Json?           @map("args_json")
+  resultJson         Json?           @map("result_json")
+  error              String?         @db.Text
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  telemetryRun       AiTelemetryRun  @relation(fields: [telemetryRunId], references: [id], onDelete: Cascade)
+
+  @@index([telemetryRunId, createdAt])
+  @@index([toolName])
+  @@map("ai_telemetry_tool_calls")
 }
 
 // Settings for storing user preferences and API keys

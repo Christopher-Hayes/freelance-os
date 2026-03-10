@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { getAdminAuth } from "@/lib/auth";
+import { getJobDetailForDebug } from "@/lib/debug-data";
 
 // GET /api/jobs/[id] - Get a specific job's status
 export async function GET(
@@ -23,9 +24,13 @@ export async function GET(
       );
     }
 
-    const job = await prisma.aiJob.findUnique({
-      where: { id: jobId },
-    });
+    const includeTelemetry = request.nextUrl.searchParams.get("includeTelemetry") === "true";
+
+    const job = includeTelemetry
+      ? await getJobDetailForDebug(jobId)
+      : await prisma.aiJob.findUnique({
+          where: { id: jobId },
+        });
 
     if (!job) {
       return NextResponse.json(

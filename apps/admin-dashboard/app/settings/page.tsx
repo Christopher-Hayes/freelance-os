@@ -532,7 +532,7 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="openai">OpenAI (gpt-5.4)</option>
-                <option value="gemini">Google Gemini (gemini-2.5-flash)</option>
+                <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
               </select>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                 Choose which AI provider to use for AI-powered features

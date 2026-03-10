@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import type { CreateAiJobInput } from "@freelance-os/types";
 import { getAdminAuth } from "@/lib/auth";
+import { getJobsForDebug } from "@/lib/debug-data";
 
 // GET /api/jobs - List all jobs or active jobs
 export async function GET(request: NextRequest) {
@@ -13,20 +14,23 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const activeOnly = searchParams.get("active") === "true";
+    const includeTelemetry = searchParams.get("includeTelemetry") === "true";
 
-    const jobs = await prisma.aiJob.findMany({
-      where: activeOnly
-        ? {
-            status: {
-              in: ["pending", "processing"],
-            },
-          }
-        : undefined,
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: activeOnly ? undefined : 50, // Limit to 50 recent jobs if not filtering
-    });
+    const jobs = includeTelemetry
+      ? await getJobsForDebug(activeOnly ? 25 : 100)
+      : await prisma.aiJob.findMany({
+          where: activeOnly
+            ? {
+                status: {
+                  in: ["pending", "processing"],
+                },
+              }
+            : undefined,
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: activeOnly ? undefined : 50,
+        });
 
     return NextResponse.json(jobs);
   } catch (error) {
@@ -136,7 +140,10 @@ async function processAutofillJob(job: any) {
     });
 
     // Use the server action to generate suggestions
-    const result = await generateAutofillSuggestions(params);
+    const result = await generateAutofillSuggestions({
+      ...params,
+      debugJobId: job.id,
+    });
 
     if (result.suggestions.length === 0) {
       await prisma.aiJob.update({

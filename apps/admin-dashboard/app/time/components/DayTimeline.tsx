@@ -677,6 +677,42 @@ export default function DayTimeline({
     }
   };
 
+  const handleClearDayEntries = async () => {
+    const entriesToDelete = timeEntries.filter((entry) => entry.id !== -1);
+
+    if (entriesToDelete.length === 0) {
+      toast.info("No project entries to clear for this day");
+      return;
+    }
+
+    try {
+      const results = await Promise.allSettled(
+        entriesToDelete.map((entry) =>
+          authFetch(`/api/time/${entry.id}`, {
+            method: "DELETE",
+          }).then((response) => {
+            if (!response.ok) {
+              throw new Error(`Failed to delete entry ${entry.id}`);
+            }
+          })
+        )
+      );
+
+      const failures = results.filter((result) => result.status === "rejected");
+
+      if (failures.length > 0) {
+        throw new Error(`Failed to clear ${failures.length} entr${failures.length === 1 ? "y" : "ies"}`);
+      }
+
+      await fetchDayData();
+      setEditingEntryId(null);
+      toast.success(`Cleared ${entriesToDelete.length} project ${entriesToDelete.length === 1 ? "entry" : "entries"}`);
+    } catch (error) {
+      console.error("Error clearing day entries:", error);
+      toast.error("Failed to clear today's project entries");
+    }
+  };
+
   const handleAutofill = async () => {
     setLoadingAutofill(true);
     try {
@@ -988,13 +1024,24 @@ export default function DayTimeline({
           />
         )}
 
-        <div className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+        <div className="mt-4 flex items-start justify-between gap-4">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
           <p>
             <strong>Apps:</strong> Hover to see details. Data from external tracking utility.
           </p>
           <p>
             <strong>Project Entries:</strong> Click & drag to create new entries. Click entry to edit. Drag top/bottom edges to resize.
           </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearDayEntries}
+            disabled={loading || timeEntries.length === 0}
+            className="shrink-0 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Remove all project tracking entries for this day"
+          >
+            Clear today's entries
+          </button>
         </div>
       </div>
     </div>

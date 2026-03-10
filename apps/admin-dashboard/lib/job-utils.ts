@@ -14,12 +14,26 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
       displayTitle = `Autofill: ${date}`;
       
       if (job.status === "completed" && job.result) {
-        const result = job.result as { entriesCreated?: number; date?: string };
-        displayDescription = `Created ${result.entriesCreated || 0} time entries`;
+        const result = job.result as {
+          entriesCreated?: number;
+          totalSuggestions?: number;
+          activityCount?: number;
+          message?: string;
+        };
+        if (result.message) {
+          displayDescription = result.message;
+        } else {
+          const created = result.entriesCreated || 0;
+          const suggestions = result.totalSuggestions ?? created;
+          const activities = result.activityCount ?? 0;
+          displayDescription = `Created ${created}/${suggestions} entries from ${activities} activities`;
+        }
       } else if (job.status === "processing") {
         displayDescription = `Analyzing activities (${job.progress}%)`;
       } else if (job.status === "failed") {
         displayDescription = job.error || "Failed to process";
+      } else if (job.status === "pending") {
+        displayDescription = "Queued and waiting to start";
       }
       break;
     }
@@ -35,11 +49,18 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
 }
 
 /**
- * Format date for job display
+ * Format date for job display.
+ * dateString is "YYYY-MM-DD". We parse the parts manually so the Date
+ * is constructed in local time — `new Date("2026-03-09")` is interpreted
+ * as UTC midnight, which shifts back a day in US timezones.
  */
 function formatJobDate(dateString: string): string {
   try {
-    const date = new Date(dateString);
+    const parts = dateString.split("-").map(Number);
+    const year = parts[0]!;
+    const month = parts[1]!;
+    const day = parts[2]!;
+    const date = new Date(year, month - 1, day);
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",

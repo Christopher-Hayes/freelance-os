@@ -356,6 +356,7 @@ export async function getFullEmailById(emailId: string): Promise<EmailResult | n
   try {
     const accountId = await client.getPrimaryAccount();
     
+    // @ts-ignore TS bug
     const [email] = await client.api.Email.get({
       ids: [emailId],
       accountId,
@@ -370,6 +371,7 @@ export async function getFullEmailById(emailId: string): Promise<EmailResult | n
         "bodyValues",
         "threadId",
       ],
+      fetchAllBodyValues: true,
     })
 
     const properties = email.list.flatMap((e) => e)[0];
@@ -379,8 +381,9 @@ export async function getFullEmailById(emailId: string): Promise<EmailResult | n
     }
 
     const { id, subject, bodyValues, from, to, cc, bcc, receivedAt, threadId } = properties;
-    const bodyValueId = bodyValues ? bodyValues["body"] : null;
-    const body = bodyValueId ? bodyValueId.value : "";
+    // JMAP part IDs are numeric strings ("1", "2", etc.) - take the first text part value
+    const bodyValue = bodyValues ? Object.values(bodyValues)[0] : null;
+    const body = typeof (bodyValue as any)?.value === "string" ? (bodyValue as any).value : "";
 
     const result: EmailResult = {
       id,
@@ -397,6 +400,93 @@ export async function getFullEmailById(emailId: string): Promise<EmailResult | n
     return result;
   } catch (error) {
     console.error("Error fetching full email via JMAP:", error);
+    return null;
+  }
+}
+
+/**
+ * Retrieve a single email by ID, but only if it exists in the Sent mailbox.
+ * This is useful for IDs returned by searchSentEmails, which are discovered via
+ * a Sent-scoped query and may not always resolve through a generic Email/get.
+ */
+export async function getSentEmailById(emailId: string): Promise<EmailResult | null> {
+  const client = await getJmapClient();
+
+  if (!client) {
+    console.log("JMAP not enabled or configured, skipping getSentEmailById");
+    return null;
+  }
+
+  try {
+    const accountId = await client.getPrimaryAccount();
+
+    const [mailboxes] = await client.api.Mailbox.get({
+      accountId,
+      properties: ["id", "name", "role"],
+    }, // @ts-ignore TS bug
+    {
+      using: ["urn:ietf:params:jmap:core"],
+    });
+
+    const sentMailbox = mailboxes.list
+      .flatMap((e) => e)
+      .find((m) => m.role === "sent");
+
+    if (!sentMailbox) {
+      console.log("No Sent mailbox found while fetching sent email by ID");
+      return null;
+    }
+
+    // @ts-ignore TS bug - fetchAllBodyValues not in jmap-jam typings, required by JMAP RFC 8621
+    const [email] = await (client.api.Email.get as any)({
+      ids: [emailId],
+      accountId,
+      properties: [
+        "id",
+        "subject",
+        "from",
+        "to",
+        "cc",
+        "bcc",
+        "receivedAt",
+        "bodyValues",
+        "threadId",
+        "mailboxIds",
+      ],
+      // Without this flag, JMAP returns bodyValues as an empty map {}
+      fetchAllBodyValues: true,
+    }, {
+      using: ["urn:ietf:params:jmap:core"],
+    });
+
+    const properties: any = email.list.flatMap((e: any) => e)[0];
+
+    if (!properties) {
+      return null;
+    }
+
+    const mailboxIds = properties.mailboxIds ? Object.keys(properties.mailboxIds) : [];
+    if (!mailboxIds.includes(sentMailbox.id)) {
+      return null;
+    }
+
+    const { id, subject, bodyValues, from, to, cc, bcc, receivedAt, threadId } = properties;
+    const bodyValue: any = bodyValues ? Object.values(bodyValues)[0] : null;
+    const body = typeof bodyValue?.value === "string" ? bodyValue.value : "";
+
+    return {
+      id,
+      subject: subject || "(No subject)",
+      from: from?.[0]?.email || "unknown",
+      to: to?.map((addr: any) => addr.email) || [],
+      cc: cc?.map((addr: any) => addr.email) || [],
+      bcc: bcc?.map((addr: any) => addr.email) || [],
+      date: new Date(receivedAt || new Date()),
+      body,
+      threadId: threadId || id,
+    };
+  } catch (error) {
+    console.error("Error fetching sent email via JMAP:", error);
     return null;
   }
 }

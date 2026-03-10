@@ -262,6 +262,66 @@ export interface AiJob {
   updatedAt: Date;
 }
 
+export interface AiTelemetryToolCall {
+  id: number;
+  telemetryRunId: number;
+  toolCallId?: string;
+  toolName: string;
+  stepNumber?: number;
+  success: boolean;
+  durationMs?: number;
+  argsJson?: unknown;
+  resultJson?: unknown;
+  error?: string;
+  createdAt: Date;
+}
+
+export interface AiTelemetryStep {
+  id: number;
+  telemetryRunId: number;
+  stepNumber: number;
+  modelProvider?: string;
+  modelId?: string;
+  finishReason?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  durationMs?: number;
+  promptPreview?: string;
+  outputPreview?: string;
+  providerMetadata?: unknown;
+  toolCallsJson?: unknown;
+  createdAt: Date;
+}
+
+export interface AiTelemetryRun {
+  id: number;
+  jobId: number;
+  functionId: string;
+  operation: string;
+  modelProvider?: string;
+  modelId?: string;
+  status: string;
+  metadata?: Record<string, any>;
+  inputPreview?: string;
+  outputPreview?: string;
+  responseText?: string;
+  finishReason?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  totalDurationMs?: number;
+  error?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  steps?: AiTelemetryStep[];
+  toolCalls?: AiTelemetryToolCall[];
+}
+
+export interface AiJobDebug extends AiJob {
+  telemetryRuns?: AiTelemetryRun[];
+}
+
 export interface CreateAiJobInput {
   type: AiJobType;
   parameters?: Record<string, any>;

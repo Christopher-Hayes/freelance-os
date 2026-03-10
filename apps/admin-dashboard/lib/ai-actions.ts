@@ -1,6 +1,12 @@
 "use server";
 
-import { generateText, generateObject, tool, Experimental_Agent as Agent, stepCountIs } from "ai";
+import {
+  generateText,
+  tool,
+  ToolLoopAgent as Agent,
+  Output,
+  stepCountIs,
+} from "ai";
 import { z } from "zod";
 import { getAiModel } from "@/lib/ai-provider";
 import { prisma } from "@freelance-os/database";
@@ -8,6 +14,108 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import { headers } from 'next/headers';
 import { isJmapEnabled } from "@/lib/jmap-provider";
 import { createEmailSearchTools, createSentEmailTools } from "@/lib/jmap-actions";
+import {
+  createTelemetryRun,
+  recordTelemetryStep,
+  finishTelemetryRun,
+  markAiTelemetryFailed,
+} from "@/lib/ai-telemetry";
+
+type DebugTelemetryOptions = {
+  jobId?: number;
+  functionId: string;
+  metadata?: Record<string, unknown>;
+  inputPreview?: unknown;
+  operation?: string;
+};
+
+/**
+ * Create a telemetry run (if a jobId is provided) and return the runId.
+ * Returns undefined when telemetry is not requested.
+ */
+async function maybeCreateTelemetryRun(
+  telemetry?: DebugTelemetryOptions
+): Promise<number | undefined> {
+  if (!telemetry?.jobId) return undefined;
+
+  return createTelemetryRun({
+    jobId: telemetry.jobId,
+    functionId: telemetry.functionId,
+    operation: telemetry.operation,
+    metadata: telemetry.metadata,
+    inputPreview:
+      typeof telemetry.inputPreview === "string"
+        ? telemetry.inputPreview
+        : JSON.stringify(telemetry.inputPreview, null, 2),
+  });
+}
+
+async function generateTextWithTelemetry(
+  params: Parameters<typeof generateText>[0],
+  telemetry?: DebugTelemetryOptions
+) {
+  const runId = await maybeCreateTelemetryRun(telemetry);
+
+  try {
+    const result = await generateText({
+      ...params,
+      // Wire the SDK's native onStepFinish callback to record each step
+      onStepFinish: runId
+        ? async (event) => {
+            await recordTelemetryStep(runId, event);
+          }
+        : params.onStepFinish,
+    });
+
+    // After completion, record summary from the result object
+    if (runId) {
+      await finishTelemetryRun(runId, result as unknown as Record<string, unknown>);
+    }
+
+    return result;
+  } catch (error) {
+    if (runId) {
+      await markAiTelemetryFailed(runId, error);
+    }
+    throw error;
+  }
+}
+
+async function generateObjectWithTelemetry<TSchema extends z.ZodTypeAny>(
+  params: {
+    model: Awaited<ReturnType<typeof getAiModel>>;
+    schema: TSchema;
+    prompt: string;
+  },
+  telemetry?: DebugTelemetryOptions
+): Promise<{ object: z.infer<TSchema> }> {
+  const runId = await maybeCreateTelemetryRun(telemetry);
+
+  try {
+    const result = await generateText({
+      model: params.model,
+      output: Output.object({ schema: params.schema }),
+      prompt: params.prompt,
+      // Wire onStepFinish so structured-output calls also record steps
+      onStepFinish: runId
+        ? async (event) => {
+            await recordTelemetryStep(runId, event);
+          }
+        : undefined,
+    });
+
+    if (runId) {
+      await finishTelemetryRun(runId, result as unknown as Record<string, unknown>);
+    }
+
+    return { object: result.output as z.infer<TSchema> };
+  } catch (error) {
+    if (runId) {
+      await markAiTelemetryFailed(runId, error);
+    }
+    throw error;
+  }
+}
 
 /**
  * Generate code snippet for API endpoint using AI
@@ -23,7 +131,7 @@ export async function generateCode(endpoint: {
     description?: string;
   }>;
   body?: string;
-}, language: string): Promise<string> {
+}, language: string, telemetry?: DebugTelemetryOptions): Promise<string> {
   const model = await getAiModel();
   const origin = (await headers()).get("origin") || "http://localhost:3010";
 
@@ -66,10 +174,13 @@ Use ONLY the query parameters listed above - DO NOT fabricate or add additional 
 Prefer working example values for query parameters and body over placeholders.
 Use the full URL: ${origin}${endpoint.path}`;
 
-  const { text } = await generateText({
+  const { text } = await generateTextWithTelemetry({
     model,
     prompt,
-  });
+  }, telemetry ? {
+    ...telemetry,
+    inputPreview: { endpoint, language },
+  } : undefined);
 
   return text.trim();
 }
@@ -81,6 +192,7 @@ Use the full URL: ${origin}${endpoint.path}`;
 export async function generateAutofillSuggestions(params: {
   date: string;
   projectIds?: number[];
+  debugJobId?: number;
 }): Promise<{
   suggestions: Array<{
     projectId: number;
@@ -269,10 +381,25 @@ Guidelines:
 
   if (!jmapIsEnabled) {
     // No email access — use simple generateObject
-    const { object } = await generateObject({
+    const { object } = await generateObjectWithTelemetry({
       model: aiModel,
       schema: autofillResponseSchema,
       prompt: basePrompt,
+    }, {
+      jobId: params.debugJobId,
+      functionId: "ai.autofill.generateObject",
+      operation: "generateObject",
+      metadata: {
+        workflow: "autofill_time_entries",
+        hasJmap: false,
+        date: params.date,
+      },
+      inputPreview: {
+        date: params.date,
+        projectIds: params.projectIds,
+        activityCount: sessions.length,
+        mergedCount: sortedByDuration.length,
+      },
     });
 
     return {
@@ -283,7 +410,27 @@ Guidelines:
   }
 
   // Use an agent with sent email tools for richer context
-  const sentEmailTools = createSentEmailTools(startInstant, endInstant);
+  const sentEmailTools = await createSentEmailTools(startInstant, endInstant);
+
+  // Create telemetry run for the agent path
+  const agentRunId = params.debugJobId
+    ? await maybeCreateTelemetryRun({
+        jobId: params.debugJobId,
+        functionId: "ai.autofill.agent",
+        operation: "generateText",
+        metadata: {
+          workflow: "autofill_time_entries",
+          hasJmap: true,
+          date: params.date,
+        },
+        inputPreview: JSON.stringify({
+          date: params.date,
+          projectIds: params.projectIds,
+          activityCount: sessions.length,
+          mergedCount: sortedByDuration.length,
+        }, null, 2),
+      })
+    : undefined;
 
   const autofillAgent = new Agent({
     model: aiModel,
@@ -291,10 +438,7 @@ Guidelines:
     tools: {
       ...sentEmailTools,
     },
-  });
-
-  const result = await autofillAgent.generate({
-    system: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
+    instructions: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
 
 Your process:
 1. Review the activity sessions and available projects
@@ -313,12 +457,34 @@ IMPORTANT: After gathering email context, output your final answer as a valid JS
 ${JSON.stringify(autofillResponseSchema.shape, null, 2)}
 
 The suggestions array must contain objects with: projectId (number), description (string), startTime (ISO string), endTime (ISO string), billable (boolean).`,
+    // Wire onStepFinish for agent telemetry
+    onStepFinish: agentRunId
+      ? async (event) => {
+          await recordTelemetryStep(agentRunId, event);
+        }
+      : undefined,
+  });
+
+  let result: Awaited<ReturnType<typeof autofillAgent.generate>>;
+  try {
+    result = await autofillAgent.generate({
     prompt: `${basePrompt}
 
 You have access to tools that can search the user's Sent folder for emails sent today and estimate how long each email took to compose. Use them to discover additional billable work from client correspondence.
 
 After using the tools, provide your final suggestions as a JSON object with a "suggestions" array.`,
-  });
+    });
+
+    // Record completion telemetry for the agent run
+    if (agentRunId) {
+      await finishTelemetryRun(agentRunId, result as unknown as Record<string, unknown>);
+    }
+  } catch (error) {
+    if (agentRunId) {
+      await markAiTelemetryFailed(agentRunId, error);
+    }
+    throw error;
+  }
 
   // Parse the structured output from the agent's text response
   let suggestions: Array<{
@@ -339,7 +505,7 @@ After using the tools, provide your final suggestions as a JSON object with a "s
   } catch (parseError) {
     console.error("Failed to parse agent suggestions, falling back to generateObject:", parseError);
     // Fallback: re-run with generateObject using the agent's gathered context
-    const { object } = await generateObject({
+    const { object } = await generateObjectWithTelemetry({
       model: aiModel,
       schema: autofillResponseSchema,
       prompt: `${basePrompt}
@@ -348,6 +514,22 @@ Additional context from email analysis:
 ${result.text}
 
 Based on ALL the above (activity sessions AND email context), generate the final time entry suggestions.`,
+    }, {
+      jobId: params.debugJobId,
+      functionId: "ai.autofill.fallbackGenerateObject",
+      operation: "generateObject",
+      metadata: {
+        workflow: "autofill_time_entries",
+        hasJmap: true,
+        fallback: true,
+        date: params.date,
+      },
+      inputPreview: {
+        date: params.date,
+        projectIds: params.projectIds,
+        activityCount: sessions.length,
+        mergedCount: sortedByDuration.length,
+      },
     });
     suggestions = object.suggestions;
   }
@@ -445,7 +627,7 @@ export async function generateWeeklySummary(params: {
     description: string | null;
     hours: number;
   }>;
-}): Promise<string> {
+}, telemetry?: DebugTelemetryOptions): Promise<string> {
   const model = await getAiModel();
   
   // Convert string dates to Temporal.PlainDate
@@ -504,7 +686,7 @@ export async function generateWeeklySummary(params: {
 
   if (!jmapIsEnabled) {
     // Fallback to simple generation without email context
-    const { text } = await generateText({
+    const { text } = await generateTextWithTelemetry({
       model,
       system: `You are writing a professional weekly summary for a client invoice.
 
@@ -529,20 +711,26 @@ Time Entries:
 ${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
 
 Generate the weekly summary now:`,
-    });
+    }, telemetry ? {
+      ...telemetry,
+      inputPreview: {
+        projectId: params.projectId,
+        weekStart: params.weekStart,
+        weekEnd: params.weekEnd,
+        entryCount: params.entries.length,
+      },
+    } : undefined);
 
     return text.trim();
   }
 
+  const summaryTools = await createEmailSearchTools(weekStartInstant, weekEndInstant);
+
   const summaryAgent = new Agent({
     model: model,
     stopWhen: stepCountIs(10),
-    tools: createEmailSearchTools(weekStartInstant, weekEndInstant),
-  });
-
-  // Use generateText with tools for intelligent email gathering
-  const result = await summaryAgent.generate({
-    system: `You are a professional assistant creating client-friendly weekly summaries for invoices.
+    tools: summaryTools,
+    instructions: `You are a professional assistant creating client-friendly weekly summaries for invoices.
 
 Your process:
 1. Analyze the time entries to understand what work was done this week
@@ -569,6 +757,10 @@ Summary writing guidelines:
 - Use email context to enrich with specific deliverables discussed
 
 Always end by providing your final summary as plain text.`,
+  });
+
+  // Use generateText with tools for intelligent email gathering
+  const result = await summaryAgent.generate({
     prompt: `${projectContext}
 Week: ${weekStart.toString()} to ${weekEnd.toString()}
 Total Hours: ${totalHours.toFixed(1)} hours
@@ -592,7 +784,7 @@ export async function generateTimeEntryDescription(params: {
   projectId: number;
   startTime: string; // ISO timestamp (Instant format)
   endTime: string;   // ISO timestamp (Instant format)
-}): Promise<string> {
+}, telemetry?: DebugTelemetryOptions): Promise<string> {
   const model = await getAiModel();
 
   // Fetch project details
@@ -681,7 +873,7 @@ export async function generateTimeEntryDescription(params: {
     projectContext += `\nMatching hints: ${project.privateNotes}`;
   }
 
-  const { text } = await generateText({
+  const { text } = await generateTextWithTelemetry({
     model,
     prompt: `You are a helpful assistant that analyzes computer activity and generates concise descriptions for time entries.
 
@@ -708,7 +900,10 @@ Guidelines:
 - Do not use first person ("I did X"), just describe the work
 
 Provide ONLY the description text, no preamble or explanation.`,
-  });
+  }, telemetry ? {
+    ...telemetry,
+    inputPreview: params,
+  } : undefined);
 
   return text.trim();
 }
