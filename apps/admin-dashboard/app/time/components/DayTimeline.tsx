@@ -25,13 +25,186 @@ import {
   mergeAdjacentSessions,
   buildAppColorMap,
 } from "./timeline/utils";
-import {
-  calculateActivityOverlaps,
-  calculateTimeEntryOverlaps,
-  type OverlapPosition,
-} from "./timeline/overlapCalculations";
-import { debounce, throttle, isAppHidden, formatAppTitle } from "@/lib/util";
+import { calculateActivityOverlaps, calculateTimeEntryOverlaps } from "./timeline/overlapCalculations";
+import { throttle, isAppHidden, formatAppTitle } from "@/lib/util";
 import { authFetch } from '@/lib/util';
+
+const MINIMAP_COLUMNS = 2;
+const MINIMAP_ROWS = 60;
+const MINIMAP_DOT_SIZE = 5;
+const MINIMAP_GRID_TEMPLATE_ROWS = `repeat(${MINIMAP_ROWS}, minmax(0, 1fr))`;
+const MINIMAP_HEIGHT_PX = 640;
+
+function getMinimapRowIndex(totalMinutes: number) {
+  return Math.max(0, Math.min(MINIMAP_ROWS - 1, Math.floor((totalMinutes / (24 * 60)) * MINIMAP_ROWS)));
+}
+
+function ActivityScrollbarMinimap({
+  sessions,
+  colorMap,
+  scrollTop,
+  viewportHeight,
+  scrollHeight,
+  onJumpToRatio,
+  onDragViewport,
+  isDraggingViewport,
+  setIsDraggingViewport,
+}: {
+  sessions: ActivitySessionType[];
+  colorMap: Map<string, string>;
+  scrollTop: number;
+  viewportHeight: number;
+  scrollHeight: number;
+  onJumpToRatio: (ratio: number) => void;
+  onDragViewport: (deltaRatio: number) => void;
+  isDraggingViewport: boolean;
+  setIsDraggingViewport: (isDragging: boolean) => void;
+}) {
+  const minimapCells = useMemo(() => {
+    const tz = Temporal.Now.timeZoneId();
+    const cells = Array.from({ length: MINIMAP_ROWS * MINIMAP_COLUMNS }, () => ({
+      color: null as string | null,
+      strength: 0,
+      title: "No activity",
+    }));
+
+    sessions.forEach((session) => {
+        const start = Temporal.Instant.from(session.startTime).toZonedDateTimeISO(tz);
+        let end = Temporal.Instant.from(session.endTime).toZonedDateTimeISO(tz);
+        const endOfDay = start.withPlainTime(Temporal.PlainTime.from("23:59:59.999"));
+
+        if (Temporal.ZonedDateTime.compare(end, endOfDay) > 0) {
+          end = endOfDay;
+        }
+
+        const startMinutes = start.hour * 60 + start.minute;
+        const endMinutes = Math.max(
+          startMinutes,
+          end.hour * 60 + end.minute + (end.second > 0 || end.millisecond > 0 ? 1 : 0)
+        );
+        const durationMinutes = Math.max(
+          1,
+          Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n)
+        );
+        const startRow = getMinimapRowIndex(startMinutes);
+        const endRow = getMinimapRowIndex(endMinutes);
+        const preferredColumn = session.id % MINIMAP_COLUMNS;
+        const color = colorMap.get(session.appClass) ?? "rgb(107 114 128)";
+        const title = `${formatAppTitle(session.appClass)} • ${Math.round(durationMinutes)}m`;
+
+        for (let row = startRow; row <= endRow; row++) {
+          const primaryIndex = row * MINIMAP_COLUMNS + preferredColumn;
+          const secondaryIndex = row * MINIMAP_COLUMNS + ((preferredColumn + 1) % MINIMAP_COLUMNS);
+          const strength = durationMinutes + (row === startRow ? 0.5 : 0);
+
+          if (strength >= cells[primaryIndex]!.strength) {
+            cells[primaryIndex] = { color, strength, title };
+          } else if (strength >= cells[secondaryIndex]!.strength) {
+            cells[secondaryIndex] = { color, strength, title };
+          }
+        }
+      });
+
+    return cells;
+  }, [colorMap, sessions]);
+
+  if (minimapCells.length === 0) {
+    return null;
+  }
+
+  const viewportHeightPercent = Math.max(
+    (viewportHeight / Math.max(scrollHeight, 1)) * 100,
+    8
+  );
+  const maxViewportTop = Math.max(0, 100 - viewportHeightPercent);
+  const viewportTravelRatio = Math.max(maxViewportTop / 100, 0.0001);
+  const viewportTop = Math.max(
+    0,
+    Math.min((scrollTop / Math.max(scrollHeight, 1)) * 100, maxViewportTop)
+  );
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+
+    if (target.dataset.viewport === "true") {
+      target.setPointerCapture(event.pointerId);
+      target.dataset.dragStartY = String(event.clientY);
+      setIsDraggingViewport(true);
+      return;
+    }
+
+    onJumpToRatio(ratio);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.viewport !== "true" || !target.hasPointerCapture(event.pointerId)) {
+      return;
+    }
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const dragStartY = Number(target.dataset.dragStartY ?? event.clientY);
+    const deltaRatio = ((event.clientY - dragStartY) / bounds.height) / viewportTravelRatio;
+
+    target.dataset.dragStartY = String(event.clientY);
+    onDragViewport(deltaRatio);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.viewport === "true" && target.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+      delete target.dataset.dragStartY;
+    }
+
+    setIsDraggingViewport(false);
+  };
+
+  return (
+    <div className="sticky top-0 z-20 p-1 flex bg-gray-100 border-l border-gray-300 shrink-0 justify-center self-stretch">
+      <div
+        className="relative h-full w-4 cursor-pointer"
+        style={{ height: `${MINIMAP_HEIGHT_PX}px` }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div
+          className="grid h-full w-4 grid-cols-2 gap-x-0.5 gap-y-px"
+        style={{ gridTemplateRows: MINIMAP_GRID_TEMPLATE_ROWS }}
+        >
+          {minimapCells.map((cell, index) => (
+            <div
+              key={index}
+              className="rounded-xs bg-gray-500/20 dark:border-gray-600/40 dark:bg-gray-600/20"
+              style={{
+                width: `${MINIMAP_DOT_SIZE}px`,
+                height: `${MINIMAP_DOT_SIZE}px`,
+                backgroundColor: cell.color ?? undefined,
+                borderColor: cell.color ?? undefined,
+                opacity: cell.color ? 0.9 : 0.28,
+              }}
+              title={cell.title}
+            />
+          ))}
+        </div>
+        <div
+          data-viewport="true"
+          className={`absolute inset-x-0 rounded-sm border border-gray-900/35 bg-gray-700/20 shadow-sm backdrop-blur-[1px] dark:border-gray-100/25 dark:bg-gray-100/10 ${isDraggingViewport ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{
+            top: `${viewportTop}%`,
+            height: `${Math.min(viewportHeightPercent, 100 - viewportTop)}%`,
+            minHeight: "36px",
+          }}
+          title="Visible timeline area"
+        />
+      </div>
+    </div>
+  );
+}
 
 // Memoized component for activity sessions timeline - only re-renders when sessions change
 const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
@@ -197,6 +370,12 @@ export default function DayTimeline({
   const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
   const [importingRescueTime, setImportingRescueTime] = useState(false);
   const [appContextMenu, setAppContextMenu] = useState<AppSessionContextMenuState>(null);
+  const [isDraggingMinimapViewport, setIsDraggingMinimapViewport] = useState(false);
+  const [activityScrollMetrics, setActivityScrollMetrics] = useState({
+    scrollTop: 0,
+    viewportHeight: MINIMAP_HEIGHT_PX,
+    scrollHeight: 24 * HOUR_HEIGHT + 40,
+  });
 
   // Refs
   const activityScrollRef = useRef<HTMLDivElement>(null);
@@ -212,6 +391,16 @@ export default function DayTimeline({
   const visibleSessions = useMemo(
     () => sessions.filter((session) => !isAppHidden(session.appClass)),
     [sessions]
+  );
+
+  const mergedVisibleSessions = useMemo(
+    () => mergeAdjacentSessions(visibleSessions),
+    [visibleSessions]
+  );
+
+  const minimapColorMap = useMemo(
+    () => buildAppColorMap(mergedVisibleSessions),
+    [mergedVisibleSessions]
   );
 
   useEffect(() => {
@@ -326,6 +515,19 @@ export default function DayTimeline({
       }
     }
   }, [selectedDate]);
+
+  useEffect(() => {
+    const activityContainer = activityScrollRef.current;
+    if (!activityContainer) {
+      return;
+    }
+
+    setActivityScrollMetrics({
+      scrollTop: activityContainer.scrollTop,
+      viewportHeight: activityContainer.clientHeight,
+      scrollHeight: activityContainer.scrollHeight,
+    });
+  }, [selectedDate, loading, mergedVisibleSessions]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -942,6 +1144,12 @@ export default function DayTimeline({
   };
 
   const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setActivityScrollMetrics({
+      scrollTop: e.currentTarget.scrollTop,
+      viewportHeight: e.currentTarget.clientHeight,
+      scrollHeight: e.currentTarget.scrollHeight,
+    });
+
     if (timelineRef.current) {
       timelineRef.current.scrollTop = e.currentTarget.scrollTop;
     }
@@ -951,6 +1159,51 @@ export default function DayTimeline({
     if (activityScrollRef.current) {
       activityScrollRef.current.scrollTop = e.currentTarget.scrollTop;
     }
+  };
+
+  const jumpActivityMinimapToRatio = (ratio: number) => {
+    const activityContainer = activityScrollRef.current;
+    if (!activityContainer) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(activityContainer.scrollHeight - activityContainer.clientHeight, 0);
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
+
+    activityContainer.scrollTop = nextScrollTop;
+
+    if (timelineRef.current) {
+      timelineRef.current.scrollTop = nextScrollTop;
+    }
+
+    setActivityScrollMetrics({
+      scrollTop: nextScrollTop,
+      viewportHeight: activityContainer.clientHeight,
+      scrollHeight: activityContainer.scrollHeight,
+    });
+  };
+
+  const dragActivityMinimapViewport = (deltaRatio: number) => {
+    const activityContainer = activityScrollRef.current;
+    if (!activityContainer) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(activityContainer.scrollHeight - activityContainer.clientHeight, 0);
+    const scrollDelta = deltaRatio * maxScrollTop;
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, activityContainer.scrollTop + scrollDelta));
+
+    activityContainer.scrollTop = nextScrollTop;
+
+    if (timelineRef.current) {
+      timelineRef.current.scrollTop = nextScrollTop;
+    }
+
+    setActivityScrollMetrics({
+      scrollTop: nextScrollTop,
+      viewportHeight: activityContainer.clientHeight,
+      scrollHeight: activityContainer.scrollHeight,
+    });
   };
 
   // Render time entries with ghost entry
@@ -1098,26 +1351,39 @@ export default function DayTimeline({
               )}
             </div>
             <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
-              <div
-                ref={activityScrollRef}
-                className="relative pr-4 overflow-y-auto overflow-x-visible"
-                style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
-                onScroll={handleActivityScroll}
-              >
-                <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
-                  <ActivitySessionsTimeline
-                    sessions={visibleSessions}
-                    loading={loading}
-                    onImportRescueTime={handleImportFromRescueTime}
-                    importingRescueTime={importingRescueTime}
-                    onSessionContextMenu={handleSessionContextMenu}
-                  />
-                  <CurrentTimeLine
-                    selectedDate={selectedDate}
-                    isClient={isClient}
-                    currentTime={currentTime}
-                  />
+              <div className="flex h-full items-stretch">
+                <div
+                  ref={activityScrollRef}
+                  className="relative min-w-0 flex-1 overflow-y-auto overflow-x-visible pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
+                  onScroll={handleActivityScroll}
+                >
+                  <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
+                    <ActivitySessionsTimeline
+                      sessions={visibleSessions}
+                      loading={loading}
+                      onImportRescueTime={handleImportFromRescueTime}
+                      importingRescueTime={importingRescueTime}
+                      onSessionContextMenu={handleSessionContextMenu}
+                    />
+                    <CurrentTimeLine
+                      selectedDate={selectedDate}
+                      isClient={isClient}
+                      currentTime={currentTime}
+                    />
+                  </div>
                 </div>
+                <ActivityScrollbarMinimap
+                  sessions={mergedVisibleSessions}
+                  colorMap={minimapColorMap}
+                  scrollTop={activityScrollMetrics.scrollTop}
+                  viewportHeight={activityScrollMetrics.viewportHeight}
+                  scrollHeight={activityScrollMetrics.scrollHeight}
+                  onJumpToRatio={jumpActivityMinimapToRatio}
+                  onDragViewport={dragActivityMinimapViewport}
+                  isDraggingViewport={isDraggingMinimapViewport}
+                  setIsDraggingViewport={setIsDraggingMinimapViewport}
+                />
               </div>
             </div>
           </div>

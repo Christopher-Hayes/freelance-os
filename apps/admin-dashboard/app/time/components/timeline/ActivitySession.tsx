@@ -12,6 +12,8 @@ import {
 } from "./utils";
 import { formatAppTitle } from "@/lib/util";
 
+const REDACTION_MODE = false;
+
 interface ActivitySession {
   id: number;
   startTime: string;
@@ -137,7 +139,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
                       {interval.timeLabel}
                     </span>
                     <span
-                      className="text-[10px] truncate opacity-90"
+                      className={`text-[10px] truncate opacity-90 ${REDACTION_MODE ? 'blur-xs' : ''}`}
                       style={{ color: appColor }}
                     >
                       {interval.title}
@@ -195,7 +197,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
           {(height > 35 && session.windowTitle) ? (
             <>
               <div className="font-semibold truncate mb-0.5">{formattedAppTitle}</div>
-              <div className="w-full text-[10px] opacity-80">
+              <div className={`w-full text-[10px] opacity-80 ${REDACTION_MODE ? 'blur-xs' : ''}`}>
                 {session.windowTitle.split(' / ').map((title, index) => (
                   <div key={index} className="truncate">
                     {title.slice(0, title.lastIndexOf(' - ') > 0 ? title.lastIndexOf(' - ') : title.length)}
@@ -213,7 +215,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
                 >
                 <span>{formattedAppTitle}</span>
               </div>
-              <span className="pl-1 text-[10px] opacity-90">
+              <span className={`pl-1 text-[10px] opacity-90 ${REDACTION_MODE ? 'blur-xs' : ''}`}>
                 {session.windowTitle &&
                   session.windowTitle !== formattedAppTitle
                   ? `${session.windowTitle.split(' / ').map(title => title.slice(0, title.indexOf(' - ') > 0 ? title.indexOf(' - ') : title.length)).join(' - ')}` : ''}
