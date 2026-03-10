@@ -30,7 +30,7 @@ import {
   calculateTimeEntryOverlaps,
   type OverlapPosition,
 } from "./timeline/overlapCalculations";
-import { debounce, throttle, isAppHidden } from "@/lib/util";
+import { debounce, throttle, isAppHidden, formatAppTitle } from "@/lib/util";
 import { authFetch } from '@/lib/util';
 
 // Memoized component for activity sessions timeline - only re-renders when sessions change
@@ -39,11 +39,13 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
   loading,
   onImportRescueTime,
   importingRescueTime,
+  onSessionContextMenu,
 }: {
   sessions: ActivitySessionType[];
   loading: boolean;
   onImportRescueTime: () => void;
   importingRescueTime: boolean;
+  onSessionContextMenu: (event: React.MouseEvent<HTMLDivElement>, session: ActivitySessionType) => void;
 }) {
   // Memoize the merged sessions calculation
   const mergedSessions = useMemo(() => mergeAdjacentSessions(sessions), [sessions]);
@@ -130,6 +132,7 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
                 session={session}
                 position={activityOverlapPositions[session.id]!}
                 colorMap={appColorMap}
+                onContextMenu={onSessionContextMenu}
               />
             ))}
         </div>
@@ -147,6 +150,12 @@ export default function DayTimeline({
   selectedDate,
   onDateChange,
 }: DayTimelineProps) {
+  type AppSessionContextMenuState = {
+    x: number;
+    y: number;
+    session: ActivitySessionType;
+  } | null;
+
   const { jobs, createJob, refreshJobs } = useJobs();
 
   // State
@@ -187,6 +196,7 @@ export default function DayTimeline({
   const [loadingAutofill, setLoadingAutofill] = useState(false);
   const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
   const [importingRescueTime, setImportingRescueTime] = useState(false);
+  const [appContextMenu, setAppContextMenu] = useState<AppSessionContextMenuState>(null);
 
   // Refs
   const activityScrollRef = useRef<HTMLDivElement>(null);
@@ -203,6 +213,35 @@ export default function DayTimeline({
     () => sessions.filter((session) => !isAppHidden(session.appClass)),
     [sessions]
   );
+
+  useEffect(() => {
+    if (!appContextMenu) {
+      return;
+    }
+
+    const handleDismiss = () => setAppContextMenu(null);
+
+    window.addEventListener("click", handleDismiss);
+    window.addEventListener("scroll", handleDismiss, true);
+    window.addEventListener("resize", handleDismiss);
+
+    return () => {
+      window.removeEventListener("click", handleDismiss);
+      window.removeEventListener("scroll", handleDismiss, true);
+      window.removeEventListener("resize", handleDismiss);
+    };
+  }, [appContextMenu]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAppContextMenu(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
 
   // Effects
   useEffect(() => {
@@ -453,6 +492,138 @@ export default function DayTimeline({
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchSettings = async () => {
+    const response = await authFetch("/api/settings/all");
+    if (!response.ok) {
+      throw new Error("Failed to load settings");
+    }
+
+    return response.json();
+  };
+
+  const updateSettings = async (payload: Record<string, unknown>) => {
+    const response = await authFetch("/api/settings/all", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update settings");
+    }
+
+    return response.json();
+  };
+
+  const syncSettingsToLocalStorage = (settings: { appTitleRenames?: unknown; hiddenAppClasses?: unknown }) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (Array.isArray(settings.appTitleRenames)) {
+      window.localStorage.setItem("appTitleRenames", JSON.stringify(settings.appTitleRenames));
+    }
+
+    if (Array.isArray(settings.hiddenAppClasses)) {
+      window.localStorage.setItem("hiddenAppClasses", JSON.stringify(settings.hiddenAppClasses));
+    }
+  };
+
+  const showUndoToast = (message: string, undo: () => Promise<void>) => {
+    toast.success(message, {
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          try {
+            await undo();
+          } catch (error) {
+            console.error("Undo failed:", error);
+            toast.error("Undo failed");
+          }
+        },
+      },
+      duration: 6000,
+    });
+  };
+
+  const handleRenameApp = async (session: ActivitySessionType) => {
+    const currentFriendlyName = formatAppTitle(session.appClass);
+    const nextName = window.prompt(`Rename \"${currentFriendlyName}\"`, currentFriendlyName);
+
+    if (!nextName) {
+      return;
+    }
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      return;
+    }
+
+    try {
+      const settings = await fetchSettings();
+  const previousRenames = Array.isArray(settings.appTitleRenames) ? settings.appTitleRenames.filter((entry: unknown): entry is string => typeof entry === "string") : [];
+      const normalizedKey = session.appClass.toLowerCase();
+      const nextRenames = [
+  ...previousRenames.filter((entry: string) => entry.split("=")[0]?.trim().toLowerCase() !== normalizedKey),
+        `${session.appClass}=${trimmedName}`,
+      ];
+
+      const updatedSettings = await updateSettings({ appTitleRenames: nextRenames });
+      syncSettingsToLocalStorage(updatedSettings);
+      setAppContextMenu(null);
+      await fetchDayData();
+
+      showUndoToast(`Renamed ${currentFriendlyName} to ${trimmedName}`, async () => {
+        const undoneSettings = await updateSettings({ appTitleRenames: previousRenames });
+        syncSettingsToLocalStorage(undoneSettings);
+        await fetchDayData();
+        toast.success(`Restored ${currentFriendlyName}`);
+      });
+    } catch (error) {
+      console.error("Error renaming app:", error);
+      toast.error("Failed to rename app");
+    }
+  };
+
+  const handleHideApp = async (session: ActivitySessionType) => {
+    const currentFriendlyName = formatAppTitle(session.appClass);
+
+    try {
+      const settings = await fetchSettings();
+  const previousHiddenApps = Array.isArray(settings.hiddenAppClasses) ? settings.hiddenAppClasses.filter((entry: unknown): entry is string => typeof entry === "string") : [];
+      const normalizedKey = session.appClass.toLowerCase();
+  const nextHiddenApps = previousHiddenApps.some((entry: string) => entry.toLowerCase() === normalizedKey)
+        ? previousHiddenApps
+        : [...previousHiddenApps, session.appClass];
+
+      const updatedSettings = await updateSettings({ hiddenAppClasses: nextHiddenApps });
+      syncSettingsToLocalStorage(updatedSettings);
+      setAppContextMenu(null);
+      await fetchDayData();
+
+      showUndoToast(`Hid ${currentFriendlyName} from timeline and analytics`, async () => {
+        const undoneSettings = await updateSettings({ hiddenAppClasses: previousHiddenApps });
+        syncSettingsToLocalStorage(undoneSettings);
+        await fetchDayData();
+        toast.success(`Unhid ${currentFriendlyName}`);
+      });
+    } catch (error) {
+      console.error("Error hiding app:", error);
+      toast.error("Failed to hide app");
+    }
+  };
+
+  const handleSessionContextMenu = (event: React.MouseEvent<HTMLDivElement>, session: ActivitySessionType) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setAppContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      session,
+    });
   };
 
   // Manual refresh handler
@@ -939,6 +1110,7 @@ export default function DayTimeline({
                     loading={loading}
                     onImportRescueTime={handleImportFromRescueTime}
                     importingRescueTime={importingRescueTime}
+                    onSessionContextMenu={handleSessionContextMenu}
                   />
                   <CurrentTimeLine
                     selectedDate={selectedDate}
@@ -1017,6 +1189,37 @@ export default function DayTimeline({
             </div>
           </div>
         </div>
+
+        {appContextMenu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setAppContextMenu(null)} />
+            <div
+              className="fixed z-50 min-w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+              style={{ top: appContextMenu.y, left: appContextMenu.x }}
+              role="menu"
+            >
+              <div className="border-b border-gray-200 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+                {formatAppTitle(appContextMenu.session.appClass)}
+              </div>
+              <button
+                type="button"
+                className="flex w-full items-center rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                onClick={() => void handleRenameApp(appContextMenu.session)}
+                role="menuitem"
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                onClick={() => void handleHideApp(appContextMenu.session)}
+                role="menuitem"
+              >
+                Hide
+              </button>
+            </div>
+          </>
+        )}
 
         {creatingEntry && (
           <TimeEntryCreationDialog

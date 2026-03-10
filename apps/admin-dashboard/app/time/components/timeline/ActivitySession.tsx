@@ -26,10 +26,11 @@ interface ActivitySessionProps {
   session: ActivitySession;
   position: { column: number; totalColumns: number; columnSpan?: number };
   colorMap: Map<string, string>;
+  onContextMenu?: (event: React.MouseEvent<HTMLDivElement>, session: ActivitySession) => void;
 }
 
 // Memoized component - only re-renders if session or position changes
-const ActivitySession = memo(function ActivitySession({ session, position, colorMap }: ActivitySessionProps) {
+const ActivitySession = memo(function ActivitySession({ session, position, colorMap, onContextMenu }: ActivitySessionProps) {
   const getAppColor = (appClass: string): string => {
     // Use the color map if available, otherwise fall back to hash-based color
     return colorMap.get(appClass) || APP_COLORS[0]!;
@@ -86,6 +87,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
     return (
       <div
         className="timeline-session absolute z-10 border backdrop-blur-sm rounded overflow-hidden cursor-help"
+        onContextMenu={(event) => onContextMenu?.(event, session)}
         style={{
           top: `${top}px`,
           height: `${height}px`,
@@ -176,6 +178,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
   return (
     <div
       className={`timeline-session absolute z-10 flex ${height > 35 ? 'items-start' : 'items-center'} border backdrop-blur-sm rounded pr-1 overflow-hidden cursor-help`}
+      onContextMenu={(event) => onContextMenu?.(event, session)}
       style={{
         top: `${top}px`,
         height: `${height}px`,
