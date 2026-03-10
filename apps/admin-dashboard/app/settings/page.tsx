@@ -10,6 +10,7 @@ import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOptio
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 
 const MASK_VALUE = "••••••••";
+const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
 
 // Demo permissions available for API keys
 const availablePermissions = [
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
+  const [appTitleRenamesText, setAppTitleRenamesText] = useState("");
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
@@ -56,6 +58,7 @@ export default function SettingsPage() {
   const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const openaiTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const googleTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const appTitleRenamesTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -71,6 +74,14 @@ export default function SettingsPage() {
     fetchApiKeys();
   }, []);
 
+  const persistAppTitleRenames = (entries: string[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(APP_TITLE_RENAMES_STORAGE_KEY, JSON.stringify(entries));
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await authFetch("/api/settings/all");
@@ -81,6 +92,9 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
+  const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
+  setAppTitleRenamesText(appTitleRenames.join("\n"));
+  persistAppTitleRenames(appTitleRenames);
         setJmapToken(data.jmapToken || "");
         setCanReadMailbox(data.canReadMailbox || false);
         setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
@@ -116,6 +130,11 @@ export default function SettingsPage() {
 
       if (!response.ok) {
         throw new Error("Failed to save setting");
+      }
+
+      if (field === "appTitleRenames") {
+        const payload = typeof value === "string" ? JSON.parse(value) : [];
+        persistAppTitleRenames(Array.isArray(payload) ? payload : []);
       }
 
       toast.success("Saved successfully");
@@ -176,6 +195,23 @@ export default function SettingsPage() {
   const handleAiProviderChange = (value: AiProvider) => {
     setAiProvider(value);
     saveSetting("aiProvider", value);
+  };
+
+  const handleAppTitleRenamesChange = (value: string) => {
+    setAppTitleRenamesText(value);
+
+    if (appTitleRenamesTimerRef.current) {
+      clearTimeout(appTitleRenamesTimerRef.current);
+    }
+
+    appTitleRenamesTimerRef.current = setTimeout(() => {
+      const lines = value
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      saveSetting("appTitleRenames", JSON.stringify(lines));
+    }, 1000);
   };
 
   const handleJmapTokenChange = (value: string) => {
@@ -508,6 +544,34 @@ export default function SettingsPage() {
                 placeholder="https://yourwebsite.com"
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            App Name Display Overrides
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label
+                htmlFor="app_title_renames"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                Custom App Name Renames
+              </label>
+              <textarea
+                id="app_title_renames"
+                value={appTitleRenamesText}
+                onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
+                placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
+                rows={6}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+              />
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                One rename per line using <code className="rounded bg-gray-100 dark:bg-gray-700 px-1 py-0.5">rawAppClass=Display Name</code>. These are cosmetic only and override the built-in formatting when present.
+              </p>
             </div>
           </div>
         </div>

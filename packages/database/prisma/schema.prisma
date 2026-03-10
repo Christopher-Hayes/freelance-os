@@ -353,6 +353,7 @@ model Setting {
   id              Int         @id @default(autoincrement())
   key             String      @unique
   value           String      @db.Text
+  appTitleRenames String[]    @default([]) @map("app_title_renames") // Cosmetic app-class => display-name overrides as `raw=pretty`
   rescuetimeKey   String?     @map("rescuetime_key") @db.Text
   openaiKey       String?     @map("openai_key") @db.Text
   googleApiKey    String?     @map("google_api_key") @db.Text

@@ -2,6 +2,8 @@
 import { ActivitySession } from '@/app/time/components/timeline/utils';
 import { Temporal } from '@/lib/temporal-polyfill';
 
+const APP_TITLE_RENAMES_STORAGE_KEY = 'appTitleRenames';
+
 /**
  * Fetch wrapper that redirects to login on 401 Unauthorized
  * Use this for all authenticated API calls from client components
@@ -74,8 +76,54 @@ const APP_NAME_OVERRIDES: Record<string, string> = {
   'Soffice': 'LibreOffice',
 };
 
+function getUserAppTitleRenames(): Record<string, string> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const stored = window.localStorage.getItem(APP_TITLE_RENAMES_STORAGE_KEY);
+    if (!stored) {
+      return {};
+    }
+
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return {};
+    }
+
+    return parsed.reduce<Record<string, string>>((acc, entry) => {
+      if (typeof entry !== 'string') {
+        return acc;
+      }
+
+      const separatorIndex = entry.indexOf('=');
+      if (separatorIndex <= 0) {
+        return acc;
+      }
+
+      const source = entry.slice(0, separatorIndex).trim();
+      const target = entry.slice(separatorIndex + 1).trim();
+
+      if (source && target) {
+        acc[source.toLowerCase()] = target;
+      }
+
+      return acc;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
 export function formatAppTitle(appClass: string): string {
   let appName = appClass || "Unknown App";
+
+  const userOverrides = getUserAppTitleRenames();
+  const directUserOverride = userOverrides[appName.toLowerCase()];
+  if (directUserOverride) {
+    return directUserOverride;
+  }
 
   // Remove common prefixes
   for (const prefix of REMOVE_TITLE_PREFIXES) {
@@ -104,7 +152,7 @@ export function formatAppTitle(appClass: string): string {
   }
 
   // Apply name overrides
-  appName = APP_NAME_OVERRIDES[appName.toLowerCase()] || appName;
+  appName = userOverrides[appName.toLowerCase()] || APP_NAME_OVERRIDES[appName.toLowerCase()] || appName;
 
   return `${appName?.[0]?.toUpperCase() ?? ''}${appName.slice(1)}`;
 }

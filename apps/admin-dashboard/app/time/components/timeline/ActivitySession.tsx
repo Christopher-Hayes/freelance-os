@@ -58,6 +58,12 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
   const height = bottom - top;
 
   const durationMinutes = session.durationSeconds / 60;
+
+  if (durationMinutes <= 10) {
+    // Do not show very short sessions
+    return null;
+  }
+
   const hasMultipleSubSessions = session.subSessions && session.subSessions.length > 1;
   const useIntervalUI = durationMinutes >= INTERVAL_BREAKDOWN_THRESHOLD_MINUTES && hasMultipleSubSessions;
 
@@ -76,7 +82,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
   const appColor = getAppColor(session.appClass);
 
   // Render the interval breakdown UI for long merged sessions
-  if (useIntervalUI && intervals.length > 0) {
+  if (useIntervalUI) {
     return (
       <div
         className="timeline-session absolute z-10 border backdrop-blur-sm rounded overflow-hidden cursor-help"
@@ -102,7 +108,7 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
           {formatAppTitle(session.appClass)}
         </div>
 
-        <div className="relative mt-0.75 flex flex-col gap-px" style={{ borderColor: appColor }}>
+        <div className="relative mt-0.5 flex flex-col gap-px" style={{ borderColor: appColor }}>
           {/* 15-minute interval markers */}
           {intervals.map((interval, index) => {
             return (
