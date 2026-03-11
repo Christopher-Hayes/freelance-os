@@ -47,7 +47,7 @@ export async function getAiModel(): Promise<LanguageModel> {
       // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
       // but we'll set it in the environment for this process
       process.env.OPENAI_API_KEY = openaiKey;
-      return openai("gpt-5.4");
+      return openai("gpt-5.4")
   }
 }
 

@@ -2,7 +2,6 @@
 
 import {
   generateText,
-  tool,
   ToolLoopAgent as Agent,
   Output,
   stepCountIs,
@@ -28,6 +27,15 @@ type DebugTelemetryOptions = {
   inputPreview?: unknown;
   operation?: string;
 };
+
+const PROVIDER_OPTIONS = {
+  openai: {
+    reasoningEffort: "medium", // 'minimal' | 'low' | 'medium' | 'high'
+  },
+  google: {
+    reasoningEffort: "medium", // 'minimal' | 'low' | 'medium' | 'high'
+  },
+}
 
 /**
  * Create a telemetry run (if a jobId is provided) and return the runId.
@@ -62,8 +70,8 @@ async function generateTextWithTelemetry(
       // Wire the SDK's native onStepFinish callback to record each step
       onStepFinish: runId
         ? async (event) => {
-            await recordTelemetryStep(runId, event);
-          }
+          await recordTelemetryStep(runId, event);
+        }
         : params.onStepFinish,
     });
 
@@ -96,11 +104,12 @@ async function generateObjectWithTelemetry<TSchema extends z.ZodTypeAny>(
       model: params.model,
       output: Output.object({ schema: params.schema }),
       prompt: params.prompt,
+      providerOptions: PROVIDER_OPTIONS,
       // Wire onStepFinish so structured-output calls also record steps
       onStepFinish: runId
         ? async (event) => {
-            await recordTelemetryStep(runId, event);
-          }
+          await recordTelemetryStep(runId, event);
+        }
         : undefined,
     });
 
@@ -207,11 +216,11 @@ export async function generateAutofillSuggestions(params: {
   // Parse the date and convert to local timezone boundaries
   const plainDate = Temporal.PlainDate.from(params.date);
   const localTz = Temporal.Now.timeZoneId();
-  
+
   // Create start of day (00:00:00) and end of day (23:59:59.999) in local timezone
   const startOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("00:00:00"));
   const endOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("23:59:59.999"));
-  
+
   // Convert to ZonedDateTime in local timezone, then to Instant (UTC) for database query
   const startInstant = startOfDay.toZonedDateTime(localTz).toInstant();
   const endInstant = endOfDay.toZonedDateTime(localTz).toInstant();
@@ -255,32 +264,32 @@ export async function generateAutofillSuggestions(params: {
   // Fetch projects
   const projects = params.projectIds
     ? await prisma.project.findMany({
-        where: {
-          id: { in: params.projectIds },
-          status: { in: ["active", "on_hold"] },
-        },
-        include: {
-          client: {
-            select: {
-              name: true,
-              email: true,
-            },
+      where: {
+        id: { in: params.projectIds },
+        status: { in: ["active", "on_hold"] },
+      },
+      include: {
+        client: {
+          select: {
+            name: true,
+            email: true,
           },
         },
-      })
+      },
+    })
     : await prisma.project.findMany({
-        where: {
-          status: { in: ["active", "on_hold"] },
-        },
-        include: {
-          client: {
-            select: {
-              name: true,
-              email: true,
-            },
+      where: {
+        status: { in: ["active", "on_hold"] },
+      },
+      include: {
+        client: {
+          select: {
+            name: true,
+            email: true,
           },
         },
-      });
+      },
+    });
 
   if (projects.length === 0) {
     return {
@@ -348,36 +357,34 @@ export async function generateAutofillSuggestions(params: {
 Today's date: ${params.date} (in ${localTz} timezone)
 UTC time range for this date: ${startInstant.toString()} to ${endInstant.toString()}
 
-CRITICAL: All timestamps you return MUST use the EXACT UTC times from the activity sessions below.
-
 Available Projects:
 ${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName}, Email: ${p.clientEmail})${p.clientDescription ? `\n  Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Matching hints: ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
 ${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
 ${existingEntriesInfo.map((e) => {
-  const project = projects.find((p) => p.id === e.projectId);
-  return `- ${project?.name || `Project ${e.projectId}`}: ${e.startTime} to ${e.endTime}${e.description ? ` - ${e.description}` : ''}`;
-}).join("\n")}
+    const project = projects.find((p) => p.id === e.projectId);
+    return `- ${project?.name || `Project ${e.projectId}`}: ${e.startTime} to ${e.endTime}${e.description ? ` - ${e.description}` : ''}`;
+  }).join("\n")}
 
 ` : ''}Activity Sessions (merged, top by duration):
 ${sortedByDuration
-  .map(
-    (s) => `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes, ${s.startTime} to ${s.endTime})`
-  )
-  .join("\n")}
+      .map(
+        (s) => `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes, ${s.startTime} to ${s.endTime})`
+      )
+      .join("\n")}
 
 Based on these activity sessions, suggest time entries that should be created for work. Group related activities together into logical work blocks.
 
 Guidelines:
-- Match activities to projects based on project name, description, and window titles
-- Include both billable AND non-billable projects
+- Match activities to projects based on project name, description, and window titles.
+- Include both billable AND non-billable projects.
 - Group consecutive work on the same project into single entries. Prefer longer entries over many short ones.
-- Use the EXACT timestamps from the activity sessions above
-- DO NOT create any entries that overlap with the existing time entries
-- Ignore casual web browsing unless window titles clearly indicate project work
+- Use APPROXIMATE timestamps to ensure all work is captured. Bridging gaps of 10-15 minutes okay.
 - It's better to over report time than underreport.
-- Entries should be at minimum 15 minutes long
-- Keep descriptions concise but informative`;
+- DO NOT create any entries that overlap with the existing time entries, and do not have your entries overlap each other.
+- Ignore casual web browsing unless window titles clearly indicate project work.
+- Entries should be at minimum 15 minutes long.
+- Keep descriptions concise but informative.`;
 
   if (!jmapIsEnabled) {
     // No email access — use simple generateObject
@@ -415,30 +422,40 @@ Guidelines:
   // Create telemetry run for the agent path
   const agentRunId = params.debugJobId
     ? await maybeCreateTelemetryRun({
-        jobId: params.debugJobId,
-        functionId: "ai.autofill.agent",
-        operation: "generateText",
-        metadata: {
-          workflow: "autofill_time_entries",
-          hasJmap: true,
-          date: params.date,
-        },
-        inputPreview: JSON.stringify({
-          date: params.date,
-          projectIds: params.projectIds,
-          activityCount: sessions.length,
-          mergedCount: sortedByDuration.length,
-        }, null, 2),
-      })
+      jobId: params.debugJobId,
+      functionId: "ai.autofill.agent",
+      operation: "generateText",
+      metadata: {
+        workflow: "autofill_time_entries",
+        hasJmap: true,
+        date: params.date,
+      },
+      inputPreview: JSON.stringify({
+        date: params.date,
+        projectIds: params.projectIds,
+        activityCount: sessions.length,
+        mergedCount: sortedByDuration.length,
+      }, null, 2),
+    })
     : undefined;
 
-  const autofillAgent = new Agent({
-    model: aiModel,
-    stopWhen: stepCountIs(8),
-    tools: {
-      ...sentEmailTools,
-    },
-    instructions: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
+  const output = Output.object({
+    schema: autofillResponseSchema,
+    name: "autofillSuggestions",
+    description: "Time entry suggestions derived from activity sessions and sent email context.",
+  });
+
+  let result;
+  try {
+    result = await generateText({
+      model: aiModel,
+      tools: {
+        ...sentEmailTools,
+      },
+      stopWhen: stepCountIs(8),
+      output,
+      providerOptions: PROVIDER_OPTIONS,
+      system: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
 
 Your process:
 1. Review the activity sessions and available projects
@@ -446,33 +463,18 @@ Your process:
 3. For important-looking emails, estimate how long the user spent composing them
 4. Combine activity data AND email data to produce comprehensive time entry suggestions
 
+Prefer activity session data as the primary source for time entry timestamps, but use email composition times to create entries for client correspondence that may not be reflected in activity sessions.
+
 Email strategy:
 - First, search all sent emails for the day to see who the user corresponded with
 - Match sent emails to projects by comparing recipient addresses with client emails
-- Use estimateEmailTime to gauge composition effort for significant emails
-- Create time entries for email correspondence (e.g. "Client correspondence: discussed X")
-- Email time entries should use the email's sent timestamp as a reference point
-
-IMPORTANT: After gathering email context, output your final answer as a valid JSON object matching this schema:
-${JSON.stringify(autofillResponseSchema.shape, null, 2)}
-
-The suggestions array must contain objects with: projectId (number), description (string), startTime (ISO string), endTime (ISO string), billable (boolean).`,
-    // Wire onStepFinish for agent telemetry
-    onStepFinish: agentRunId
-      ? async (event) => {
+- Use estimateEmailTime to gauge composition effort for significant emails.`,
+      prompt: basePrompt,
+      onStepFinish: agentRunId
+        ? async (event) => {
           await recordTelemetryStep(agentRunId, event);
         }
-      : undefined,
-  });
-
-  let result: Awaited<ReturnType<typeof autofillAgent.generate>>;
-  try {
-    result = await autofillAgent.generate({
-    prompt: `${basePrompt}
-
-You have access to tools that can search the user's Sent folder for emails sent today and estimate how long each email took to compose. Use them to discover additional billable work from client correspondence.
-
-After using the tools, provide your final suggestions as a JSON object with a "suggestions" array.`,
+        : undefined,
     });
 
     // Record completion telemetry for the agent run
@@ -486,58 +488,10 @@ After using the tools, provide your final suggestions as a JSON object with a "s
     throw error;
   }
 
-  // Parse the structured output from the agent's text response
-  let suggestions: Array<{
-    projectId: number;
-    description: string;
-    startTime: string;
-    endTime: string;
-    billable: boolean;
-  }> = [];
-
-  try {
-    // Extract JSON from the agent's response
-    const jsonMatch = result.text.match(/\{[\s\S]*"suggestions"[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = autofillResponseSchema.parse(JSON.parse(jsonMatch[0]));
-      suggestions = parsed.suggestions;
-    }
-  } catch (parseError) {
-    console.error("Failed to parse agent suggestions, falling back to generateObject:", parseError);
-    // Fallback: re-run with generateObject using the agent's gathered context
-    const { object } = await generateObjectWithTelemetry({
-      model: aiModel,
-      schema: autofillResponseSchema,
-      prompt: `${basePrompt}
-
-Additional context from email analysis:
-${result.text}
-
-Based on ALL the above (activity sessions AND email context), generate the final time entry suggestions.`,
-    }, {
-      jobId: params.debugJobId,
-      functionId: "ai.autofill.fallbackGenerateObject",
-      operation: "generateObject",
-      metadata: {
-        workflow: "autofill_time_entries",
-        hasJmap: true,
-        fallback: true,
-        date: params.date,
-      },
-      inputPreview: {
-        date: params.date,
-        projectIds: params.projectIds,
-        activityCount: sessions.length,
-        mergedCount: sortedByDuration.length,
-      },
-    });
-    suggestions = object.suggestions;
-  }
-
   console.log(`Autofill agent used ${result.toolCalls?.length || 0} tool calls`);
 
   return {
-    suggestions,
+    suggestions: result.output.suggestions,
     activityCount: sessions.length,
     mergedCount: sortedByDuration.length,
   };
@@ -546,11 +500,34 @@ Based on ALL the above (activity sessions AND email context), generate the final
 /**
  * Helper function to merge adjacent sessions
  */
-function mergeSessionsForAI(sessions: any[]): any[] {
+type ActivitySessionForAI = {
+  id: number;
+  startTime: string;
+  endTime: string;
+  appClass: string;
+  windowTitle: string | null;
+  durationSeconds: number;
+  subSessions?: ActivitySessionForAI[];
+};
+
+function cloneActivitySessionForAI(session: ActivitySessionForAI): ActivitySessionForAI {
+  return {
+    id: session.id,
+    startTime: session.startTime,
+    endTime: session.endTime,
+    appClass: session.appClass,
+    windowTitle: session.windowTitle,
+    durationSeconds: session.durationSeconds,
+  };
+}
+
+function mergeSessionsForAI(sessions: ActivitySessionForAI[]): ActivitySessionForAI[] {
   if (sessions.length === 0) return [];
 
   const MERGE_GAP_MINUTES = 10;
-  const MAX_DESCRIPTION_LENGTH = 200;
+  const INTERVAL_CHUNK_MINUTES = 15;
+  const INTERVAL_BREAKDOWN_THRESHOLD_MINUTES = 30;
+  const MAX_DESCRIPTION_LENGTH = 500;
 
   const sorted = [...sessions].sort((a, b) => {
     const aInstant = Temporal.Instant.from(a.startTime);
@@ -558,7 +535,97 @@ function mergeSessionsForAI(sessions: any[]): any[] {
     return Temporal.Instant.compare(aInstant, bInstant);
   });
 
-  const merged: any[] = [];
+  const stripTrailingAppName = (title: string) => {
+    const lastDash = title.lastIndexOf(" - ");
+    if (lastDash > 0) {
+      return title.slice(0, lastDash);
+    }
+    return title;
+  };
+
+  const truncateTitle = (title: string) =>
+    title.length > MAX_DESCRIPTION_LENGTH
+      ? `${title.substring(0, MAX_DESCRIPTION_LENGTH)}...`
+      : title;
+
+  const formatIntervalLabel = (instant: Temporal.Instant) => {
+    const zdt = instant.toZonedDateTimeISO("UTC");
+    const hour = zdt.hour;
+    const minute = zdt.minute;
+    const period = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
+  };
+
+  const describeSessionTitles = (session: ActivitySessionForAI) => {
+    const subSessions = session.subSessions ?? [session];
+    const distinctTitles = Array.from(
+      new Set(
+        subSessions
+          .map((sub) => sub.windowTitle?.trim())
+          .filter((title): title is string => Boolean(title))
+          .map(stripTrailingAppName)
+      )
+    );
+
+    if (session.durationSeconds < INTERVAL_BREAKDOWN_THRESHOLD_MINUTES * 60) {
+      return truncateTitle(distinctTitles.slice(0, 3).join(" / "));
+    }
+
+    const sessionStart = Temporal.Instant.from(session.startTime);
+    const sessionEnd = Temporal.Instant.from(session.endTime);
+    const chunkSeconds = INTERVAL_CHUNK_MINUTES * 60;
+    const intervalSummaries: string[] = [];
+
+    for (
+      let intervalStart = sessionStart;
+      Temporal.Instant.compare(intervalStart, sessionEnd) < 0;
+      intervalStart = intervalStart.add({ minutes: INTERVAL_CHUNK_MINUTES })
+    ) {
+      const intervalEndCandidate = intervalStart.add({ minutes: INTERVAL_CHUNK_MINUTES });
+      const intervalEnd = Temporal.Instant.compare(intervalEndCandidate, sessionEnd) > 0
+        ? sessionEnd
+        : intervalEndCandidate;
+
+      let bestTitle = "";
+      let bestOverlapSeconds = 0;
+
+      for (const sub of subSessions) {
+        if (!sub.windowTitle?.trim()) continue;
+
+        const subStart = Temporal.Instant.from(sub.startTime);
+        const subEnd = Temporal.Instant.from(sub.endTime);
+        const overlapStart = Temporal.Instant.compare(intervalStart, subStart) > 0 ? intervalStart : subStart;
+        const overlapEnd = Temporal.Instant.compare(intervalEnd, subEnd) < 0 ? intervalEnd : subEnd;
+
+        if (Temporal.Instant.compare(overlapStart, overlapEnd) >= 0) continue;
+
+        const overlapNs = overlapEnd.epochNanoseconds - overlapStart.epochNanoseconds;
+        const overlapSeconds = Number(overlapNs / 1_000_000_000n);
+
+        if (overlapSeconds > bestOverlapSeconds) {
+          bestOverlapSeconds = overlapSeconds;
+          bestTitle = stripTrailingAppName(sub.windowTitle);
+        }
+      }
+
+      if (bestTitle && bestOverlapSeconds >= Math.min(chunkSeconds / 3, chunkSeconds)) {
+        const label = formatIntervalLabel(intervalStart);
+        const summary = `${label}: ${bestTitle}`;
+        if (intervalSummaries.at(-1) !== summary) {
+          intervalSummaries.push(summary);
+        }
+      }
+    }
+
+    if (intervalSummaries.length > 0) {
+      return truncateTitle(intervalSummaries.join(" | "));
+    }
+
+    return truncateTitle(distinctTitles.slice(0, 5).join(" / "));
+  };
+
+  const merged: ActivitySessionForAI[] = [];
 
   for (const session of sorted) {
     const currentStart = Temporal.Instant.from(session.startTime);
@@ -567,6 +634,7 @@ function mergeSessionsForAI(sessions: any[]): any[] {
     let existingIndex = -1;
     for (let i = merged.length - 1; i >= 0; i--) {
       const m = merged[i];
+      if (!m) continue;
       if (m.appClass !== session.appClass) continue;
 
       const mEnd = Temporal.Instant.from(m.endTime);
@@ -581,6 +649,13 @@ function mergeSessionsForAI(sessions: any[]): any[] {
 
     if (existingIndex >= 0) {
       const existing = merged[existingIndex];
+      if (!existing) {
+        continue;
+      }
+      existing.subSessions = existing.subSessions ?? [
+        cloneActivitySessionForAI(existing),
+      ];
+      existing.subSessions.push(cloneActivitySessionForAI(session));
       const existingEnd = Temporal.Instant.from(existing.endTime);
 
       if (Temporal.Instant.compare(currentEnd, existingEnd) > 0) {
@@ -592,26 +667,23 @@ function mergeSessionsForAI(sessions: any[]): any[] {
       const newDurationNs = existingEndInstant.epochNanoseconds - existingStart.epochNanoseconds;
       existing.durationSeconds = Math.floor(Number(newDurationNs) / 1_000_000_000);
 
-      if (session.windowTitle && session.windowTitle !== existing.windowTitle) {
-        const currentTitle = existing.windowTitle || "";
-        const newTitle = session.windowTitle;
-        if (!currentTitle.includes(newTitle)) {
-          const combined = currentTitle ? `${currentTitle} / ${newTitle}` : newTitle;
-          existing.windowTitle = combined.length > MAX_DESCRIPTION_LENGTH
-            ? combined.substring(0, MAX_DESCRIPTION_LENGTH) + "..."
-            : combined;
-        }
-      }
+      existing.windowTitle = describeSessionTitles(existing);
     } else {
-      const truncated = { ...session };
-      if (truncated.windowTitle && truncated.windowTitle.length > MAX_DESCRIPTION_LENGTH) {
-        truncated.windowTitle = truncated.windowTitle.substring(0, MAX_DESCRIPTION_LENGTH) + "...";
-      }
+      const truncated: ActivitySessionForAI = {
+        ...session,
+        subSessions: [
+          cloneActivitySessionForAI(session),
+        ],
+      };
+      truncated.windowTitle = truncated.windowTitle
+        ? describeSessionTitles(truncated)
+        : truncated.windowTitle;
       merged.push(truncated);
     }
   }
 
-  return merged;
+  // Remove any sessions shorter than 5 minutes after merging
+  return merged.filter((s) => s.durationSeconds >= 300);
 }
 
 /**
@@ -629,7 +701,7 @@ export async function generateWeeklySummary(params: {
   }>;
 }, telemetry?: DebugTelemetryOptions): Promise<string> {
   const model = await getAiModel();
-  
+
   // Convert string dates to Temporal.PlainDate
   const weekStart = Temporal.PlainDate.from(params.weekStart);
   const weekEnd = Temporal.PlainDate.from(params.weekEnd);
@@ -657,7 +729,7 @@ export async function generateWeeklySummary(params: {
   }
 
   const totalHours = params.entries.reduce((sum, e) => sum + e.hours, 0);
-  
+
   // Build project context
   let projectContext = `Project: ${project.name}`;
   projectContext += `\nClient: ${project.client.name} (${project.client.email})`;
@@ -730,6 +802,7 @@ Generate the weekly summary now:`,
     model: model,
     stopWhen: stepCountIs(10),
     tools: summaryTools,
+    providerOptions: PROVIDER_OPTIONS,
     instructions: `You are a professional assistant creating client-friendly weekly summaries for invoices.
 
 Your process:
@@ -859,9 +932,9 @@ export async function generateTimeEntryDescription(params: {
   );
 
   // Sort by duration and take top 10
-  const topSessions = mergedSessions
-    .sort((a, b) => b.durationSeconds - a.durationSeconds)
-    .slice(0, 10);
+  // const topSessions = mergedSessions
+  //   .sort((a, b) => b.durationSeconds - a.durationSeconds)
+  //   .slice(0, 10);
 
   // Build project context
   let projectContext = `Project: ${project.name}`;
@@ -882,11 +955,11 @@ ${projectContext}
 Time Entry Period: ${params.startTime} to ${params.endTime}
 
 Activity Sessions during this period (sorted by duration):
-${topSessions
-  .map(
-    (s) => `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes)`
-  )
-  .join("\n")}
+${mergedSessions
+        .map(
+          (s) => `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes)`
+        )
+        .join("\n")}
 
 Based on these activity sessions, generate a SINGLE, concise description (5-10 words) for what was worked on during this time entry.
 
