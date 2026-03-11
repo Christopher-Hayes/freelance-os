@@ -134,6 +134,13 @@ async function processAutofillJob(job: any) {
     projectIds?: number[];
   };
 
+  const plainDate = Temporal.PlainDate.from(params.date);
+  const localTz = Temporal.Now.timeZoneId();
+  const startOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("00:00:00"));
+  const endOfDay = plainDate.toPlainDateTime(Temporal.PlainTime.from("23:59:59.999"));
+  const startInstant = startOfDay.toZonedDateTime(localTz).toInstant();
+  const endInstant = endOfDay.toZonedDateTime(localTz).toInstant();
+
   // Update progress: fetching activities
   await prisma.aiJob.update({
     where: { id: job.id },
@@ -177,15 +184,56 @@ async function processAutofillJob(job: any) {
       data: { progress: 80 },
     });
 
-    // Create time entries from suggestions
+    const existingEntryIds = new Set(
+      (
+        await prisma.timeEntry.findMany({
+          where: {
+            startTime: {
+              gte: new Date(startInstant.toString()),
+              lte: new Date(endInstant.toString()),
+            },
+          },
+          select: { id: true },
+        })
+      ).map((entry) => entry.id)
+    );
+
+    // Apply time entry suggestions
     let entriesCreated = 0;
+    let entriesUpdated = 0;
     for (const suggestion of result.suggestions) {
       try {
-        const startInstant = Temporal.Instant.from(suggestion.startTime);
-        const endInstant = Temporal.Instant.from(suggestion.endTime);
+        const suggestionStartInstant = Temporal.Instant.from(suggestion.startTime);
+        const suggestionEndInstant = Temporal.Instant.from(suggestion.endTime);
         const durationMinutes = Math.round(
-          Number((endInstant.epochNanoseconds - startInstant.epochNanoseconds) / 60_000_000_000n)
+          Number((suggestionEndInstant.epochNanoseconds - suggestionStartInstant.epochNanoseconds) / 60_000_000_000n)
         );
+
+        if (durationMinutes < 15) {
+          console.warn("Skipping autofill suggestion with invalid duration", suggestion);
+          continue;
+        }
+
+        if (suggestion.action === "update") {
+          if (suggestion.existingEntryId == null || !existingEntryIds.has(suggestion.existingEntryId)) {
+            console.warn("Skipping autofill update for missing entry", suggestion);
+            continue;
+          }
+
+          await prisma.timeEntry.update({
+            where: { id: suggestion.existingEntryId },
+            data: {
+              projectId: suggestion.projectId,
+              description: suggestion.description || null,
+              startTime: new Date(suggestion.startTime),
+              endTime: new Date(suggestion.endTime),
+              durationMinutes,
+              billable: suggestion.billable,
+            },
+          });
+          entriesUpdated++;
+          continue;
+        }
 
         await prisma.timeEntry.create({
           data: {
@@ -211,6 +259,7 @@ async function processAutofillJob(job: any) {
         progress: 100,
         result: {
           entriesCreated,
+          entriesUpdated,
           totalSuggestions: result.suggestions.length,
           activityCount: result.activityCount,
           date: params.date,

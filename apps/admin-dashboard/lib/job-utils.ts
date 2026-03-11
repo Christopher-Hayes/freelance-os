@@ -16,6 +16,7 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
       if (job.status === "completed" && job.result) {
         const result = job.result as {
           entriesCreated?: number;
+          entriesUpdated?: number;
           totalSuggestions?: number;
           activityCount?: number;
           message?: string;
@@ -24,9 +25,14 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
           displayDescription = result.message;
         } else {
           const created = result.entriesCreated || 0;
+          const updated = result.entriesUpdated || 0;
           const suggestions = result.totalSuggestions ?? created;
           const activities = result.activityCount ?? 0;
-          displayDescription = `Created ${created}/${suggestions} entries from ${activities} activities`;
+          const changes = [`created ${created}`];
+          if (updated > 0) {
+            changes.push(`updated ${updated}`);
+          }
+          displayDescription = `${changes.join(", ")} from ${suggestions} suggestions across ${activities} activities`;
         }
       } else if (job.status === "processing") {
         displayDescription = `Analyzing activities (${job.progress}%)`;

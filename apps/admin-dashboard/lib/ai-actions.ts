@@ -205,6 +205,8 @@ export async function generateAutofillSuggestions(params: {
   debugJobId?: number;
 }): Promise<{
   suggestions: Array<{
+    action: "create" | "update";
+    existingEntryId: number | null;
     projectId: number;
     description: string;
     startTime: string;
@@ -309,10 +311,12 @@ export async function generateAutofillSuggestions(params: {
       },
     },
     select: {
+      id: true,
       projectId: true,
       startTime: true,
       endTime: true,
       description: true,
+      billable: true,
     },
   });
 
@@ -329,14 +333,18 @@ export async function generateAutofillSuggestions(params: {
   }));
 
   const existingEntriesInfo = existingEntries.map((entry) => ({
+    id: entry.id,
     projectId: entry.projectId,
     startTime: entry.startTime.toISOString(),
     endTime: entry.endTime.toISOString(),
     description: entry.description,
+    billable: entry.billable,
   }));
 
   // Generate suggestions using AI
   const timeEntrySuggestionSchema = z.object({
+    action: z.enum(["create", "update"]),
+    existingEntryId: z.number().nullable(),
     projectId: z.number(),
     description: z.string(),
     startTime: z.string(),
@@ -363,10 +371,10 @@ UTC time range for this date: ${startInstant.toString()} to ${endInstant.toStrin
 Available Projects:
 ${projectsInfo.map((p) => `- ID ${p.id}: ${p.name} (Client: ${p.clientName}, Email: ${p.clientEmail})${p.clientDescription ? `\n  Description: ${p.clientDescription}` : ''}${p.privateNotes ? `\n  Matching hints: ${p.privateNotes}` : ''}${p.billable ? ' [Billable]' : ' [Non-billable]'}`).join("\n")}
 
-${existingEntriesInfo.length > 0 ? `Existing Time Entries (DO NOT OVERLAP WITH THESE):
+${existingEntriesInfo.length > 0 ? `Existing Time Entries (you may keep these as-is OR refine them with action="update"):
 ${existingEntriesInfo.map((e) => {
     const project = projects.find((p) => p.id === e.projectId);
-    return `- ${project?.name || `Project ${e.projectId}`}: ${e.startTime} to ${e.endTime}${e.description ? ` - ${e.description}` : ''}`;
+    return `- Entry ID ${e.id}: ${project?.name || `Project ${e.projectId}`} (${e.billable ? 'Billable' : 'Non-billable'}): ${e.startTime} to ${e.endTime}${e.description ? ` - ${e.description}` : ''}`;
   }).join("\n")}
 
 ` : ''}Activity Sessions (merged, top by duration):
@@ -376,7 +384,7 @@ ${sortedByDuration
       )
       .join("\n")}
 
-Based on these activity sessions, suggest time entries that should be created for work. Group related activities together into logical work blocks.
+Based on these activity sessions, suggest how the day's time entries should look. You can both create missing entries and refine existing ones. Group related activities together into logical work blocks.
 
 Guidelines:
 - Match activities to projects based on project name, description, and window titles.
@@ -384,7 +392,11 @@ Guidelines:
 - Group consecutive work on the same project into single entries. Prefer longer entries over many short ones.
 - Use APPROXIMATE timestamps to ensure all work is captured. Bridging gaps of 10-15 minutes okay.
 - It's better to over report time than underreport.
-- DO NOT create any entries that overlap with the existing time entries, and do not have your entries overlap each other.
+- For brand new entries, use action="create" and set existingEntryId to null.
+- If an existing entry should be improved, use action="update" and set existingEntryId to that entry's ID.
+- Updates may refine timeframe, description, billable flag, and even project when the evidence is strong.
+- Treat the final combined set of kept existing entries, updated entries, and new entries as a complete day plan: no overlaps after your changes, and no overlaps among your returned suggestions.
+- Only return updates for entries that should actually change. Do not return unchanged existing entries.
 - Ignore casual web browsing unless window titles clearly indicate project work.
 - Entries should be at minimum 15 minutes long.
 - Keep descriptions concise but informative.`;
@@ -465,7 +477,7 @@ Guidelines:
   const systemParts = [
     `You are a helpful assistant that analyzes computer activity to suggest time entries for project tracking.`,
     ``,
-    `Your process:`,
+  `Your process:`,
     `1. Review the activity sessions and available projects`,
   ];
 
@@ -482,10 +494,12 @@ Guidelines:
     systemParts.push(`${stepNum}. Match repository names and commit messages to projects`);
     stepNum++;
   }
-  systemParts.push(`${stepNum}. Combine all data sources to produce comprehensive time entry suggestions`);
+  systemParts.push(`${stepNum}. Combine all data sources to produce comprehensive time entry suggestions, including updates to existing entries when helpful`);
 
   systemParts.push(``);
   systemParts.push(`Prefer activity session data as the primary source for time entry timestamps.`);
+  systemParts.push(`When existing time entries are present, treat them as editable drafts rather than immutable records.`);
+  systemParts.push(`Only emit action="update" for entries that materially improve the day's record.`);
 
   if (jmapIsEnabled) {
     systemParts.push(``);
