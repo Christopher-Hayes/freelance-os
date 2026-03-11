@@ -14,6 +14,8 @@ import { headers } from 'next/headers';
 import { isJmapEnabled } from "@/lib/jmap-provider";
 import { createEmailSearchTools, createSentEmailTools } from "@/lib/jmap-actions";
 import { isAnyForgeEnabled, createGitCommitTools } from "@/lib/git-actions";
+import { isWebdavEnabled } from "@/lib/webdav-provider";
+import { createCalendarSearchTools } from "@/lib/webdav-actions";
 import {
   createTelemetryRun,
   recordTelemetryStep,
@@ -362,6 +364,8 @@ export async function generateAutofillSuggestions(params: {
   const jmapIsEnabled = await isJmapEnabled();
   // Check if any git forge (GitHub, GitLab, Codeberg) is configured
   const gitForgesEnabled = await isAnyForgeEnabled();
+  // Check if CalDAV is available for calendar event context
+  const calendarEnabled = await isWebdavEnabled();
 
   const basePrompt = `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
 
@@ -401,8 +405,8 @@ Guidelines:
 - Entries should be at minimum 15 minutes long.
 - Keep descriptions concise but informative.`;
 
-  // If neither JMAP nor git forges are configured, use simple generateObject
-  if (!jmapIsEnabled && !gitForgesEnabled) {
+  // If no integrations are configured, use simple generateObject
+  if (!jmapIsEnabled && !gitForgesEnabled && !calendarEnabled) {
     const { object } = await generateObjectWithTelemetry({
       model: aiModel,
       schema: autofillResponseSchema,
@@ -415,6 +419,7 @@ Guidelines:
         workflow: "autofill_time_entries",
         hasJmap: false,
         hasGitForges: false,
+        hasCalendar: false,
         date: params.date,
       },
       inputPreview: {
@@ -446,6 +451,11 @@ Guidelines:
     Object.assign(agentTools, gitTools);
   }
 
+  if (calendarEnabled) {
+    const calendarTools = await createCalendarSearchTools(startInstant, endInstant);
+    Object.assign(agentTools, calendarTools);
+  }
+
   // Create telemetry run for the agent path
   const agentRunId = params.debugJobId
     ? await maybeCreateTelemetryRun({
@@ -456,6 +466,7 @@ Guidelines:
         workflow: "autofill_time_entries",
         hasJmap: jmapIsEnabled,
         hasGitForges: gitForgesEnabled,
+        hasCalendar: calendarEnabled,
         date: params.date,
       },
       inputPreview: JSON.stringify({
@@ -488,6 +499,10 @@ Guidelines:
     systemParts.push(`${stepNum}. For important-looking emails, estimate how long the user spent composing them`);
     stepNum++;
   }
+  if (calendarEnabled) {
+    systemParts.push(`${stepNum}. Search the user's calendar for meetings and appointments that indicate project work`);
+    stepNum++;
+  }
   if (gitForgesEnabled) {
     systemParts.push(`${stepNum}. Search the user's git commits across GitHub/GitLab/Codeberg to understand what code was worked on`);
     stepNum++;
@@ -507,6 +522,16 @@ Guidelines:
     systemParts.push(`- First, search all sent emails for the day to see who the user corresponded with`);
     systemParts.push(`- Match sent emails to projects by comparing recipient addresses with client emails`);
     systemParts.push(`- Use estimateEmailTime to gauge composition effort for significant emails.`);
+  }
+
+  if (calendarEnabled) {
+    systemParts.push(``);
+    systemParts.push(`Calendar strategy:`);
+    systemParts.push(`- Search calendar events for the day to discover meetings and scheduled work`);
+    systemParts.push(`- Match event titles, attendees, and descriptions to projects and clients`);
+    systemParts.push(`- Client meetings should be attributed to the corresponding project`);
+    systemParts.push(`- Use event duration as strong evidence for time spent on that project`);
+    systemParts.push(`- Meeting descriptions and attendee lists help identify the correct project`);
   }
 
   if (gitForgesEnabled) {
@@ -812,12 +837,14 @@ export async function generateWeeklySummary(params: {
   const jmapIsEnabled = await isJmapEnabled();
   // Check if any git forge is configured
   const gitForgesEnabled = await isAnyForgeEnabled();
+  // Check if CalDAV is available for calendar event context
+  const calendarEnabled = await isWebdavEnabled();
 
   // Convert dates to Instants for tool scoping
   const weekStartInstant = weekStart.toPlainDateTime(Temporal.PlainTime.from("00:00:00")).toZonedDateTime("UTC").toInstant();
   const weekEndInstant = weekEnd.toPlainDateTime(Temporal.PlainTime.from("23:59:59")).toZonedDateTime("UTC").toInstant();
 
-  if (!jmapIsEnabled && !gitForgesEnabled) {
+  if (!jmapIsEnabled && !gitForgesEnabled && !calendarEnabled) {
     // Fallback to simple generation without email context
     const { text } = await generateTextWithTelemetry({
       model,
@@ -870,6 +897,11 @@ Generate the weekly summary now:`,
     Object.assign(summaryAgentTools, gitTools);
   }
 
+  if (calendarEnabled) {
+    const calendarTools = await createCalendarSearchTools(weekStartInstant, weekEndInstant);
+    Object.assign(summaryAgentTools, calendarTools);
+  }
+
   const summaryAgent = new Agent({
     model: model,
     stopWhen: stepCountIs(10),
@@ -892,6 +924,11 @@ Email search strategy:
 - Search for project name, client name, or specific features mentioned
 - You can search multiple times with different keywords if needed
 - Don't over-search if entries are already clear` : ''}
+${calendarEnabled ? `
+Calendar strategy:
+- Search for meetings and events related to this project during the week
+- Meeting titles and attendees help identify client-facing work
+- Include meeting context in the summary when it adds value (e.g. "discussed X with client")` : ''}
 ${gitForgesEnabled ? `
 Git commit strategy:
 - When calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window

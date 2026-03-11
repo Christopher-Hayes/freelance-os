@@ -364,6 +364,11 @@ model Setting {
   jmapHostname           String?  @map("jmap_hostname") @db.Text
   canReadMailbox         Boolean  @default(false) @map("can_read_mailbox") // Allow AI to read emails via JMAP
   jmapAllowedMailboxes   String[] @default([]) @map("jmap_allowed_mailboxes") // Mailbox IDs AI can search (empty = all mailboxes)
+  webdavUrl              String?  @map("webdav_url") @db.Text // CalDAV server URL
+  webdavUsername         String?  @map("webdav_username") @db.Text
+  webdavPassword         String?  @map("webdav_password") @db.Text
+  canReadCalendar        Boolean  @default(false) @map("can_read_calendar") // Allow AI to read calendar events via CalDAV
+  webdavAllowedCalendars String[] @default([]) @map("webdav_allowed_calendars") // Calendar URLs AI can search (empty = all calendars)
   githubToken            String?  @map("github_token") @db.Text
   githubUsername         String?  @map("github_username") @db.Text
   gitlabToken            String?  @map("gitlab_token") @db.Text

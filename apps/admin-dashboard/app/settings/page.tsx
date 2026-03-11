@@ -6,7 +6,9 @@ import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
 import { authFetch } from '@/lib/util';
 import { fetchMailboxes } from '@/lib/jmap-actions';
+import { fetchCalendars } from '@/lib/webdav-actions';
 import type { MailboxInfo } from '@/lib/jmap-provider';
+import type { CalendarInfo } from '@/lib/webdav-provider';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 
@@ -14,6 +16,7 @@ const MASK_VALUE = "••••••••";
 const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
 const HIDDEN_APP_CLASSES_STORAGE_KEY = "hiddenAppClasses";
 const JMAP_MAILBOXES_STORAGE_KEY = "jmapAvailableMailboxes";
+const WEBDAV_CALENDARS_STORAGE_KEY = "webdavAvailableCalendars";
 
 const settingsSections = [
   { id: "freelancer-information", title: "Invoice Information" },
@@ -84,6 +87,13 @@ export default function SettingsPage() {
   const [jmapAllowedMailboxes, setJmapAllowedMailboxes] = useState<string[]>([]);
   const [availableMailboxes, setAvailableMailboxes] = useState<MailboxInfo[]>([]);
   const [loadingMailboxes, setLoadingMailboxes] = useState(false);
+  const [webdavUrl, setWebdavUrl] = useState("");
+  const [webdavUsername, setWebdavUsername] = useState("");
+  const [webdavPassword, setWebdavPassword] = useState("");
+  const [canReadCalendar, setCanReadCalendar] = useState(false);
+  const [webdavAllowedCalendars, setWebdavAllowedCalendars] = useState<string[]>([]);
+  const [availableCalendars, setAvailableCalendars] = useState<CalendarInfo[]>([]);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [githubToken, setGithubToken] = useState("");
   const [githubUsername, setGithubUsername] = useState("");
   const [gitlabToken, setGitlabToken] = useState("");
@@ -117,6 +127,9 @@ export default function SettingsPage() {
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const webdavUrlTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const webdavUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const webdavPasswordTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const githubTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const githubUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const gitlabTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -135,6 +148,7 @@ export default function SettingsPage() {
     fetchSettings();
     fetchApiKeys();
     hydrateStoredMailboxes();
+    hydrateStoredCalendars();
   }, []);
 
   const persistAppTitleRenames = (entries: string[]) => {
@@ -182,6 +196,35 @@ export default function SettingsPage() {
     }
   };
 
+  const persistAvailableCalendars = (calendars: CalendarInfo[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(WEBDAV_CALENDARS_STORAGE_KEY, JSON.stringify(calendars));
+  };
+
+  const hydrateStoredCalendars = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(WEBDAV_CALENDARS_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setAvailableCalendars(parsed as CalendarInfo[]);
+      }
+    } catch (error) {
+      console.error("Error hydrating stored calendars:", error);
+      window.localStorage.removeItem(WEBDAV_CALENDARS_STORAGE_KEY);
+    }
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await authFetch("/api/settings/all");
@@ -204,6 +247,11 @@ export default function SettingsPage() {
         // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
+        setWebdavUrl(data.webdavUrl || "");
+        setWebdavUsername(data.webdavUsername || "");
+        setWebdavPassword(data.webdavPassword || "");
+        setCanReadCalendar(data.canReadCalendar || false);
+        setWebdavAllowedCalendars(data.webdavAllowedCalendars || []);
         setGithubToken(data.githubToken || "");
         setGithubUsername(data.githubUsername || "");
         setGitlabToken(data.gitlabToken || "");
@@ -413,6 +461,76 @@ export default function SettingsPage() {
       toast.error("Failed to fetch mailboxes");
     } finally {
       setLoadingMailboxes(false);
+    }
+  };
+
+  // ── WebDAV / CalDAV handlers ──
+
+  const handleWebdavUrlChange = (value: string) => {
+    setWebdavUrl(value);
+
+    if (webdavUrlTimerRef.current) {
+      clearTimeout(webdavUrlTimerRef.current);
+    }
+
+    webdavUrlTimerRef.current = setTimeout(() => {
+      saveSetting("webdavUrl", value);
+    }, 1000);
+  };
+
+  const handleWebdavUsernameChange = (value: string) => {
+    setWebdavUsername(value);
+
+    if (webdavUsernameTimerRef.current) {
+      clearTimeout(webdavUsernameTimerRef.current);
+    }
+
+    webdavUsernameTimerRef.current = setTimeout(() => {
+      saveSetting("webdavUsername", value);
+    }, 1000);
+  };
+
+  const handleWebdavPasswordChange = (value: string) => {
+    setWebdavPassword(value);
+    setModifiedFields(prev => new Set(prev).add("webdavPassword"));
+
+    if (webdavPasswordTimerRef.current) {
+      clearTimeout(webdavPasswordTimerRef.current);
+    }
+
+    webdavPasswordTimerRef.current = setTimeout(() => {
+      if (value !== MASK_VALUE) {
+        saveSetting("webdavPassword", value);
+      }
+    }, 1000);
+  };
+
+  const handleCalendarEnabledChange = (checked: boolean) => {
+    setCanReadCalendar(checked);
+    saveSetting("canReadCalendar", String(checked));
+  };
+
+  const handleWebdavAllowedCalendarsChange = (calendarUrls: string[]) => {
+    setWebdavAllowedCalendars(calendarUrls);
+    saveSetting("webdavAllowedCalendars", JSON.stringify(calendarUrls));
+  };
+
+  const handleRefreshCalendars = async () => {
+    setLoadingCalendars(true);
+    try {
+      const calendars = await fetchCalendars();
+      setAvailableCalendars(calendars);
+      persistAvailableCalendars(calendars);
+      if (calendars.length === 0) {
+        toast.error("No calendars found. Please check your CalDAV configuration.");
+      } else {
+        toast.success(`Found ${calendars.length} calendar(s)`);
+      }
+    } catch (error) {
+      console.error("Error fetching calendars:", error);
+      toast.error("Failed to fetch calendars");
+    } finally {
+      setLoadingCalendars(false);
     }
   };
 
@@ -1297,6 +1415,259 @@ export default function SettingsPage() {
                   />
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     JMAP server hostname
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section
+              id="calendar-integration-webdav"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <header className="mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Calendar Integration (CalDAV)
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Cross reference your calendar events with projects to more accurately categorize and summarize your work. This integration uses CalDAV (WebDAV), which is supported by most calendar services (Nextcloud, Radicale, Fastmail, iCloud, Google via CalDAV, etc.).
+                </p>
+              </header>
+
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="can_read_calendar"
+                      type="checkbox"
+                      checked={canReadCalendar}
+                      onChange={(e) => handleCalendarEnabledChange(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <div className="ml-3">
+                    <label htmlFor="can_read_calendar" className="font-medium text-gray-700 dark:text-gray-300">
+                      Allow AI to read calendar events via CalDAV
+                    </label>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      When generating time entries and weekly summaries, AI can search your calendar for meetings and events that indicate project work. This is disabled by default for privacy.
+                    </p>
+                  </div>
+                </div>
+
+                {canReadCalendar && (
+                  <>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+                      <div className="flex items-start">
+                        <div className="shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            Privacy Warning
+                          </h3>
+                          <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
+                            <p>
+                              When enabled, AI will be able to search your calendar events to enrich time entries with context from meetings and appointments. This may expose sensitive or private information to the AI provider.
+                            </p>
+                            <p>
+                              In the field below, you can restrict which calendars AI is allowed to access. Leaving it empty will allow AI to search all calendars.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          Restrict to Calendars (Optional)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleRefreshCalendars}
+                          disabled={loadingCalendars}
+                          className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loadingCalendars ? "Loading..." : "Refresh Calendars"}
+                        </button>
+                      </div>
+
+                      <Combobox
+                        multiple
+                        by="url"
+                        value={availableCalendars.filter(c => webdavAllowedCalendars.includes(c.url))}
+                        onChange={(selected: CalendarInfo[]) => {
+                          handleWebdavAllowedCalendarsChange(selected.map(c => c.url));
+                        }}
+                      >
+                        <div className="relative">
+                          <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
+                            <span className="flex flex-wrap gap-1">
+                              {webdavAllowedCalendars.length === 0 ? (
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {availableCalendars.length === 0 ? "Click 'Refresh Calendars' first" : "Select calendars to restrict (or leave empty for all)"}
+                                </span>
+                              ) : (
+                                availableCalendars
+                                  .filter(c => webdavAllowedCalendars.includes(c.url))
+                                  .map(calendar => (
+                                    <span
+                                      key={calendar.url}
+                                      className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
+                                    >
+                                      {calendar.color && (
+                                        <span
+                                          className="inline-block h-2.5 w-2.5 rounded-full"
+                                          style={{ backgroundColor: calendar.color }}
+                                        />
+                                      )}
+                                      {calendar.displayName}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleWebdavAllowedCalendarsChange(
+                                            webdavAllowedCalendars.filter(url => url !== calendar.url)
+                                          );
+                                        }}
+                                        className="hover:text-blue-900 dark:hover:text-blue-100"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </span>
+                                  ))
+                              )}
+                            </span>
+                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                              <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </ComboboxButton>
+
+                          <ComboboxOptions
+                            className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
+                          >
+                            {availableCalendars.length === 0 ? (
+                              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                Click &quot;Refresh Calendars&quot; to load available calendars
+                              </div>
+                            ) : (
+                              availableCalendars
+                                .sort((a, b) => {
+                                  const aSelected = webdavAllowedCalendars.includes(a.url) ? 1 : 0;
+                                  const bSelected = webdavAllowedCalendars.includes(b.url) ? 1 : 0;
+                                  return bSelected - aSelected;
+                                })
+                                .map((calendar) => (
+                                  <ComboboxOption
+                                    key={calendar.url}
+                                    value={calendar}
+                                    className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
+                                  >
+                                    {({ selected }) => (
+                                      <>
+                                        <span className="flex items-center gap-2 truncate font-normal group-data-selected:font-medium">
+                                          {calendar.color && (
+                                            <span
+                                              className="inline-block h-3 w-3 rounded-full shrink-0"
+                                              style={{ backgroundColor: calendar.color }}
+                                            />
+                                          )}
+                                          {calendar.displayName}
+                                          {calendar.description && (
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                                              — {calendar.description}
+                                            </span>
+                                          )}
+                                        </span>
+                                        {selected && (
+                                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
+                                            <Check className="h-4 w-4" aria-hidden="true" />
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </ComboboxOption>
+                                ))
+                            )}
+                          </ComboboxOptions>
+                        </div>
+                      </Combobox>
+
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {webdavAllowedCalendars.length === 0
+                          ? "AI can search all calendars by default. Select specific calendars to restrict access."
+                          : `AI can only search ${webdavAllowedCalendars.length} selected calendar(s). Click a tag to remove it.`
+                        }
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="webdav_url"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    CalDAV Server URL
+                  </label>
+                  <input
+                    type="text"
+                    id="webdav_url"
+                    value={webdavUrl}
+                    onChange={(e) => handleWebdavUrlChange(e.target.value)}
+                    placeholder="https://cloud.example.com/remote.php/dav"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    The CalDAV server URL. For Nextcloud: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">https://your-server/remote.php/dav</code>, for Fastmail: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">https://caldav.fastmail.com/dav</code>
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="webdav_username"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    CalDAV Username
+                  </label>
+                  <input
+                    type="text"
+                    id="webdav_username"
+                    value={webdavUsername}
+                    onChange={(e) => handleWebdavUsernameChange(e.target.value)}
+                    placeholder="user@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    Your CalDAV username (often your email address)
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="webdav_password"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    CalDAV Password
+                  </label>
+                  <input
+                    type="password"
+                    id="webdav_password"
+                    value={webdavPassword}
+                    onChange={(e) => handleWebdavPasswordChange(e.target.value)}
+                    placeholder="Enter your CalDAV password or app password"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {webdavPassword === MASK_VALUE ? (
+                      <span className="text-green-600 dark:text-green-400">✓ Password is configured. Edit to update.</span>
+                    ) : (
+                      "Use an app-specific password if your provider supports it."
+                    )}
                   </p>
                 </div>
               </div>
