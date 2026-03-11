@@ -165,7 +165,7 @@ const TimeEntryBar = memo(function TimeEntryBar({
       }}
       >
       <div
-        className={`timeline-entry group flex items-center border-2 rounded px-2 ${isDragging ? "opacity-70" : ""
+        className={`timeline-entry group flex items-center border-2 rounded backdrop-blur-sm px-2 ${isDragging ? "opacity-70" : ""
           } ${isGhost ? "justify-center opacity-50 border-dashed pointer-events-none" : ""
           } ${isEditing ? "z-50 overflow-visible" : "z-20 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
           }`}
