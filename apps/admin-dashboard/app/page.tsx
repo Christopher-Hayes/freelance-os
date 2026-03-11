@@ -130,9 +130,33 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
-function formatAppName(appClass: string) {
+function buildAppRenameMap(entries: string[] | null | undefined) {
+  return (entries ?? []).reduce<Map<string, string>>((map, entry) => {
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex <= 0) {
+      return map;
+    }
+
+    const source = entry.slice(0, separatorIndex).trim().toLowerCase();
+    const target = entry.slice(separatorIndex + 1).trim();
+
+    if (source && target) {
+      map.set(source, target);
+    }
+
+    return map;
+  }, new Map<string, string>());
+}
+
+function formatAppName(appClass: string, renameMap?: Map<string, string>) {
   const trimmed = appClass.trim();
   if (!trimmed) return "Unknown app";
+
+  const renamed = renameMap?.get(trimmed.toLowerCase());
+  if (renamed) {
+    return renamed;
+  }
+
   return formatAppTitle(trimmed);
 }
 
@@ -172,6 +196,7 @@ async function getDashboardData(): Promise<DashboardData> {
   );
 
   const [
+    settings,
     clientCount,
     projectCount,
     invoiceCount,
@@ -185,6 +210,10 @@ async function getDashboardData(): Promise<DashboardData> {
     monthlyClientGroups,
     recentTimeEntries,
   ] = await Promise.all([
+    prisma.setting.findUnique({
+      where: { key: "main" },
+      select: { appTitleRenames: true },
+    }),
     prisma.client.count(),
     prisma.project.count(),
     prisma.invoice.count(),
@@ -293,6 +322,8 @@ async function getDashboardData(): Promise<DashboardData> {
     }),
   ]);
 
+  const appRenameMap = buildAppRenameMap(settings?.appTitleRenames);
+
   const projectIds = monthlyProjectGroups.map((group) => group.projectId);
   const projectDetails = projectIds.length
     ? await prisma.project.findMany({
@@ -322,7 +353,7 @@ async function getDashboardData(): Promise<DashboardData> {
   const appAggregate = new Map<string, { durationSeconds: number; sessions: number }>();
 
   for (const session of activitySessions) {
-    const appName = formatAppName(session.appClass || "Unknown app");
+    const appName = formatAppName(session.appClass || "Unknown app", appRenameMap);
     const existing = appAggregate.get(appName) ?? { durationSeconds: 0, sessions: 0 };
     existing.durationSeconds += session.durationSeconds;
     existing.sessions += 1;

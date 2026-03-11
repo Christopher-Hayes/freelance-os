@@ -9,6 +9,8 @@ import { Temporal } from "@/lib/temporal-polyfill";
 // Types
 // ──────────────────────────────────────────────────
 
+const LOG_GIT_DEBUG = false;
+
 export interface GitCommit {
   sha: string;
   message: string;
@@ -19,7 +21,9 @@ export interface GitCommit {
 }
 
 function logGitDebug(message: string, meta?: Record<string, unknown>) {
-  console.log(`[Git Debug] ${message}`, meta ?? {});
+  if (LOG_GIT_DEBUG) {
+    console.log(`[Git Debug] ${message}`, meta ?? {});
+  }
 }
 
 function normalizeIdentity(value: string): string {

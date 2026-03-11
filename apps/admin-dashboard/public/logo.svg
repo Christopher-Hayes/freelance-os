@@ -54,23 +54,23 @@
      inkscape:groupmode="layer"
      id="layer1">
     <ellipse
-       style="fill:#fefcec;fill-opacity:1;stroke:none;stroke-width:4.17955;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:16.7178, 16.7178;stroke-dashoffset:0"
+       style="fill:#020713;fill-opacity:1;stroke:none;stroke-width:4.17955;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:16.7178, 16.7178;stroke-dashoffset:0"
        id="path22"
        cx="18.66802"
        cy="49.15992"
        rx="13.08198"
        ry="13.165235" />
     <path
-       style="fill:#fefcec;fill-opacity:1;stroke:none;stroke-width:0.112276;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       style="fill:#020713;fill-opacity:1;stroke:none;stroke-width:0.112276;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        d="m 49.558799,36.345727 c -3.384244,0.01308 -6.701214,1.532393 -8.97803,4.026155 -0.369057,0.450363 -0.855067,0.850794 -1.061697,1.406279 -0.0027,0.500993 0.469411,0.822359 0.6958,1.231676 2.418234,3.316691 4.877814,6.602994 7.29331,9.920172 -2.263673,1.558212 -4.582323,3.036046 -6.834187,4.611104 -0.318044,0.276025 -0.151721,0.730629 0.145133,0.948768 2.125204,2.219323 5.114081,3.622312 8.189224,3.762131 1.549484,0.04157 3.1189,-0.09449 4.588067,-0.615969 2.698686,-0.894174 5.027118,-2.789574 6.572916,-5.157665 0.228484,-0.504615 -0.3551,-0.86858 -0.5719,-1.267742 -2.426962,-3.283861 -4.853966,-6.567691 -7.281001,-9.851498 2.123211,-1.427273 4.275656,-2.81639 6.376518,-4.273835 0.362415,-0.327 0.05193,-0.80044 -0.236958,-1.050014 -2.302945,-2.374462 -5.589776,-3.736558 -8.897195,-3.689562 z"
        id="path26" />
     <path
        id="rect26"
-       style="fill:#fefcec;stroke-width:0.638777"
+       style="fill:#020713;stroke-width:0.638777;fill-opacity:1"
        d="m 23.053301,6.8567365 h 8.006265 V 12.4499 h -8.006265 z m -14.4245525,0 H 23.463392 V 27.93103 H 8.6287485 Z" />
     <path
        id="rect26-6"
-       style="fill:#fefcec;stroke-width:0.638777"
+       style="fill:#020713;stroke-width:0.638777;fill-opacity:1"
        d="m 54.14184,27.666447 h 8.006265 V 22.073283 H 54.14184 Z m -14.424551,0 H 54.551932 V 6.5921532 H 39.717289 Z" />
   </g>
 </svg>
