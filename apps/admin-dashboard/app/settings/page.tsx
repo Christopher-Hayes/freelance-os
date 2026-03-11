@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
@@ -20,14 +21,16 @@ const settingsSections = [
   // { id: "app-name-display-overrides", title: "App Name Display Overrides" },
   // { id: "hidden-apps", title: "Hidden Apps" },
   { id: "integrations", title: "Integrations" },
+  { id: "mcp-server", title: "MCP Server" },
   // { id: "ai-integration", title: "AI Integration" },
   // { id: "rescuetime-integration", title: "RescueTime Integration" },
   // { id: "email-integration-jmap", title: "Email Integration (JMAP)" },
   { id: "api-keys", title: "API Keys" },
 ] as const;
 
-// Demo permissions available for API keys
+// Available permissions for admin API keys
 const availablePermissions = [
+  { id: "mcp:use", label: "Use MCP Server", description: "Allow this key to connect to the admin dashboard MCP server" },
   { id: "read:clients", label: "Read Clients", description: "View client information and details" },
   { id: "write:clients", label: "Write Clients", description: "Create and update client records" },
   { id: "read:projects", label: "Read Projects", description: "View project information and status" },
@@ -36,8 +39,36 @@ const availablePermissions = [
   { id: "write:time", label: "Write Time Entries", description: "Create and update time entries" },
   { id: "read:invoices", label: "Read Invoices", description: "View invoice information" },
   { id: "write:invoices", label: "Write Invoices", description: "Create and update invoices" },
-  { id: "read:analytics", label: "Read Analytics", description: "View analytics and reports" },
+  { id: "read:activity", label: "Read Activity", description: "View captured activity sessions and supporting analytics data" },
+  { id: "read:settings", label: "Read Settings", description: "View application settings" },
+  { id: "write:settings", label: "Write Settings", description: "Update application settings, including MCP configuration" },
+  { id: "read:jobs", label: "Read Jobs", description: "View background jobs and job history" },
+  { id: "write:jobs", label: "Write Jobs", description: "Create and trigger background jobs" },
+  { id: "read:api-keys", label: "Read API Keys", description: "List existing admin API keys" },
+  { id: "write:api-keys", label: "Write API Keys", description: "Create or revoke admin API keys" },
+  { id: "read:*", label: "Read Everything", description: "Grant all current and future read permissions" },
+  { id: "write:*", label: "Write Everything", description: "Grant all current and future write permissions" },
+  { id: "*", label: "Full Access", description: "Grant unrestricted access to all admin dashboard and MCP actions" },
 ];
+
+function normalizeApiKeyListItem(raw: ApiKeyListItem & Record<string, unknown>): ApiKeyListItem {
+  return {
+    ...raw,
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date(raw.createdAt as string | number | Date).toISOString(),
+    expiresAt:
+      raw.expiresAt == null
+        ? null
+        : typeof raw.expiresAt === "string"
+          ? raw.expiresAt
+          : new Date(raw.expiresAt as string | number | Date).toISOString(),
+    lastUsedAt:
+      raw.lastUsedAt == null
+        ? null
+        : typeof raw.lastUsedAt === "string"
+          ? raw.lastUsedAt
+          : new Date(raw.lastUsedAt as string | number | Date).toISOString(),
+  };
+}
 
 export default function SettingsPage() {
   const [rescueTimeApiKey, setRescueTimeApiKey] = useState("");
@@ -59,6 +90,7 @@ export default function SettingsPage() {
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
+  const [mcpEnabled, setMcpEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
 
   // API Keys state
@@ -164,6 +196,7 @@ export default function SettingsPage() {
         setAddress(data.address || "");
         setPhone(data.phone || "");
         setWebsite(data.website || "");
+  setMcpEnabled(data.mcpEnabled ?? true);
 
         // Reset modified fields tracker on initial load
         setModifiedFields(new Set());
@@ -434,12 +467,17 @@ export default function SettingsPage() {
     }, 1000);
   };
 
+  const handleMcpEnabledChange = (checked: boolean) => {
+    setMcpEnabled(checked);
+    saveSetting("mcpEnabled", String(checked));
+  };
+
   const fetchApiKeys = async () => {
     try {
       const response = await authFetch("/api/api-keys");
       if (response.ok) {
         const data = await response.json();
-        setApiKeys(data);
+        setApiKeys(Array.isArray(data) ? data.map((item) => normalizeApiKeyListItem(item)) : []);
       }
     } catch (error) {
       console.error("Error fetching API keys:", error);
@@ -1150,6 +1188,58 @@ export default function SettingsPage() {
           </section>
 
           <section
+            id="mcp-server"
+            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+          >
+            <header className="mb-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                MCP Server
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Expose the admin dashboard as a local MCP server for ChatGPT, Copilot, and other compatible tools.
+              </p>
+            </header>
+
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+                <div className="pr-4">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                    Enable MCP endpoint
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                    When enabled, the dashboard serves MCP tools at <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">/api/mcp</code>. Disable this to immediately block MCP access without revoking your API keys.
+                  </p>
+                </div>
+
+                <label className="relative inline-flex cursor-pointer items-center">
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={mcpEnabled}
+                    onChange={(e) => handleMcpEnabledChange(e.target.checked)}
+                  />
+                  <div className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-blue-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 dark:bg-gray-600 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-5"></div>
+                </label>
+              </div>
+
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-100">
+                <p className="font-medium">API keys must include MCP access</p>
+                <p className="mt-1">
+                  To use the MCP server, generate an admin API key with <code className="rounded bg-white/70 px-1 py-0.5 text-xs dark:bg-gray-900/60">mcp:use</code> plus whichever read/write scopes you want the AI to have.
+                </p>
+                <div className="mt-3">
+                  <Link
+                    href="/mcp"
+                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                  >
+                    View MCP setup guide
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
             id="api-keys"
             className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
           >
@@ -1170,15 +1260,7 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            <ApiKeyList
-              apiKeys={apiKeys.map(key => ({
-                ...key,
-                lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
-                expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
-                createdAt: key.createdAt.toISOString()
-              }))}
-              onRevoke={handleRevokeApiKey}
-            />
+            <ApiKeyList apiKeys={apiKeys} onRevoke={handleRevokeApiKey} />
           </section>
         </div>
       </div>

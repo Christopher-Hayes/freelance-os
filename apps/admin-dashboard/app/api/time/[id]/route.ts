@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // ============================================================================
 // Types
@@ -44,6 +45,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "read:time")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: read:time" }, { status: 403 });
+    }
+
     const { id } = await params;
     const timeEntryId = parseInt(id);
 
@@ -109,6 +119,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<TimeEntryResponse | { error: string }>> {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "write:time")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: write:time" }, { status: 403 });
+    }
+
     const { id } = await params;
     const timeEntryId = parseInt(id);
     const body: TimeEntryUpdateRequest = await request.json();
@@ -243,6 +262,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ success: boolean } | { error: string }>> {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "write:time")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: write:time" }, { status: 403 });
+    }
+
     const { id } = await params;
     const timeEntryId = parseInt(id);
 

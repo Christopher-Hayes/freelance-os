@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import type { ProjectStatus } from '@freelance-os/types';
+import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/projects/[id] - Get a single project
 export async function GET(
@@ -8,6 +9,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'read:projects')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: read:projects' }, { status: 403 });
+    }
+
     const { id } = await params;
     const projectId = parseInt(id);
 
@@ -84,6 +94,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'write:projects')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: write:projects' }, { status: 403 });
+    }
+
     const { id } = await params;
     const projectId = parseInt(id);
     const body = await request.json();
@@ -173,6 +192,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'write:projects')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: write:projects' }, { status: 403 });
+    }
+
     const { id } = await params;
     const projectId = parseInt(id);
 

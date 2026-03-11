@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { getMostUsedApp, getTopProject, getHoursInRange } from "@/lib/activity-actions";
 import { Temporal } from "@js-temporal/polyfill";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // ============================================================================
 // Types
@@ -85,6 +86,15 @@ export type TimeEntryCreateResponse = {
 // GET /api/time - List time entries with optional filters
 export async function GET(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "read:time")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: read:time" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get("projectId");
     const clientId = searchParams.get("clientId");
@@ -225,6 +235,15 @@ export async function GET(request: Request) {
 // POST /api/time - Create a new time entry
 export async function POST(request: Request): Promise<NextResponse<TimeEntryCreateResponse | { error: string }>> {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "write:time")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: write:time" }, { status: 403 });
+    }
+
     const body: TimeEntryCreateRequest = await request.json();
     const { projectId, startTime, endTime, durationMinutes, description, billable } = body;
 

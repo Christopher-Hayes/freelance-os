@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import type { ProjectStatus } from '@freelance-os/types';
-import { getAdminAuth } from '@/lib/auth';
+import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/projects - List all projects
 export async function GET(request: NextRequest) {
@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'read:projects')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: read:projects' }, { status: 403 });
+		}
 
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('clientId');
@@ -78,6 +82,10 @@ export async function POST(request: NextRequest) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'write:projects')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: write:projects' }, { status: 403 });
+		}
 
     const body = await request.json();
     const { name, clientDescription, privateNotes, clientId, status, color, billable, startDate, endDate } = body;

@@ -370,6 +370,7 @@ model Setting {
   address         String?     @db.Text
   phone           String?     @db.Text
   website         String?     @db.Text
+  mcpEnabled      Boolean     @default(true) @map("mcp_enabled")
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 

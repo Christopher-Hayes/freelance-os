@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { getAdminAuth } from "@/lib/auth";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // GET /api/activity-sessions - List activity sessions for a specific date
 export async function GET(request: Request) {
@@ -9,6 +9,10 @@ export async function GET(request: Request) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, "read:activity")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: read:activity" }, { status: 403 });
+		}
 
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");

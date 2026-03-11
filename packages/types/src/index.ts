@@ -356,7 +356,7 @@ export interface ApiKeyListItem {
   id: string;
   name: string;
   permissions: string[];
-  lastUsedAt?: Date;
-  expiresAt?: Date;
-  createdAt: Date;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
 }

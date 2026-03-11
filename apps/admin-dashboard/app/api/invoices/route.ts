@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
-import { getAdminAuth } from '@/lib/auth';
+import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/invoices - List all invoices with optional filters
 export async function GET(request: NextRequest) {
@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'read:invoices')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: read:invoices' }, { status: 403 });
+		}
 
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('clientId');
@@ -75,6 +79,10 @@ export async function POST(request: NextRequest) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'write:invoices')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: write:invoices' }, { status: 403 });
+		}
 
     const body = await request.json();
     const {

@@ -3,6 +3,29 @@ import { prisma } from "@freelance-os/database";
 import { createHash } from "crypto";
 import { sessions } from "./sessions";
 
+export const ADMIN_PERMISSION_SCOPES = [
+  "mcp:use",
+  "read:*",
+  "write:*",
+  "read:clients",
+  "write:clients",
+  "read:projects",
+  "write:projects",
+  "read:invoices",
+  "write:invoices",
+  "read:time",
+  "write:time",
+  "read:activity",
+  "read:settings",
+  "write:settings",
+  "read:jobs",
+  "write:jobs",
+  "read:api-keys",
+  "write:api-keys",
+] as const;
+
+export type AdminPermissionScope = (typeof ADMIN_PERMISSION_SCOPES)[number];
+
 /**
  * Verify session token from cookie
  */
@@ -222,6 +245,36 @@ export function hasPermission(authData: { permissions: string[] }, permission: s
   }
 
   return false;
+}
+
+export function normalizeAdminPermissions(inputPermissions: string[]): string[] {
+  const normalized = new Set<string>();
+
+  for (const permission of inputPermissions) {
+    switch (permission) {
+      case "admin":
+        normalized.add("*");
+        break;
+      case "read":
+        normalized.add("read:*");
+        break;
+      case "write":
+        normalized.add("write:*");
+        break;
+      case "delete":
+        // Delete operations are covered by write scopes in the current app.
+        normalized.add("write:*");
+        break;
+      default:
+        normalized.add(permission);
+    }
+  }
+
+  return Array.from(normalized);
+}
+
+export function isValidAdminPermission(permission: string): boolean {
+  return permission === "*" || ADMIN_PERMISSION_SCOPES.includes(permission as AdminPermissionScope);
 }
 
 /**

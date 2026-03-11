@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import type { Client } from '@freelance-os/types';
-import { getAdminAuth } from '@/lib/auth';
+import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/clients - List all clients
 export async function GET() {
@@ -10,6 +10,10 @@ export async function GET() {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'read:clients')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: read:clients' }, { status: 403 });
+		}
 
     const clients = await prisma.client.findMany({
       orderBy: {
@@ -42,6 +46,10 @@ export async function POST(request: Request) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, 'write:clients')) {
+			return NextResponse.json({ error: 'Forbidden - Missing permission: write:clients' }, { status: 403 });
+		}
 
     const body = await request.json();
     

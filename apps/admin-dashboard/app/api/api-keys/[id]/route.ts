@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { getAdminAuth } from "@/lib/auth";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 export async function DELETE(
   request: Request,
@@ -11,6 +11,10 @@ export async function DELETE(
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, "write:api-keys")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: write:api-keys" }, { status: 403 });
+		}
 
     const { id } = await params;
 

@@ -115,6 +115,9 @@ export function ApiKeyModal({ isOpen, onClose, onGenerate, availablePermissions 
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Permissions
                 </label>
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  For MCP access, include <span className="font-medium">Use MCP Server</span> and the specific data scopes you want this key to allow.
+                </p>
                 <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md p-3">
                   {availablePermissions.map((permission) => (
                     <label

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
-import { getAdminAuth } from "@/lib/auth";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // GET /api/settings - Get all settings or a specific setting by key
 export async function GET(request: Request) {
@@ -9,6 +9,10 @@ export async function GET(request: Request) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, "read:settings")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: read:settings" }, { status: 403 });
+		}
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get("key");
@@ -56,6 +60,10 @@ export async function PUT(request: Request) {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, "write:settings")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: write:settings" }, { status: 403 });
+		}
 
     const body = await request.json();
     const { key, value } = body;

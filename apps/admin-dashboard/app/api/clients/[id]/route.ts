@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
+import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/clients/[id] - Get a single client
 export async function GET(
@@ -7,6 +8,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'read:clients')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: read:clients' }, { status: 403 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id, 10);
 
@@ -58,6 +68,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'write:clients')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: write:clients' }, { status: 403 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id, 10);
     const body = await request.json();
@@ -142,6 +161,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, 'write:clients')) {
+      return NextResponse.json({ error: 'Forbidden - Missing permission: write:clients' }, { status: 403 });
+    }
+
     const { id } = await params;
     const clientId = parseInt(id, 10);
 

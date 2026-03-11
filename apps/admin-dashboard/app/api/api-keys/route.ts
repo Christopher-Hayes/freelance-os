@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import { randomBytes, createHash } from "crypto";
-import { getAdminAuth } from "@/lib/auth";
+import {
+  getAdminAuth,
+  hasPermission,
+  isValidAdminPermission,
+  normalizeAdminPermissions,
+} from "@/lib/auth";
 
 export async function GET() {
   try {
@@ -9,6 +14,10 @@ export async function GET() {
     if (!authData) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+		if (!hasPermission(authData, "read:api-keys")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: read:api-keys" }, { status: 403 });
+		}
 
     // Fetch all API keys
     // Note: Admin dashboard shows all keys since it's a single-admin system
@@ -51,6 +60,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+		if (!hasPermission(authData, "write:api-keys")) {
+			return NextResponse.json({ error: "Forbidden - Missing permission: write:api-keys" }, { status: 403 });
+		}
+
     const { name, permissions, expiresAt, userId } = await request.json();
 
     // Validate inputs
@@ -83,12 +96,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedPermissions = normalizeAdminPermissions(permissions);
+
     // Validate permission values
-    const validPermissions = ['read', 'write', 'delete', 'admin'];
-    const invalidPermissions = permissions.filter(p => !validPermissions.includes(p));
+    const invalidPermissions = normalizedPermissions.filter((p) => !isValidAdminPermission(p));
     if (invalidPermissions.length > 0) {
       return NextResponse.json(
-        { error: `Invalid permissions: ${invalidPermissions.join(', ')}. Valid permissions are: ${validPermissions.join(', ')}` },
+        { error: `Invalid permissions: ${invalidPermissions.join(', ')}` },
         { status: 400 }
       );
     }
@@ -145,7 +159,7 @@ export async function POST(request: Request) {
         name,
         key: hashedKey,
         userId: actualUserId,
-        permissions,
+        permissions: normalizedPermissions,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       },
     });

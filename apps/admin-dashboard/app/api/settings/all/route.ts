@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
 import type { AiProvider } from "@freelance-os/types";
+import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // Helper to mask sensitive values
 const MASK_VALUE = "••••••••";
@@ -70,6 +71,15 @@ function normalizeHiddenAppClasses(value: unknown): string[] {
 // Sensitive fields (API keys, tokens) are masked to prevent exposure to client
 export async function GET() {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "read:settings")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: read:settings" }, { status: 403 });
+    }
+
     // Try to find the main settings record (we'll use key 'main' for the single settings row)
     let setting = await prisma.setting.findUnique({
       where: { key: "main" },
@@ -107,6 +117,7 @@ export async function GET() {
       address: setting.address || "",
       phone: setting.phone || "",
       website: setting.website || "",
+  mcpEnabled: setting.mcpEnabled ?? true,
       
       // Metadata to help client know which fields are set
       hasRescuetimeKey: !!setting.rescuetimeKey,
@@ -127,6 +138,15 @@ export async function GET() {
 // Ignores masked placeholder values to prevent overwriting actual credentials
 export async function PUT(request: Request) {
   try {
+    const authData = await getAdminAuth();
+    if (!authData) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!hasPermission(authData, "write:settings")) {
+      return NextResponse.json({ error: "Forbidden - Missing permission: write:settings" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { 
       rescuetimeKey, 
@@ -146,6 +166,7 @@ export async function PUT(request: Request) {
       address,
       phone,
       website,
+      mcpEnabled,
     } = body;
 
     // Validate AI provider if provided
@@ -212,6 +233,7 @@ export async function PUT(request: Request) {
     if (address !== undefined) updateData.address = address || null;
     if (phone !== undefined) updateData.phone = phone || null;
     if (website !== undefined) updateData.website = website || null;
+    if (mcpEnabled !== undefined) updateData.mcpEnabled = mcpEnabled === "true" || mcpEnabled === true;
 
     // Upsert the settings
     const setting = await prisma.setting.upsert({
@@ -239,6 +261,7 @@ export async function PUT(request: Request) {
         address: address || null,
         phone: phone || null,
         website: website || null,
+        mcpEnabled: mcpEnabled === undefined ? true : mcpEnabled === "true" || mcpEnabled === true,
       },
     });
 
@@ -261,6 +284,7 @@ export async function PUT(request: Request) {
       address: setting.address || "",
       phone: setting.phone || "",
       website: setting.website || "",
+  mcpEnabled: setting.mcpEnabled ?? true,
       hasRescuetimeKey: !!setting.rescuetimeKey,
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,
