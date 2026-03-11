@@ -13,6 +13,18 @@ const MASK_VALUE = "••••••••";
 const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
 const HIDDEN_APP_CLASSES_STORAGE_KEY = "hiddenAppClasses";
 
+const settingsSections = [
+  { id: "freelancer-information", title: "Invoice Information" },
+  { id: "display-options", title: "Display Options" },
+  // { id: "app-name-display-overrides", title: "App Name Display Overrides" },
+  // { id: "hidden-apps", title: "Hidden Apps" },
+  { id: "integrations", title: "Integrations" },
+  // { id: "ai-integration", title: "AI Integration" },
+  // { id: "rescuetime-integration", title: "RescueTime Integration" },
+  // { id: "email-integration-jmap", title: "Email Integration (JMAP)" },
+  { id: "api-keys", title: "API Keys" },
+] as const;
+
 // Demo permissions available for API keys
 const availablePermissions = [
   { id: "read:clients", label: "Read Clients", description: "View client information and details" },
@@ -103,12 +115,12 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
-    const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
-    setAppTitleRenamesText(appTitleRenames.join("\n"));
-    persistAppTitleRenames(appTitleRenames);
-    const hiddenAppClasses = Array.isArray(data.hiddenAppClasses) ? data.hiddenAppClasses : [];
-    setHiddenAppClassesText(hiddenAppClasses.join("\n"));
-    persistHiddenAppClasses(hiddenAppClasses);
+        const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
+        setAppTitleRenamesText(appTitleRenames.join("\n"));
+        persistAppTitleRenames(appTitleRenames);
+        const hiddenAppClasses = Array.isArray(data.hiddenAppClasses) ? data.hiddenAppClasses : [];
+        setHiddenAppClassesText(hiddenAppClasses.join("\n"));
+        persistHiddenAppClasses(hiddenAppClasses);
         setJmapToken(data.jmapToken || "");
         setCanReadMailbox(data.canReadMailbox || false);
         setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
@@ -457,7 +469,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Settings
@@ -467,588 +479,675 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-8">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Freelancer Information
-          </h2>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <aside className="lg:sticky lg:top-6 lg:w-72 lg:shrink-0">
+          <nav className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Jump to section
+            </h2>
+            <ul className="mt-4 space-y-1">
+              {settingsSections.map((section) => (
+                <li key={section.id}>
+                  <a
+                    href={`#${section.id}`}
+                    className="block rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    {section.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
 
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="company_name"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Company/Business Name
-              </label>
-              <input
-                type="text"
-                id="company_name"
-                value={companyName}
-                onChange={(e) => handleCompanyNameChange(e.target.value)}
-                placeholder="Your Company Name"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Used in invoices and email communications
+        <div className="min-w-0 flex-1 space-y-6">
+          <section
+            id="freelancer-information"
+            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+          >
+            <header className="mb-4">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Invoice Information
+              </h2>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                This information will be used in your invoices and official documents.
               </p>
-            </div>
+            </header>
 
-            <div>
-              <label
-                htmlFor="freelancer_name"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Your Name
-              </label>
-              <input
-                type="text"
-                id="freelancer_name"
-                value={freelancerName}
-                onChange={(e) => handleFreelancerNameChange(e.target.value)}
-                placeholder="John Doe"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="freelancer_email"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Business Email
-              </label>
-              <input
-                type="email"
-                id="freelancer_email"
-                value={freelancerEmail}
-                onChange={(e) => handleFreelancerEmailChange(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="address"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Business Address
-              </label>
-              <textarea
-                id="address"
-                value={address}
-                onChange={(e) => handleAddressChange(e.target.value)}
-                placeholder="123 Main St&#10;City, State 12345&#10;Country"
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Appears on invoices and official documents
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="phone"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                value={phone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                placeholder="+1 (555) 123-4567"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="website"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Website
-              </label>
-              <input
-                type="url"
-                id="website"
-                value={website}
-                onChange={(e) => handleWebsiteChange(e.target.value)}
-                placeholder="https://yourwebsite.com"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            App Name Display Overrides
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="app_title_renames"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Custom App Name Renames
-              </label>
-              <textarea
-                id="app_title_renames"
-                value={appTitleRenamesText}
-                onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
-                placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
-                rows={6}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                One rename per line using <code className="rounded bg-gray-100 dark:bg-gray-700 px-1 py-0.5">rawAppClass=Display Name</code>. These are cosmetic only and override the built-in formatting when present.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Hidden Apps
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="hidden_app_classes"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Hide App Classes From Timeline and Analytics
-              </label>
-              <textarea
-                id="hidden_app_classes"
-                value={hiddenAppClassesText}
-                onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
-                placeholder={"Easyeffects\nSteam"}
-                rows={5}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                One raw app class per line. Hidden apps won&apos;t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            AI Provider Configuration
-          </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="ai_provider"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                AI Provider
-              </label>
-              <select
-                id="ai_provider"
-                value={aiProvider}
-                onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="openai">OpenAI (gpt-5.4)</option>
-                <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
-              </select>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Choose which AI provider to use for AI-powered features
-              </p>
-            </div>
-
-            {aiProvider === "openai" && (
+            <div className="space-y-4">
               <div>
                 <label
-                  htmlFor="openai_api_key"
+                  htmlFor="company_name"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                 >
-                  OpenAI API Key
+                  Company/Business Name
                 </label>
                 <input
-                  type="password"
-                  id="openai_api_key"
-                  value={openaiApiKey}
-                  onChange={(e) => handleOpenaiChange(e.target.value)}
-                  placeholder="sk-..."
+                  type="text"
+                  id="company_name"
+                  value={companyName}
+                  onChange={(e) => handleCompanyNameChange(e.target.value)}
+                  placeholder="Your Company Name"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {openaiApiKey === MASK_VALUE ? (
-                    <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
-                  ) : (
-                    <>
-                      Get your API key from{" "}
-                      <a
-                        href="https://platform.openai.com/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        OpenAI Platform
-                      </a>
-                    </>
-                  )}
+                  Used in invoices and email communications
                 </p>
               </div>
-            )}
 
-            {aiProvider === "gemini" && (
               <div>
                 <label
-                  htmlFor="google_api_key"
+                  htmlFor="freelancer_name"
                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                 >
-                  Google API Key
+                  Your Name
                 </label>
                 <input
-                  type="password"
-                  id="google_api_key"
-                  value={googleApiKey}
-                  onChange={(e) => handleGoogleChange(e.target.value)}
-                  placeholder="Enter your Google API key"
+                  type="text"
+                  id="freelancer_name"
+                  value={freelancerName}
+                  onChange={(e) => handleFreelancerNameChange(e.target.value)}
+                  placeholder="John Doe"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="freelancer_email"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Business Email
+                </label>
+                <input
+                  type="email"
+                  id="freelancer_email"
+                  value={freelancerEmail}
+                  onChange={(e) => handleFreelancerEmailChange(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="address"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Business Address
+                </label>
+                <textarea
+                  id="address"
+                  value={address}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  placeholder="123 Main St&#10;City, State 12345&#10;Country"
+                  rows={3}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {googleApiKey === MASK_VALUE ? (
-                    <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
-                  ) : (
-                    <>
-                      Get your API key from{" "}
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        Google AI Studio
-                      </a>
-                    </>
-                  )}
+                  Appears on invoices and official documents
                 </p>
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            RescueTime Integration
-          </h2>
+              <div>
+                <label
+                  htmlFor="phone"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder="+1 (555) 123-4567"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
 
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="rescuetime_api_key"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                RescueTime API Key
-              </label>
-              <input
-                type="password"
-                id="rescuetime_api_key"
-                value={rescueTimeApiKey}
-                onChange={(e) => handleRescueTimeChange(e.target.value)}
-                placeholder="Enter your RescueTime API key"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {rescueTimeApiKey === MASK_VALUE ? (
-                  <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
-                ) : (
-                  <>
-                    Get your API key from{" "}
-                    <a
-                      href="https://www.rescuetime.com/anapi/manage"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
+              <div>
+                <label
+                  htmlFor="website"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                >
+                  Website
+                </label>
+                <input
+                  type="url"
+                  id="website"
+                  value={website}
+                  onChange={(e) => handleWebsiteChange(e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section id="display-options" className="space-y-6 scroll-mt-24">
+            <header>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Display Options
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Customize how apps display and which apps are visible.
+              </p>
+            </header>
+            <section
+              id="app-name-display-overrides"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                App Name Display Overrides
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="app_title_renames"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    Custom App Name Renames
+                  </label>
+                  <textarea
+                    id="app_title_renames"
+                    value={appTitleRenamesText}
+                    onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
+                    placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    One rename per line using <code className="rounded bg-gray-100 dark:bg-gray-700 px-1 py-0.5">rawAppClass=Display Name</code>. These are cosmetic only and override the built-in formatting when present.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section
+              id="hidden-apps"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Hidden Apps
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="hidden_app_classes"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    Hide App Classes From Timeline and Analytics
+                  </label>
+                  <textarea
+                    id="hidden_app_classes"
+                    value={hiddenAppClassesText}
+                    onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
+                    placeholder={"Easyeffects\nSteam"}
+                    rows={5}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    One raw app class per line. Hidden apps won&apos;t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section
+            id="integrations"
+            className="space-y-6 scroll-mt-24"
+          >
+            <header>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Integrations
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Connect external services used for AI, time tracking, and email context.
+              </p>
+            </header>
+
+            <section
+              id="ai-integration"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <header className="mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  AI Integration
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Use AI to automatically categorize app activity into project entries, generate work summaries, and more.
+                </p>
+              </header>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="ai_provider"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    AI Provider
+                  </label>
+                  <select
+                    id="ai_provider"
+                    value={aiProvider}
+                    onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="openai">OpenAI (gpt-5.4)</option>
+                    <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    Choose which AI provider to use for AI-powered features
+                  </p>
+                </div>
+
+                {aiProvider === "openai" && (
+                  <div>
+                    <label
+                      htmlFor="openai_api_key"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                     >
-                      RescueTime API Management
-                    </a>
-                  </>
+                      OpenAI API Key
+                    </label>
+                    <input
+                      type="password"
+                      id="openai_api_key"
+                      value={openaiApiKey}
+                      onChange={(e) => handleOpenaiChange(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {openaiApiKey === MASK_VALUE ? (
+                        <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                      ) : (
+                        <>
+                          Get your API key from{" "}
+                          <a
+                            href="https://platform.openai.com/api-keys"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            OpenAI Platform
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
                 )}
-              </p>
-            </div>
-          </div>
-        </div>
 
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Email Configuration (JMAP)
-          </h2>
-
-          <div className="space-y-4">
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="can_read_mailbox"
-                  type="checkbox"
-                  checked={canReadMailbox}
-                  onChange={(e) => handleJmapEnabledChange(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
-                />
+                {aiProvider === "gemini" && (
+                  <div>
+                    <label
+                      htmlFor="google_api_key"
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                    >
+                      Google API Key
+                    </label>
+                    <input
+                      type="password"
+                      id="google_api_key"
+                      value={googleApiKey}
+                      onChange={(e) => handleGoogleChange(e.target.value)}
+                      placeholder="Enter your Google API key"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {googleApiKey === MASK_VALUE ? (
+                        <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                      ) : (
+                        <>
+                          Get your API key from{" "}
+                          <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            Google AI Studio
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
-              <div className="ml-3">
-                <label htmlFor="can_read_mailbox" className="font-medium text-gray-700 dark:text-gray-300">
-                  Allow AI to read emails via JMAP
-                </label>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy.
+            </section>
+
+            <section
+              id="rescuetime-integration"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <header className="mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  RescueTime Integration
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Automatically populate your App Activity with data from RescueTime.
                 </p>
+              </header>
+
+              <div className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="rescuetime_api_key"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    RescueTime API Key
+                  </label>
+                  <input
+                    type="password"
+                    id="rescuetime_api_key"
+                    value={rescueTimeApiKey}
+                    onChange={(e) => handleRescueTimeChange(e.target.value)}
+                    placeholder="Enter your RescueTime API key"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {rescueTimeApiKey === MASK_VALUE ? (
+                      <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                    ) : (
+                      <>
+                        Get your API key from{" "}
+                        <a
+                          href="https://www.rescuetime.com/anapi/manage"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          RescueTime API Management
+                        </a>
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
-            </div>
-            {canReadMailbox && (
-              <>
-                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
-                  <div className="flex items-start">
-                    <div className="shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                        Privacy Warning
-                      </h3>
-                      <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
-                        <p>
-                          When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
-                        </p>
-                        <p>
-                          In the field below, you can restrict which folders AI is allowed to access. Leaving it empty will allow AI to search all email folders.
-                        </p>
+            </section>
+
+            <section
+              id="email-integration-jmap"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <header className="mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Email Integration (JMAP)
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Cross reference your emails with clients to more accurately categorize and summarize your work. This integration uses JMAP, a modern email protocol, your email provider must support JMAP for this to work (e.g. Fastmail, iCloud, Gmail with a JMAP proxy).
+                </p>
+              </header>
+
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="can_read_mailbox"
+                      type="checkbox"
+                      checked={canReadMailbox}
+                      onChange={(e) => handleJmapEnabledChange(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
+                    />
+                  </div>
+                  <div className="ml-3">
+                    <label htmlFor="can_read_mailbox" className="font-medium text-gray-700 dark:text-gray-300">
+                      Allow AI to read emails via JMAP
+                    </label>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy.
+                    </p>
+                  </div>
+                </div>
+
+                {canReadMailbox && (
+                  <>
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+                      <div className="flex items-start">
+                        <div className="shrink-0">
+                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            Privacy Warning
+                          </h3>
+                          <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
+                            <p>
+                              When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
+                            </p>
+                            <p>
+                              In the field below, you can restrict which folders AI is allowed to access. Leaving it empty will allow AI to search all email folders.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          Restrict JMAP to Folders (Optional)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleRefreshMailboxes}
+                          disabled={loadingMailboxes}
+                          className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loadingMailboxes ? "Loading..." : "Refresh Mailboxes"}
+                        </button>
+                      </div>
+
+                      <Combobox
+                        multiple
+                        by="id"
+                        value={availableMailboxes.filter(m => jmapAllowedMailboxes.includes(m.id))}
+                        onChange={(selected: MailboxInfo[]) => {
+                          handleJmapAllowedMailboxesChange(selected.map(m => m.id));
+                        }}
+                      >
+                        <div className="relative">
+                          <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
+                            <span className="flex flex-wrap gap-1">
+                              {jmapAllowedMailboxes.length === 0 ? (
+                                <span className="text-gray-500 dark:text-gray-400">
+                                  {availableMailboxes.length === 0 ? "Click 'Refresh Mailboxes' first" : "Select folders to restrict (or leave empty for all)"}
+                                </span>
+                              ) : (
+                                availableMailboxes
+                                  .filter(m => jmapAllowedMailboxes.includes(m.id))
+                                  .map(mailbox => (
+                                    <span
+                                      key={mailbox.id}
+                                      className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
+                                    >
+                                      {mailbox.name}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleJmapAllowedMailboxesChange(
+                                            jmapAllowedMailboxes.filter(id => id !== mailbox.id)
+                                          );
+                                        }}
+                                        className="hover:text-blue-900 dark:hover:text-blue-100"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </span>
+                                  ))
+                              )}
+                            </span>
+                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                              <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
+                            </span>
+                          </ComboboxButton>
+
+                          <ComboboxOptions
+                            className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
+                          >
+                            {availableMailboxes.length === 0 ? (
+                              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                Click "Refresh Mailboxes" to load available folders
+                              </div>
+                            ) : (
+                              availableMailboxes
+                                .sort((a, b) => b.totalEmails - a.totalEmails)
+                                .sort((a, b) => {
+                                  const aSelected = jmapAllowedMailboxes.includes(a.id) ? 1 : 0;
+                                  const bSelected = jmapAllowedMailboxes.includes(b.id) ? 1 : 0;
+                                  return bSelected - aSelected;
+                                })
+                                .map((mailbox) => (
+                                  <ComboboxOption
+                                    key={mailbox.id}
+                                    value={mailbox}
+                                    className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
+                                  >
+                                    {({ selected }) => (
+                                      <>
+                                        <span className="block truncate font-normal group-data-selected:font-medium">
+                                          {mailbox.name} {mailbox.role ? `(${mailbox.role})` : ''} - {mailbox.totalEmails} emails
+                                        </span>
+                                        {selected && (
+                                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
+                                            <Check className="h-4 w-4" aria-hidden="true" />
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </ComboboxOption>
+                                ))
+                            )}
+                          </ComboboxOptions>
+                        </div>
+                      </Combobox>
+
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {jmapAllowedMailboxes.length === 0
+                          ? "AI can search all mailboxes by default. Select specific folders to restrict access."
+                          : `AI can only search ${jmapAllowedMailboxes.length} selected folder(s). Click a tag to remove it.`
+                        }
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="jmap_token"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    JMAP API Token
+                  </label>
+                  <input
+                    type="password"
+                    id="jmap_token"
+                    value={jmapToken}
+                    onChange={(e) => handleJmapTokenChange(e.target.value)}
+                    placeholder="Enter your JMAP API token or app password"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {jmapToken === MASK_VALUE ? (
+                      <span className="text-green-600 dark:text-green-400">✓ API token is configured. Edit to update.</span>
+                    ) : (
+                      <>
+                        For Fastmail, create an app-specific password from your{" "}
+                        <a
+                          href="https://www.fastmail.com/settings/security/devicekeys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          security settings
+                        </a>
+                      </>
+                    )}
+                  </p>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                    >
-                      Restrict JMAP to Folders (Optional)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleRefreshMailboxes}
-                      disabled={loadingMailboxes}
-                      className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loadingMailboxes ? "Loading..." : "Refresh Mailboxes"}
-                    </button>
-                  </div>
-                  
-                  <Combobox
-                    multiple
-                    by="id"
-                    value={availableMailboxes.filter(m => jmapAllowedMailboxes.includes(m.id))}
-                    onChange={(selected: MailboxInfo[]) => {
-                      handleJmapAllowedMailboxesChange(selected.map(m => m.id));
-                    }}
+                  <label
+                    htmlFor="jmap_username"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                   >
-                    <div className="relative">
-                      <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
-                        <span className="flex flex-wrap gap-1">
-                          {jmapAllowedMailboxes.length === 0 ? (
-                            <span className="text-gray-500 dark:text-gray-400">
-                              {availableMailboxes.length === 0 ? "Click 'Refresh Mailboxes' first" : "Select folders to restrict (or leave empty for all)"}
-                            </span>
-                          ) : (
-                            availableMailboxes
-                              .filter(m => jmapAllowedMailboxes.includes(m.id))
-                              .map(mailbox => (
-                                <span
-                                  key={mailbox.id}
-                                  className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
-                                >
-                                  {mailbox.name}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleJmapAllowedMailboxesChange(
-                                        jmapAllowedMailboxes.filter(id => id !== mailbox.id)
-                                      );
-                                    }}
-                                    className="hover:text-blue-900 dark:hover:text-blue-100"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </span>
-                              ))
-                          )}
-                        </span>
-                        <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                          <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
-                        </span>
-                      </ComboboxButton>
-                      
-                      <ComboboxOptions
-                        className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
-                      >
-                        {availableMailboxes.length === 0 ? (
-                          <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                            Click "Refresh Mailboxes" to load available folders
-                          </div>
-                        ) : (
-                          availableMailboxes
-                            // Sort by email count
-                            .sort((a, b) => b.totalEmails - a.totalEmails)
-                            // Put selected mailboxes at the top
-                            .sort((a, b) => {
-                              const aSelected = jmapAllowedMailboxes.includes(a.id) ? 1 : 0;
-                              const bSelected = jmapAllowedMailboxes.includes(b.id) ? 1 : 0;
-                              return bSelected - aSelected;
-                            })
-                            .map((mailbox) => (
-                              <ComboboxOption
-                                key={mailbox.id}
-                                value={mailbox}
-                                className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
-                              >
-                                {({ selected }) => (
-                                  <>
-                                    <span className="block truncate font-normal group-data-selected:font-medium">
-                                      {mailbox.name} {mailbox.role ? `(${mailbox.role})` : ''} - {mailbox.totalEmails} emails
-                                    </span>
-                                    {selected && (
-                                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
-                                        <Check className="h-4 w-4" aria-hidden="true" />
-                                      </span>
-                                    )}
-                                  </>
-                                )}
-                              </ComboboxOption>
-                            ))
-                        )}
-                      </ComboboxOptions>
-                    </div>
-                  </Combobox>
-                  
+                    JMAP Username (Email)
+                  </label>
+                  <input
+                    type="email"
+                    id="jmap_username"
+                    value={jmapUsername}
+                    onChange={(e) => handleJmapUsernameChange(e.target.value)}
+                    placeholder="sender@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {jmapAllowedMailboxes.length === 0 
-                      ? "AI can search all mailboxes by default. Select specific folders to restrict access."
-                      : `AI can only search ${jmapAllowedMailboxes.length} selected folder(s). Click a tag to remove it.`
-                    }
+                    Your email address for JMAP authentication
                   </p>
                 </div>
-              </>
-            )}
-            <div>
-              <label
-                htmlFor="jmap_token"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+
+                <div>
+                  <label
+                    htmlFor="jmap_hostname"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                  >
+                    JMAP Hostname
+                  </label>
+                  <input
+                    type="text"
+                    id="jmap_hostname"
+                    value={jmapHostname}
+                    onChange={(e) => handleJmapHostnameChange(e.target.value)}
+                    placeholder="api.fastmail.com"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    JMAP server hostname
+                  </p>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section
+            id="api-keys"
+            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  API Keys
+                </h2>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Generate API keys for programmatic access to your data
+                </p>
+              </div>
+              <button
+                onClick={() => setIsApiKeyModalOpen(true)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
               >
-                JMAP API Token
-              </label>
-              <input
-                type="password"
-                id="jmap_token"
-                value={jmapToken}
-                onChange={(e) => handleJmapTokenChange(e.target.value)}
-                placeholder="Enter your JMAP API token or app password"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                {jmapToken === MASK_VALUE ? (
-                  <span className="text-green-600 dark:text-green-400">✓ API token is configured. Edit to update.</span>
-                ) : (
-                  <>
-                    For Fastmail, create an app-specific password from your{" "}
-                    <a
-                      href="https://www.fastmail.com/settings/security/devicekeys"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      security settings
-                    </a>
-                  </>
-                )}
-              </p>
+                Generate New Key
+              </button>
             </div>
 
-            <div>
-              <label
-                htmlFor="jmap_username"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                JMAP Username (Email)
-              </label>
-              <input
-                type="email"
-                id="jmap_username"
-                value={jmapUsername}
-                onChange={(e) => handleJmapUsernameChange(e.target.value)}
-                placeholder="sender@example.com"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Your email address for JMAP authentication
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="jmap_hostname"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                JMAP Hostname
-              </label>
-              <input
-                type="text"
-                id="jmap_hostname"
-                value={jmapHostname}
-                onChange={(e) => handleJmapHostnameChange(e.target.value)}
-                placeholder="api.fastmail.com"
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                JMAP server hostname (defaults to api.fastmail.com)
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                API Keys
-              </h2>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Generate API keys for programmatic access to your data
-              </p>
-            </div>
-            <button
-              onClick={() => setIsApiKeyModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
-            >
-              Generate New Key
-            </button>
-          </div>
-
-          <ApiKeyList 
-            apiKeys={apiKeys.map(key => ({
-              ...key,
-              lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
-              expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
-              createdAt: key.createdAt.toISOString()
-            }))} 
-            onRevoke={handleRevokeApiKey} 
-          />
+            <ApiKeyList
+              apiKeys={apiKeys.map(key => ({
+                ...key,
+                lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
+                expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
+                createdAt: key.createdAt.toISOString()
+              }))}
+              onRevoke={handleRevokeApiKey}
+            />
+          </section>
         </div>
       </div>
 
