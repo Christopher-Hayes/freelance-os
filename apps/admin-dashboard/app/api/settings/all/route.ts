@@ -102,6 +102,9 @@ export async function GET() {
       openaiKey: maskIfPresent(setting.openaiKey),
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
+      githubToken: maskIfPresent(setting.githubToken),
+      gitlabToken: maskIfPresent(setting.gitlabToken),
+      codebergToken: maskIfPresent(setting.codebergToken),
       
       // Non-sensitive fields - safe to expose
     aiProvider: setting.aiProvider || "openai",
@@ -111,6 +114,10 @@ export async function GET() {
       jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
+      githubUsername: setting.githubUsername || "",
+      gitlabUsername: setting.gitlabUsername || "",
+      gitlabUrl: setting.gitlabUrl || "",
+      codebergUsername: setting.codebergUsername || "",
       companyName: setting.companyName || "",
       freelancerName: setting.freelancerName || "",
       freelancerEmail: setting.freelancerEmail || "",
@@ -124,6 +131,9 @@ export async function GET() {
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,
       hasJmapToken: !!setting.jmapToken,
+      hasGithubToken: !!setting.githubToken,
+      hasGitlabToken: !!setting.gitlabToken,
+      hasCodebergToken: !!setting.codebergToken,
     });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -160,6 +170,13 @@ export async function PUT(request: Request) {
       jmapToken, 
       jmapUsername, 
       jmapHostname,
+      githubToken,
+      githubUsername,
+      gitlabToken,
+      gitlabUsername,
+      gitlabUrl,
+      codebergToken,
+      codebergUsername,
       companyName,
       freelancerName,
       freelancerEmail,
@@ -209,6 +226,15 @@ export async function PUT(request: Request) {
     if (jmapToken !== undefined && jmapToken !== MASK_VALUE) {
       updateData.jmapToken = jmapToken || null;
     }
+    if (githubToken !== undefined && githubToken !== MASK_VALUE) {
+      updateData.githubToken = githubToken || null;
+    }
+    if (gitlabToken !== undefined && gitlabToken !== MASK_VALUE) {
+      updateData.gitlabToken = gitlabToken || null;
+    }
+    if (codebergToken !== undefined && codebergToken !== MASK_VALUE) {
+      updateData.codebergToken = codebergToken || null;
+    }
     
     // Non-sensitive fields can be updated normally
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
@@ -227,6 +253,10 @@ export async function PUT(request: Request) {
     }
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
+    if (githubUsername !== undefined) updateData.githubUsername = githubUsername || null;
+    if (gitlabUsername !== undefined) updateData.gitlabUsername = gitlabUsername || null;
+    if (gitlabUrl !== undefined) updateData.gitlabUrl = gitlabUrl || null;
+    if (codebergUsername !== undefined) updateData.codebergUsername = codebergUsername || null;
     if (companyName !== undefined) updateData.companyName = companyName || null;
     if (freelancerName !== undefined) updateData.freelancerName = freelancerName || null;
     if (freelancerEmail !== undefined) updateData.freelancerEmail = freelancerEmail || null;
@@ -255,6 +285,13 @@ export async function PUT(request: Request) {
         jmapToken: jmapToken && jmapToken !== MASK_VALUE ? jmapToken : null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
+        githubToken: githubToken && githubToken !== MASK_VALUE ? githubToken : null,
+        githubUsername: githubUsername || null,
+        gitlabToken: gitlabToken && gitlabToken !== MASK_VALUE ? gitlabToken : null,
+        gitlabUsername: gitlabUsername || null,
+        gitlabUrl: gitlabUrl || null,
+        codebergToken: codebergToken && codebergToken !== MASK_VALUE ? codebergToken : null,
+        codebergUsername: codebergUsername || null,
         companyName: companyName || null,
         freelancerName: freelancerName || null,
         freelancerEmail: freelancerEmail || null,
@@ -271,6 +308,9 @@ export async function PUT(request: Request) {
       openaiKey: maskIfPresent(setting.openaiKey),
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
+      githubToken: maskIfPresent(setting.githubToken),
+      gitlabToken: maskIfPresent(setting.gitlabToken),
+      codebergToken: maskIfPresent(setting.codebergToken),
     aiProvider: setting.aiProvider || "openai",
     appTitleRenames: setting.appTitleRenames || [],
     hiddenAppClasses: setting.hiddenAppClasses || [],
@@ -278,6 +318,10 @@ export async function PUT(request: Request) {
       jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
+      githubUsername: setting.githubUsername || "",
+      gitlabUsername: setting.gitlabUsername || "",
+      gitlabUrl: setting.gitlabUrl || "",
+      codebergUsername: setting.codebergUsername || "",
       companyName: setting.companyName || "",
       freelancerName: setting.freelancerName || "",
       freelancerEmail: setting.freelancerEmail || "",
@@ -289,6 +333,9 @@ export async function PUT(request: Request) {
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,
       hasJmapToken: !!setting.jmapToken,
+      hasGithubToken: !!setting.githubToken,
+      hasGitlabToken: !!setting.gitlabToken,
+      hasCodebergToken: !!setting.codebergToken,
     });
   } catch (error) {
     console.error("Error updating settings:", error);

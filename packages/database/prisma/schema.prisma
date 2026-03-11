@@ -364,6 +364,13 @@ model Setting {
   jmapHostname           String?  @map("jmap_hostname") @db.Text
   canReadMailbox         Boolean  @default(false) @map("can_read_mailbox") // Allow AI to read emails via JMAP
   jmapAllowedMailboxes   String[] @default([]) @map("jmap_allowed_mailboxes") // Mailbox IDs AI can search (empty = all mailboxes)
+  githubToken            String?  @map("github_token") @db.Text
+  githubUsername         String?  @map("github_username") @db.Text
+  gitlabToken            String?  @map("gitlab_token") @db.Text
+  gitlabUsername         String?  @map("gitlab_username") @db.Text
+  gitlabUrl              String?  @map("gitlab_url") @db.Text // Self-hosted GitLab URL (defaults to https://gitlab.com)
+  codebergToken          String?  @map("codeberg_token") @db.Text
+  codebergUsername       String?  @map("codeberg_username") @db.Text
   companyName            String?  @map("company_name") @db.Text
   freelancerName  String?     @map("freelancer_name") @db.Text
   freelancerEmail String?     @map("freelancer_email") @db.Text

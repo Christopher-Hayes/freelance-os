@@ -13,6 +13,7 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import { headers } from 'next/headers';
 import { isJmapEnabled } from "@/lib/jmap-provider";
 import { createEmailSearchTools, createSentEmailTools } from "@/lib/jmap-actions";
+import { isAnyForgeEnabled, createGitCommitTools } from "@/lib/git-actions";
 import {
   createTelemetryRun,
   recordTelemetryStep,
@@ -351,6 +352,8 @@ export async function generateAutofillSuggestions(params: {
 
   // Check if JMAP is available for sent email analysis
   const jmapIsEnabled = await isJmapEnabled();
+  // Check if any git forge (GitHub, GitLab, Codeberg) is configured
+  const gitForgesEnabled = await isAnyForgeEnabled();
 
   const basePrompt = `You are a helpful assistant that analyzes computer activity and suggests time entries for project tracking.
 
@@ -386,8 +389,8 @@ Guidelines:
 - Entries should be at minimum 15 minutes long.
 - Keep descriptions concise but informative.`;
 
-  if (!jmapIsEnabled) {
-    // No email access — use simple generateObject
+  // If neither JMAP nor git forges are configured, use simple generateObject
+  if (!jmapIsEnabled && !gitForgesEnabled) {
     const { object } = await generateObjectWithTelemetry({
       model: aiModel,
       schema: autofillResponseSchema,
@@ -399,6 +402,7 @@ Guidelines:
       metadata: {
         workflow: "autofill_time_entries",
         hasJmap: false,
+        hasGitForges: false,
         date: params.date,
       },
       inputPreview: {
@@ -416,8 +420,19 @@ Guidelines:
     };
   }
 
-  // Use an agent with sent email tools for richer context
-  const sentEmailTools = await createSentEmailTools(startInstant, endInstant);
+  // Build agent tools from all enabled integrations
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const agentTools: Record<string, any> = {};
+
+  if (jmapIsEnabled) {
+    const sentEmailTools = await createSentEmailTools(startInstant, endInstant);
+    Object.assign(agentTools, sentEmailTools);
+  }
+
+  if (gitForgesEnabled) {
+    const gitTools = await createGitCommitTools(startInstant, endInstant);
+    Object.assign(agentTools, gitTools);
+  }
 
   // Create telemetry run for the agent path
   const agentRunId = params.debugJobId
@@ -427,7 +442,8 @@ Guidelines:
       operation: "generateText",
       metadata: {
         workflow: "autofill_time_entries",
-        hasJmap: true,
+        hasJmap: jmapIsEnabled,
+        hasGitForges: gitForgesEnabled,
         date: params.date,
       },
       inputPreview: JSON.stringify({
@@ -442,33 +458,61 @@ Guidelines:
   const output = Output.object({
     schema: autofillResponseSchema,
     name: "autofillSuggestions",
-    description: "Time entry suggestions derived from activity sessions and sent email context.",
+    description: "Time entry suggestions derived from activity sessions and additional context.",
   });
+
+  // Build system prompt dynamically based on available integrations
+  const systemParts = [
+    `You are a helpful assistant that analyzes computer activity to suggest time entries for project tracking.`,
+    ``,
+    `Your process:`,
+    `1. Review the activity sessions and available projects`,
+  ];
+
+  let stepNum = 2;
+  if (jmapIsEnabled) {
+    systemParts.push(`${stepNum}. Search the user's sent emails for the day to discover client correspondence`);
+    stepNum++;
+    systemParts.push(`${stepNum}. For important-looking emails, estimate how long the user spent composing them`);
+    stepNum++;
+  }
+  if (gitForgesEnabled) {
+    systemParts.push(`${stepNum}. Search the user's git commits across GitHub/GitLab/Codeberg to understand what code was worked on`);
+    stepNum++;
+    systemParts.push(`${stepNum}. Match repository names and commit messages to projects`);
+    stepNum++;
+  }
+  systemParts.push(`${stepNum}. Combine all data sources to produce comprehensive time entry suggestions`);
+
+  systemParts.push(``);
+  systemParts.push(`Prefer activity session data as the primary source for time entry timestamps.`);
+
+  if (jmapIsEnabled) {
+    systemParts.push(``);
+    systemParts.push(`Email strategy:`);
+    systemParts.push(`- First, search all sent emails for the day to see who the user corresponded with`);
+    systemParts.push(`- Match sent emails to projects by comparing recipient addresses with client emails`);
+    systemParts.push(`- Use estimateEmailTime to gauge composition effort for significant emails.`);
+  }
+
+  if (gitForgesEnabled) {
+    systemParts.push(``);
+    systemParts.push(`Git commit strategy:`);
+    systemParts.push(`- Search for all commits the user made during the day`);
+    systemParts.push(`- Match repository names to projects using project names, descriptions, and matching hints`);
+    systemParts.push(`- Use commit messages to write more specific time entry descriptions`);
+    systemParts.push(`- If a repo filter would help narrow results, use it`);
+  }
 
   let result;
   try {
     result = await generateText({
       model: aiModel,
-      tools: {
-        ...sentEmailTools,
-      },
-      stopWhen: stepCountIs(8),
+      tools: agentTools,
+      stopWhen: stepCountIs(12),
       output,
       providerOptions: PROVIDER_OPTIONS,
-      system: `You are a helpful assistant that analyzes computer activity AND sent emails to suggest time entries for project tracking.
-
-Your process:
-1. Review the activity sessions and available projects
-2. Search the user's sent emails for the day to discover client correspondence
-3. For important-looking emails, estimate how long the user spent composing them
-4. Combine activity data AND email data to produce comprehensive time entry suggestions
-
-Prefer activity session data as the primary source for time entry timestamps, but use email composition times to create entries for client correspondence that may not be reflected in activity sessions.
-
-Email strategy:
-- First, search all sent emails for the day to see who the user corresponded with
-- Match sent emails to projects by comparing recipient addresses with client emails
-- Use estimateEmailTime to gauge composition effort for significant emails.`,
+      system: systemParts.join("\n"),
       prompt: basePrompt,
       onStepFinish: agentRunId
         ? async (event) => {
@@ -751,12 +795,14 @@ export async function generateWeeklySummary(params: {
 
   // Check if JMAP is available
   const jmapIsEnabled = await isJmapEnabled();
+  // Check if any git forge is configured
+  const gitForgesEnabled = await isAnyForgeEnabled();
 
-  // Convert dates to Instants for email search
+  // Convert dates to Instants for tool scoping
   const weekStartInstant = weekStart.toPlainDateTime(Temporal.PlainTime.from("00:00:00")).toZonedDateTime("UTC").toInstant();
   const weekEndInstant = weekEnd.toPlainDateTime(Temporal.PlainTime.from("23:59:59")).toZonedDateTime("UTC").toInstant();
 
-  if (!jmapIsEnabled) {
+  if (!jmapIsEnabled && !gitForgesEnabled) {
     // Fallback to simple generation without email context
     const { text } = await generateTextWithTelemetry({
       model,
@@ -796,30 +842,46 @@ Generate the weekly summary now:`,
     return text.trim();
   }
 
-  const summaryTools = await createEmailSearchTools(weekStartInstant, weekEndInstant);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const summaryAgentTools: Record<string, any> = {};
+
+  if (jmapIsEnabled) {
+    const emailTools = await createEmailSearchTools(weekStartInstant, weekEndInstant);
+    Object.assign(summaryAgentTools, emailTools);
+  }
+
+  if (gitForgesEnabled) {
+    const gitTools = await createGitCommitTools(weekStartInstant, weekEndInstant);
+    Object.assign(summaryAgentTools, gitTools);
+  }
 
   const summaryAgent = new Agent({
     model: model,
     stopWhen: stepCountIs(10),
-    tools: summaryTools,
+    tools: summaryAgentTools,
     providerOptions: PROVIDER_OPTIONS,
     instructions: `You are a professional assistant creating client-friendly weekly summaries for invoices.
 
 Your process:
 1. Analyze the time entries to understand what work was done this week
-2. Determine if the entries are vague/generic and would benefit from email context
-3. If yes, intelligently search emails using the available tools
+2. Determine if the entries are vague/generic and would benefit from additional context
+3. If yes, intelligently search for context using the available tools
 4. Use the gathered context to write a specific, outcome-focused summary
 
-When to search emails:
+When to search for context:
 - Time entries are vague (e.g., "worked on project", "bug fixes")
-- Specific features/deliverables are mentioned that might have email discussions
-- Client communications would clarify what was accomplished
-
+- Specific features/deliverables are mentioned that might have email discussions or commits
+- Client communications or commit messages would clarify what was accomplished
+${jmapIsEnabled ? `
 Email search strategy:
 - Search for project name, client name, or specific features mentioned
 - You can search multiple times with different keywords if needed
-- Don't over-search if entries are already clear
+- Don't over-search if entries are already clear` : ''}
+${gitForgesEnabled ? `
+Git commit strategy:
+- Search for commits to find specific code changes related to this project
+- Use repo filter to narrow results to the relevant project repository
+- Commit messages can provide specific details about what was implemented` : ''}
 
 Summary writing guidelines:
 - Client-friendly, professional language (avoid jargon)
@@ -841,7 +903,7 @@ Total Hours: ${totalHours.toFixed(1)} hours
 Time Entries:
 ${params.entries.map(e => `- ${e.date}: ${e.description || 'Work on project'} (${e.hours.toFixed(1)}h)`).join('\n')}
 
-Please analyze these entries, search emails if helpful, then provide the final weekly summary.`,
+Please analyze these entries, search for additional context if helpful, then provide the final weekly summary.`,
   });
 
   console.log(`Generated summary with ${result.toolCalls?.length || 0} tool calls`);

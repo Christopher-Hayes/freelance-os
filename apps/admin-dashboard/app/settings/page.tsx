@@ -84,6 +84,13 @@ export default function SettingsPage() {
   const [jmapAllowedMailboxes, setJmapAllowedMailboxes] = useState<string[]>([]);
   const [availableMailboxes, setAvailableMailboxes] = useState<MailboxInfo[]>([]);
   const [loadingMailboxes, setLoadingMailboxes] = useState(false);
+  const [githubToken, setGithubToken] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
+  const [gitlabToken, setGitlabToken] = useState("");
+  const [gitlabUsername, setGitlabUsername] = useState("");
+  const [gitlabUrl, setGitlabUrl] = useState("");
+  const [codebergToken, setCodebergToken] = useState("");
+  const [codebergUsername, setCodebergUsername] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [freelancerName, setFreelancerName] = useState("");
   const [freelancerEmail, setFreelancerEmail] = useState("");
@@ -110,6 +117,13 @@ export default function SettingsPage() {
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const githubTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const githubUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const gitlabTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const gitlabUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const gitlabUrlTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const codebergTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const codebergUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const companyNameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const freelancerNameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const freelancerEmailTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -190,6 +204,13 @@ export default function SettingsPage() {
         // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
+        setGithubToken(data.githubToken || "");
+        setGithubUsername(data.githubUsername || "");
+        setGitlabToken(data.gitlabToken || "");
+        setGitlabUsername(data.gitlabUsername || "");
+        setGitlabUrl(data.gitlabUrl || "");
+        setCodebergToken(data.codebergToken || "");
+        setCodebergUsername(data.codebergUsername || "");
         setCompanyName(data.companyName || "");
         setFreelancerName(data.freelancerName || "");
         setFreelancerEmail(data.freelancerEmail || "");
@@ -404,6 +425,101 @@ export default function SettingsPage() {
 
     companyNameTimerRef.current = setTimeout(() => {
       saveSetting("companyName", value);
+    }, 1000);
+  };
+
+  // ── Git Forge handlers ──
+
+  const handleGithubTokenChange = (value: string) => {
+    setGithubToken(value);
+    setModifiedFields(prev => new Set(prev).add("githubToken"));
+
+    if (githubTokenTimerRef.current) {
+      clearTimeout(githubTokenTimerRef.current);
+    }
+
+    githubTokenTimerRef.current = setTimeout(() => {
+      if (value !== MASK_VALUE) {
+        saveSetting("githubToken", value);
+      }
+    }, 1000);
+  };
+
+  const handleGithubUsernameChange = (value: string) => {
+    setGithubUsername(value);
+
+    if (githubUsernameTimerRef.current) {
+      clearTimeout(githubUsernameTimerRef.current);
+    }
+
+    githubUsernameTimerRef.current = setTimeout(() => {
+      saveSetting("githubUsername", value);
+    }, 1000);
+  };
+
+  const handleGitlabTokenChange = (value: string) => {
+    setGitlabToken(value);
+    setModifiedFields(prev => new Set(prev).add("gitlabToken"));
+
+    if (gitlabTokenTimerRef.current) {
+      clearTimeout(gitlabTokenTimerRef.current);
+    }
+
+    gitlabTokenTimerRef.current = setTimeout(() => {
+      if (value !== MASK_VALUE) {
+        saveSetting("gitlabToken", value);
+      }
+    }, 1000);
+  };
+
+  const handleGitlabUsernameChange = (value: string) => {
+    setGitlabUsername(value);
+
+    if (gitlabUsernameTimerRef.current) {
+      clearTimeout(gitlabUsernameTimerRef.current);
+    }
+
+    gitlabUsernameTimerRef.current = setTimeout(() => {
+      saveSetting("gitlabUsername", value);
+    }, 1000);
+  };
+
+  const handleGitlabUrlChange = (value: string) => {
+    setGitlabUrl(value);
+
+    if (gitlabUrlTimerRef.current) {
+      clearTimeout(gitlabUrlTimerRef.current);
+    }
+
+    gitlabUrlTimerRef.current = setTimeout(() => {
+      saveSetting("gitlabUrl", value);
+    }, 1000);
+  };
+
+  const handleCodebergTokenChange = (value: string) => {
+    setCodebergToken(value);
+    setModifiedFields(prev => new Set(prev).add("codebergToken"));
+
+    if (codebergTokenTimerRef.current) {
+      clearTimeout(codebergTokenTimerRef.current);
+    }
+
+    codebergTokenTimerRef.current = setTimeout(() => {
+      if (value !== MASK_VALUE) {
+        saveSetting("codebergToken", value);
+      }
+    }, 1000);
+  };
+
+  const handleCodebergUsernameChange = (value: string) => {
+    setCodebergUsername(value);
+
+    if (codebergUsernameTimerRef.current) {
+      clearTimeout(codebergUsernameTimerRef.current);
+    }
+
+    codebergUsernameTimerRef.current = setTimeout(() => {
+      saveSetting("codebergUsername", value);
     }, 1000);
   };
 
@@ -1183,6 +1299,167 @@ export default function SettingsPage() {
                     JMAP server hostname
                   </p>
                 </div>
+              </div>
+            </section>
+
+            <section
+              id="git-forges"
+              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+            >
+              <header className="mb-4">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Git Forges
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  Connect GitHub, GitLab, and/or Codeberg so the AI can cross-reference your commit history when categorizing work and generating time entries. Only configure the forges you use.
+                </p>
+              </header>
+
+              <div className="space-y-6">
+                {/* GitHub */}
+                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">GitHub</legend>
+                  <div>
+                    <label htmlFor="github_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      id="github_username"
+                      value={githubUsername}
+                      onChange={(e) => handleGithubUsernameChange(e.target.value)}
+                      placeholder="octocat"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="github_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Personal Access Token
+                    </label>
+                    <input
+                      type="password"
+                      id="github_token"
+                      value={githubToken}
+                      onChange={(e) => handleGithubTokenChange(e.target.value)}
+                      placeholder="ghp_..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {githubToken === MASK_VALUE ? (
+                        <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
+                      ) : (
+                        <>
+                          Create a token with <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">repo</code> (read) scope from{" "}
+                          <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                            GitHub Settings
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </fieldset>
+
+                {/* GitLab */}
+                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">GitLab</legend>
+                  <div>
+                    <label htmlFor="gitlab_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      id="gitlab_username"
+                      value={gitlabUsername}
+                      onChange={(e) => handleGitlabUsernameChange(e.target.value)}
+                      placeholder="gitlab-user"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="gitlab_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Personal Access Token
+                    </label>
+                    <input
+                      type="password"
+                      id="gitlab_token"
+                      value={gitlabToken}
+                      onChange={(e) => handleGitlabTokenChange(e.target.value)}
+                      placeholder="glpat-..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {gitlabToken === MASK_VALUE ? (
+                        <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
+                      ) : (
+                        <>
+                          Create a token with <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">read_api</code> scope from{" "}
+                          <a href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                            GitLab Settings
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="gitlab_url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      GitLab URL (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="gitlab_url"
+                      value={gitlabUrl}
+                      onChange={(e) => handleGitlabUrlChange(e.target.value)}
+                      placeholder="https://gitlab.com"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Leave blank to use gitlab.com. Set this for self-hosted GitLab instances.
+                    </p>
+                  </div>
+                </fieldset>
+
+                {/* Codeberg */}
+                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">Codeberg</legend>
+                  <div>
+                    <label htmlFor="codeberg_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      id="codeberg_username"
+                      value={codebergUsername}
+                      onChange={(e) => handleCodebergUsernameChange(e.target.value)}
+                      placeholder="codeberg-user"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="codeberg_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      API Token
+                    </label>
+                    <input
+                      type="password"
+                      id="codeberg_token"
+                      value={codebergToken}
+                      onChange={(e) => handleCodebergTokenChange(e.target.value)}
+                      placeholder="Enter your Codeberg API token"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      {codebergToken === MASK_VALUE ? (
+                        <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
+                      ) : (
+                        <>
+                          Create a token from{" "}
+                          <a href="https://codeberg.org/user/settings/applications" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                            Codeberg Settings → Applications
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </fieldset>
               </div>
             </section>
           </section>
