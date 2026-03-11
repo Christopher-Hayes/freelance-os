@@ -18,6 +18,68 @@ export interface GitCommit {
   url: string;
 }
 
+function logGitDebug(message: string, meta?: Record<string, unknown>) {
+  console.log(`[Git Debug] ${message}`, meta ?? {});
+}
+
+function normalizeIdentity(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getIdentityCandidates(configuredUsername: string): string[] {
+  const raw = configuredUsername.trim().toLowerCase();
+  const normalized = normalizeIdentity(configuredUsername);
+  const parts = raw.split(/[-_.\s]+/).filter(Boolean);
+
+  return Array.from(
+    new Set([
+      raw,
+      normalized,
+      ...parts,
+      parts.join(""),
+      parts.join(" "),
+    ].filter(Boolean)),
+  );
+}
+
+function matchesConfiguredIdentity(
+  configuredUsername: string,
+  authorName: string,
+  authorEmail: string,
+): boolean {
+  const candidates = getIdentityCandidates(configuredUsername);
+  const normalizedAuthorName = normalizeIdentity(authorName);
+  const normalizedAuthorEmail = normalizeIdentity(authorEmail);
+  const emailLocalPart = authorEmail.split("@")[0] ?? "";
+  const normalizedEmailLocalPart = normalizeIdentity(emailLocalPart);
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeIdentity(candidate);
+
+    return (
+      normalizedAuthorName.includes(normalizedCandidate) ||
+      normalizedAuthorEmail.includes(normalizedCandidate) ||
+      normalizedEmailLocalPart.includes(normalizedCandidate)
+    );
+  });
+}
+
+function isCommitWithinRange(
+  commitDate: string,
+  startInclusiveIso: string,
+  endInclusiveIso: string,
+): boolean {
+  const commitMs = new Date(commitDate).getTime();
+  const startMs = new Date(startInclusiveIso).getTime();
+  const endMs = new Date(endInclusiveIso).getTime();
+
+  if (Number.isNaN(commitMs) || Number.isNaN(startMs) || Number.isNaN(endMs)) {
+    return false;
+  }
+
+  return commitMs >= startMs && commitMs <= endMs;
+}
+
 interface ForgeConfig {
   token: string;
   username: string;
@@ -71,135 +133,289 @@ export async function isAnyForgeEnabled(): Promise<boolean> {
 
 async function fetchGitHubCommits(
   config: ForgeConfig,
-  startDate: string,
-  endDate: string,
+  startTime: string,
+  endTime: string,
 ): Promise<GitCommit[]> {
-  // GitHub search commits: author-date range, scoped to the authenticated user
-  const query = `author:${config.username} author-date:${startDate}..${endDate}`;
-  const url = `https://api.github.com/search/commits?q=${encodeURIComponent(query)}&per_page=100&sort=author-date&order=desc`;
+  const queries = [
+    `author:${config.username} committer-date:${startTime}..${endTime}`,
+    `author:${config.username} author-date:${startTime}..${endTime}`,
+  ];
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    });
+    const allCommits: GitCommit[] = [];
 
-    if (!response.ok) {
-      console.error(
-        `[Git] GitHub search commits failed: ${response.status} ${response.statusText}`,
+    for (const query of queries) {
+      const url = `https://api.github.com/search/commits?q=${encodeURIComponent(query)}&per_page=100&sort=author-date&order=desc`;
+
+      logGitDebug("GitHub commit search starting", {
+        forge: "github",
+        username: config.username,
+        startTime,
+        endTime,
+        query,
+        url,
+      });
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        console.error(
+          `[Git] GitHub search commits failed: ${response.status} ${response.statusText}`,
+        );
+        logGitDebug("GitHub commit search failed", {
+          forge: "github",
+          query,
+          status: response.status,
+          statusText: response.statusText,
+          bodyPreview: errorText.slice(0, 500),
+        });
+        continue;
+      }
+
+      const data = await response.json();
+
+      const commits = (data.items ?? []).map(
+        (item: {
+          sha: string;
+          commit: {
+            message: string;
+            author: { date: string };
+          };
+          repository: { full_name: string };
+          html_url: string;
+        }) => ({
+          sha: item.sha,
+          message: item.commit.message.split("\n")[0],
+          date: item.commit.author.date,
+          repo: item.repository.full_name,
+          forge: "github" as const,
+          url: item.html_url,
+        }),
       );
-      return [];
+
+      logGitDebug("GitHub commit search completed", {
+        forge: "github",
+        query,
+        totalCount: data.total_count ?? commits.length,
+        returnedCount: commits.length,
+        sample: commits.slice(0, 5).map((commit: GitCommit) => ({
+          sha: commit.sha.slice(0, 8),
+          date: commit.date,
+          repo: commit.repo,
+          message: commit.message,
+        })),
+      });
+
+      allCommits.push(...commits);
     }
 
-    const data = await response.json();
-
-    return (data.items ?? []).map(
-      (item: {
-        sha: string;
-        commit: {
-          message: string;
-          author: { date: string };
-        };
-        repository: { full_name: string };
-        html_url: string;
-      }) => ({
-        sha: item.sha,
-        message: item.commit.message.split("\n")[0], // first line only
-        date: item.commit.author.date,
-        repo: item.repository.full_name,
-        forge: "github" as const,
-        url: item.html_url,
-      }),
+    return Array.from(
+      new Map(allCommits.map((commit) => [`github:${commit.sha}`, commit])).values(),
     );
   } catch (error) {
     console.error("[Git] GitHub fetch error:", error);
+    logGitDebug("GitHub fetch threw", {
+      forge: "github",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }
 
 // ──────────────────────────────────────────────────
-// GitLab — Events API (push events)
+// GitLab — Project listing + repository commits
 // ──────────────────────────────────────────────────
 
 async function fetchGitLabCommits(
   config: ForgeConfig,
-  startDate: string,
-  endDate: string,
+  startTime: string,
+  endTime: string,
 ): Promise<GitCommit[]> {
   const baseUrl = config.baseUrl || "https://gitlab.com";
-  // GitLab events API: after/before are exclusive date boundaries
-  const url = `${baseUrl}/api/v4/events?action=pushed&after=${startDate}&before=${endDate}&per_page=100`;
+  const projectsUrl = `${baseUrl}/api/v4/projects?membership=true&min_access_level=20&simple=true&order_by=last_activity_at&sort=desc&per_page=100`;
+
+  logGitDebug("GitLab project scan starting", {
+    forge: "gitlab",
+    username: config.username,
+    startTime,
+    endTime,
+    url: projectsUrl,
+  });
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(projectsUrl, {
       headers: {
         "Private-Token": config.token,
       },
     });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
       console.error(
-        `[Git] GitLab events failed: ${response.status} ${response.statusText}`,
+        `[Git] GitLab projects failed: ${response.status} ${response.statusText}`,
       );
+      logGitDebug("GitLab project scan failed", {
+        forge: "gitlab",
+        status: response.status,
+        statusText: response.statusText,
+        bodyPreview: errorText.slice(0, 500),
+      });
       return [];
     }
 
-    const events: Array<{
-      push_data?: {
-        commit_title?: string;
-        commit_to?: string;
-        ref?: string;
-        action?: string;
-      };
-      project_id: number;
-      created_at: string;
-      action_name: string;
+    const projects: Array<{
+      id: number;
+      path_with_namespace: string;
+      default_branch: string | null;
+      last_activity_at: string;
+      web_url: string;
     }> = await response.json();
 
-    // Resolve project paths in bulk
-    const projectIds = [...new Set(events.map((e) => e.project_id))];
-    const projectPaths: Record<number, string> = {};
+    const sinceDate = new Date(startTime);
+    const relevantProjects = projects.filter(
+      (project) => new Date(project.last_activity_at) >= sinceDate,
+    );
+
+    logGitDebug("GitLab projects fetched", {
+      forge: "gitlab",
+      projectCount: projects.length,
+      relevantProjectCount: relevantProjects.length,
+      sample: relevantProjects.slice(0, 10).map((project) => ({
+        id: project.id,
+        repo: project.path_with_namespace,
+        defaultBranch: project.default_branch,
+        lastActivityAt: project.last_activity_at,
+      })),
+    });
+
+    const commits: GitCommit[] = [];
 
     await Promise.all(
-      projectIds.map(async (id) => {
+      relevantProjects.map(async (project) => {
         try {
-          const projRes = await fetch(`${baseUrl}/api/v4/projects/${id}`, {
-            headers: { "Private-Token": config.token },
+          const defaultBranch = project.default_branch ?? "main";
+          const commitsUrl = `${baseUrl}/api/v4/projects/${project.id}/repository/commits?ref_name=${encodeURIComponent(defaultBranch)}&since=${encodeURIComponent(startTime)}&until=${encodeURIComponent(endTime)}&per_page=100`;
+
+          logGitDebug("GitLab project commit fetch starting", {
+            forge: "gitlab",
+            projectId: project.id,
+            repo: project.path_with_namespace,
+            url: commitsUrl,
           });
-          if (projRes.ok) {
-            const proj = await projRes.json();
-            projectPaths[id] = proj.path_with_namespace;
+
+          const commitsRes = await fetch(commitsUrl, {
+            headers: {
+              "Private-Token": config.token,
+            },
+          });
+
+          if (!commitsRes.ok) {
+            const errorText = await commitsRes.text().catch(() => "");
+            logGitDebug("GitLab project commit fetch failed", {
+              forge: "gitlab",
+              projectId: project.id,
+              repo: project.path_with_namespace,
+              status: commitsRes.status,
+              statusText: commitsRes.statusText,
+              bodyPreview: errorText.slice(0, 500),
+            });
+            return;
           }
-        } catch {
-          // ignore — we'll use the numeric ID as fallback
+
+          const projectCommits: Array<{
+            id: string;
+            short_id: string;
+            created_at: string;
+            title: string;
+            author_name: string;
+            author_email: string;
+            web_url: string;
+          }> = await commitsRes.json();
+
+          logGitDebug("GitLab project commits fetched", {
+            forge: "gitlab",
+            projectId: project.id,
+            repo: project.path_with_namespace,
+            rawCommitCount: projectCommits.length,
+            sample: projectCommits.slice(0, 5).map((commit) => ({
+              sha: commit.short_id,
+              date: commit.created_at,
+              authorName: commit.author_name,
+              authorEmail: commit.author_email,
+              message: commit.title,
+            })),
+          });
+
+          const matchingCommits = projectCommits.filter((commit) =>
+            matchesConfiguredIdentity(
+              config.username,
+              commit.author_name,
+              commit.author_email,
+            ),
+          );
+
+          logGitDebug("GitLab project commits filtered by author", {
+            forge: "gitlab",
+            projectId: project.id,
+            repo: project.path_with_namespace,
+            username: config.username,
+            identityCandidates: getIdentityCandidates(config.username),
+            filteredCommitCount: matchingCommits.length,
+            sample: matchingCommits.slice(0, 5).map((commit) => ({
+              sha: commit.short_id,
+              date: commit.created_at,
+              authorName: commit.author_name,
+              authorEmail: commit.author_email,
+              message: commit.title,
+            })),
+          });
+
+          for (const commit of matchingCommits) {
+            commits.push({
+              sha: commit.id,
+              message: commit.title,
+              date: commit.created_at,
+              repo: project.path_with_namespace,
+              forge: "gitlab",
+              url: commit.web_url,
+            });
+          }
+        } catch (error) {
+          logGitDebug("GitLab project commit fetch threw", {
+            forge: "gitlab",
+            projectId: project.id,
+            repo: project.path_with_namespace,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }),
     );
 
-    const commits: GitCommit[] = [];
-
-    for (const event of events) {
-      if (!event.push_data?.commit_to) continue;
-
-      const repoPath =
-        projectPaths[event.project_id] ?? `project/${event.project_id}`;
-
-      commits.push({
-        sha: event.push_data.commit_to,
-        message: event.push_data.commit_title ?? "(no message)",
-        date: event.created_at,
-        repo: repoPath,
-        forge: "gitlab",
-        url: `${baseUrl}/${repoPath}/-/commit/${event.push_data.commit_to}`,
-      });
-    }
+    logGitDebug("GitLab commit scan completed", {
+      forge: "gitlab",
+      commitCount: commits.length,
+      sample: commits.slice(0, 5).map((commit) => ({
+        sha: commit.sha.slice(0, 8),
+        date: commit.date,
+        repo: commit.repo,
+        message: commit.message,
+      })),
+    });
 
     return commits;
   } catch (error) {
     console.error("[Git] GitLab fetch error:", error);
+    logGitDebug("GitLab project scan threw", {
+      forge: "gitlab",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }
@@ -210,10 +426,17 @@ async function fetchGitLabCommits(
 
 async function fetchCodebergCommits(
   config: ForgeConfig,
-  startDate: string,
-  endDate: string,
+  startTime: string,
+  endTime: string,
 ): Promise<GitCommit[]> {
   const baseUrl = "https://codeberg.org/api/v1";
+
+  logGitDebug("Codeberg repo scan starting", {
+    forge: "codeberg",
+    username: config.username,
+    startTime,
+    endTime,
+  });
 
   try {
     // Step 1: Get repos the user owns/has contributed to that were updated recently
@@ -226,9 +449,16 @@ async function fetchCodebergCommits(
     });
 
     if (!reposRes.ok) {
+      const errorText = await reposRes.text().catch(() => "");
       console.error(
         `[Git] Codeberg repos failed: ${reposRes.status} ${reposRes.statusText}`,
       );
+      logGitDebug("Codeberg repo scan failed", {
+        forge: "codeberg",
+        status: reposRes.status,
+        statusText: reposRes.statusText,
+        bodyPreview: errorText.slice(0, 500),
+      });
       return [];
     }
 
@@ -240,10 +470,21 @@ async function fetchCodebergCommits(
     }> = await reposRes.json();
 
     // Only check repos updated after our start date (rough filter)
-    const sinceDate = new Date(startDate);
+    const sinceDate = new Date(startTime);
     const relevantRepos = repos.filter(
       (r) => new Date(r.updated_at) >= sinceDate,
     );
+
+    logGitDebug("Codeberg repos fetched", {
+      forge: "codeberg",
+      repoCount: repos.length,
+      relevantRepoCount: relevantRepos.length,
+      sample: relevantRepos.slice(0, 10).map((repo) => ({
+        repo: repo.full_name,
+        updatedAt: repo.updated_at,
+        defaultBranch: repo.default_branch,
+      })),
+    });
 
     const allCommits: GitCommit[] = [];
 
@@ -251,7 +492,13 @@ async function fetchCodebergCommits(
     await Promise.all(
       relevantRepos.map(async (repo) => {
         try {
-          const commitsUrl = `${baseUrl}/repos/${repo.full_name}/commits?sha=${encodeURIComponent(repo.default_branch)}&since=${startDate}T00:00:00Z&until=${endDate}T23:59:59Z&limit=50`;
+          const commitsUrl = `${baseUrl}/repos/${repo.full_name}/commits?sha=${encodeURIComponent(repo.default_branch)}&since=${encodeURIComponent(startTime)}&until=${encodeURIComponent(endTime)}&limit=50`;
+          logGitDebug("Codeberg repo commit fetch starting", {
+            forge: "codeberg",
+            repo: repo.full_name,
+            url: commitsUrl,
+          });
+
           const commitsRes = await fetch(commitsUrl, {
             headers: {
               Authorization: `token ${config.token}`,
@@ -259,7 +506,17 @@ async function fetchCodebergCommits(
             },
           });
 
-          if (!commitsRes.ok) return;
+          if (!commitsRes.ok) {
+            const errorText = await commitsRes.text().catch(() => "");
+            logGitDebug("Codeberg repo commit fetch failed", {
+              forge: "codeberg",
+              repo: repo.full_name,
+              status: commitsRes.status,
+              statusText: commitsRes.statusText,
+              bodyPreview: errorText.slice(0, 500),
+            });
+            return;
+          }
 
           const commits: Array<{
             sha: string;
@@ -270,15 +527,41 @@ async function fetchCodebergCommits(
             html_url: string;
           }> = await commitsRes.json();
 
-          // Filter by author username (case-insensitive match on name or email)
-          const userLower = config.username.toLowerCase();
+          logGitDebug("Codeberg repo commits fetched", {
+            forge: "codeberg",
+            repo: repo.full_name,
+            rawCommitCount: commits.length,
+            sample: commits.slice(0, 5).map((commit) => ({
+              sha: commit.sha.slice(0, 8),
+              date: commit.commit.author.date,
+              authorName: commit.commit.author.name,
+              authorEmail: commit.commit.author.email,
+              message: commit.commit.message.split("\n")[0] ?? "",
+            })),
+          });
+
+          // Filter by configured identity against author name/email/local-part.
           const userCommits = commits.filter((c) => {
-            const authorName = c.commit.author.name.toLowerCase();
-            const authorEmail = c.commit.author.email.toLowerCase();
-            return (
-              authorName.includes(userLower) ||
-              authorEmail.includes(userLower)
+            return matchesConfiguredIdentity(
+              config.username,
+              c.commit.author.name,
+              c.commit.author.email,
             );
+          });
+
+          logGitDebug("Codeberg repo commits filtered by author", {
+            forge: "codeberg",
+            repo: repo.full_name,
+            username: config.username,
+            identityCandidates: getIdentityCandidates(config.username),
+            filteredCommitCount: userCommits.length,
+            sample: userCommits.slice(0, 5).map((commit) => ({
+              sha: commit.sha.slice(0, 8),
+              date: commit.commit.author.date,
+              authorName: commit.commit.author.name,
+              authorEmail: commit.commit.author.email,
+              message: commit.commit.message.split("\n")[0] ?? "",
+            })),
           });
 
           for (const commit of userCommits) {
@@ -291,15 +574,35 @@ async function fetchCodebergCommits(
               url: commit.html_url,
             });
           }
-        } catch {
+        } catch (error) {
+          logGitDebug("Codeberg repo commit fetch threw", {
+            forge: "codeberg",
+            repo: repo.full_name,
+            error: error instanceof Error ? error.message : String(error),
+          });
           // skip individual repo failures
         }
       }),
     );
 
+    logGitDebug("Codeberg commit scan completed", {
+      forge: "codeberg",
+      totalCommitCount: allCommits.length,
+      sample: allCommits.slice(0, 5).map((commit) => ({
+        sha: commit.sha.slice(0, 8),
+        date: commit.date,
+        repo: commit.repo,
+        message: commit.message,
+      })),
+    });
+
     return allCommits;
   } catch (error) {
     console.error("[Git] Codeberg fetch error:", error);
+    logGitDebug("Codeberg fetch threw", {
+      forge: "codeberg",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return [];
   }
 }
@@ -313,24 +616,61 @@ async function fetchCodebergCommits(
  * Returns commits sorted by date descending.
  */
 export async function fetchAllForgeCommits(
-  startDate: string,
-  endDate: string,
+  startTime: string,
+  endTime: string,
 ): Promise<GitCommit[]> {
   const configs = await getForgeConfigs();
   const fetches: Promise<GitCommit[]>[] = [];
 
+  logGitDebug("Aggregating forge commits", {
+    startTime,
+    endTime,
+    configuredForges: {
+      github: !!configs.github,
+      gitlab: !!configs.gitlab,
+      codeberg: !!configs.codeberg,
+    },
+  });
+
   if (configs.github) {
-    fetches.push(fetchGitHubCommits(configs.github, startDate, endDate));
+    fetches.push(fetchGitHubCommits(configs.github, startTime, endTime));
   }
   if (configs.gitlab) {
-    fetches.push(fetchGitLabCommits(configs.gitlab, startDate, endDate));
+    fetches.push(fetchGitLabCommits(configs.gitlab, startTime, endTime));
   }
   if (configs.codeberg) {
-    fetches.push(fetchCodebergCommits(configs.codeberg, startDate, endDate));
+    fetches.push(fetchCodebergCommits(configs.codeberg, startTime, endTime));
   }
 
   const results = await Promise.all(fetches);
-  const allCommits = results.flat();
+  const rawCommits = results.flat();
+
+  logGitDebug("Per-forge raw results completed", {
+    startTime,
+    endTime,
+    perForgeCounts: {
+      github: rawCommits.filter((commit) => commit.forge === "github").length,
+      gitlab: rawCommits.filter((commit) => commit.forge === "gitlab").length,
+      codeberg: rawCommits.filter((commit) => commit.forge === "codeberg").length,
+    },
+  });
+
+  const allCommits = rawCommits.filter((commit) =>
+    isCommitWithinRange(commit.date, startTime, endTime),
+  );
+
+  logGitDebug("Aggregated commits after final timeframe filter", {
+    startTime,
+    endTime,
+    finalCount: allCommits.length,
+    sample: allCommits.slice(0, 10).map((commit) => ({
+      forge: commit.forge,
+      repo: commit.repo,
+      sha: commit.sha.slice(0, 8),
+      date: commit.date,
+      message: commit.message,
+    })),
+  });
 
   // Sort by date descending
   allCommits.sort(
@@ -352,23 +692,30 @@ export async function createGitCommitTools(
   startInstant: Temporal.Instant,
   endInstant: Temporal.Instant,
 ) {
-  // Convert Instants to YYYY-MM-DD strings for forge APIs
-  const startDate = startInstant
-    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-    .toPlainDate()
-    .toString();
-  const endDate = endInstant
-    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-    .toPlainDate()
-    .toString();
+  const defaultStartIso = startInstant.toString();
+  const defaultEndIso = endInstant.toString();
 
   return {
     searchGitCommits: tool({
       description:
         "Search for the user's git commits across GitHub, GitLab, and Codeberg " +
-        "within the time period. Returns commit messages, repos, and timestamps. " +
+        "within a specific time period. Returns commit messages, repos, and timestamps. " +
         "Use this to understand what code the user worked on and which repos map to which projects.",
       inputSchema: z.object({
+        startTime: z
+          .string()
+          .datetime()
+          .optional()
+          .describe(
+            `Inclusive ISO timestamp for the start of the search window. Defaults to ${defaultStartIso}.`,
+          ),
+        endTime: z
+          .string()
+          .datetime()
+          .optional()
+          .describe(
+            `Inclusive ISO timestamp for the end of the search window. Defaults to ${defaultEndIso}.`,
+          ),
         repoFilter: z
           .string()
           .optional()
@@ -377,13 +724,34 @@ export async function createGitCommitTools(
             "Leave empty to get all commits.",
           ),
       }),
-      execute: async ({ repoFilter }: { repoFilter?: string }) => {
-        const commits = await fetchAllForgeCommits(startDate, endDate);
+      execute: async ({
+        startTime,
+        endTime,
+        repoFilter,
+      }: {
+        startTime?: string;
+        endTime?: string;
+        repoFilter?: string;
+      }) => {
+        const effectiveStart = startTime ?? defaultStartIso;
+        const effectiveEnd = endTime ?? defaultEndIso;
+
+        logGitDebug("searchGitCommits tool invoked", {
+          requestedStartTime: startTime ?? null,
+          requestedEndTime: endTime ?? null,
+          effectiveStart,
+          effectiveEnd,
+          repoFilter: repoFilter ?? "",
+        });
+
+        const commits = (await fetchAllForgeCommits(effectiveStart, effectiveEnd)).filter((commit) =>
+          isCommitWithinRange(commit.date, effectiveStart, effectiveEnd),
+        );
 
         if (commits.length === 0) {
           return {
             count: 0,
-            message: "No git commits found in the time period across any configured forges.",
+            message: `No git commits found between ${effectiveStart} and ${effectiveEnd} across any configured forges.`,
           };
         }
 
@@ -396,9 +764,17 @@ export async function createGitCommitTools(
         }
 
         console.log(
-          `[Git] searchGitCommits: ${filtered.length} commits` +
+          `[Git] searchGitCommits: ${filtered.length} commits between ${effectiveStart} and ${effectiveEnd}` +
             (repoFilter ? ` matching "${repoFilter}"` : ""),
         );
+
+        logGitDebug("searchGitCommits tool completed", {
+          effectiveStart,
+          effectiveEnd,
+          repoFilter: repoFilter ?? "",
+          rawCount: commits.length,
+          filteredCount: filtered.length,
+        });
 
         // Group by repo for a cleaner summary
         const byRepo: Record<
@@ -418,6 +794,10 @@ export async function createGitCommitTools(
 
         return {
           count: filtered.length,
+          timeframe: {
+            startTime: effectiveStart,
+            endTime: effectiveEnd,
+          },
           repos: Object.entries(byRepo).map(([key, repoCommits]) => ({
             repo: key,
             commitCount: repoCommits.length,

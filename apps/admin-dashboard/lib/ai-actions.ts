@@ -498,7 +498,8 @@ Guidelines:
   if (gitForgesEnabled) {
     systemParts.push(``);
     systemParts.push(`Git commit strategy:`);
-    systemParts.push(`- Search for all commits the user made during the day`);
+    systemParts.push(`- When calling searchGitCommits, always pass the exact startTime and endTime for the current analysis window`);
+    systemParts.push(`- Search for all commits the user made during that window`);
     systemParts.push(`- Match repository names to projects using project names, descriptions, and matching hints`);
     systemParts.push(`- Use commit messages to write more specific time entry descriptions`);
     systemParts.push(`- If a repo filter would help narrow results, use it`);
@@ -879,6 +880,7 @@ Email search strategy:
 - Don't over-search if entries are already clear` : ''}
 ${gitForgesEnabled ? `
 Git commit strategy:
+- When calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window
 - Search for commits to find specific code changes related to this project
 - Use repo filter to narrow results to the relevant project repository
 - Commit messages can provide specific details about what was implemented` : ''}
