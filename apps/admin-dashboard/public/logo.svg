@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="256"
+   height="256"
+   viewBox="0 0 67.733332 67.733333"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   sodipodi:docname="logo.svg"
+   inkscape:export-filename="logo-light.webp"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="px"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="-130.10765"
+     inkscape:cy="48.083261"
+     inkscape:window-width="2560"
+     inkscape:window-height="1329"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="g3"
+       transform="matrix(1.0064676,0,0,1.0064676,-0.44587614,0.33078084)"
+       style="fill:#fafaed;fill-opacity:1">
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.9866px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:Luciole;letter-spacing:-0.935678px;writing-mode:lr-tb;direction:ltr;fill:#fafaed;stroke-width:13.0793;stroke-linejoin:bevel;stroke-dasharray:52.316, 52.316;fill-opacity:1"
+         x="10.286427"
+         y="22.719143"
+         id="text1-3-0"><tspan
+           sodipodi:role="line"
+           id="tspan1-5-6"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.9866px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:Luciole;letter-spacing:-0.935678px;stroke-width:13.0792;fill:#fafaed;fill-opacity:1"
+           x="10.286427"
+           y="22.719143">free</tspan><tspan
+           sodipodi:role="line"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.9866px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:Luciole;letter-spacing:-0.935678px;stroke-width:13.0792;fill:#fafaed;fill-opacity:1"
+           x="10.286427"
+           y="36.709763"
+           id="tspan2" /></text>
+      <text
+         xml:space="preserve"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.9866px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:Luciole;letter-spacing:-0.935678px;writing-mode:lr-tb;direction:ltr;fill:#fafaed;stroke-width:13.0793;stroke-linejoin:bevel;stroke-dasharray:52.316, 52.316;fill-opacity:1"
+         x="10.926538"
+         y="38.070374"
+         id="text1-3-0-7"><tspan
+           sodipodi:role="line"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:19.9866px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:Luciole;letter-spacing:-0.935678px;stroke-width:13.0792;fill:#fafaed;fill-opacity:1"
+           x="10.926538"
+           y="38.070374"
+           id="tspan2-2">lance</tspan></text>
+    </g>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:20.1159px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:'Luciole Semi-Bold';letter-spacing:-0.941731px;writing-mode:lr-tb;direction:ltr;fill:#fafaed;fill-opacity:1;stroke-width:13.1638;stroke-linejoin:bevel;stroke-dasharray:52.6541, 52.6541;stroke-dashoffset:0"
+       x="29.833801"
+       y="58.823181"
+       id="text1-3-0-7-5"><tspan
+         sodipodi:role="line"
+         style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:normal;font-size:20.1159px;line-height:0.7;font-family:Luciole;-inkscape-font-specification:'Luciole Semi-Bold';letter-spacing:-0.941731px;fill:#fafaed;fill-opacity:1;stroke-width:13.1638;stroke-dasharray:52.6541, 52.6541;stroke-dashoffset:0"
+         x="29.833801"
+         y="58.823181"
+         id="tspan2-2-9">OS</tspan></text>
+    <rect
+       style="fill:none;stroke:#fafaed;stroke-width:1.16599998;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
+       id="rect3"
+       width="67.73333"
+       height="67.73333"
+       x="0"
+       y="0" />
+  </g>
+</svg>
