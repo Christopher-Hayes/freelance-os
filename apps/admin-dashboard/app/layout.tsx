@@ -13,6 +13,14 @@ const geist = Geist({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Freelance OS - Admin Dashboard",
   description: "Manage your freelance business operations",
+  icons: {
+    icon: [
+      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico" },
+    ],
+    apple: [{ url: "/logo.webp" }],
+    shortcut: ["/logo.svg"],
+  },
 };
 
 export default function RootLayout({

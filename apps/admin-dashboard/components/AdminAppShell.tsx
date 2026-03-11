@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog, DialogBackdrop, DialogPanel, TransitionChild } from "@headlessui/react";
@@ -17,6 +18,8 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import LogoDark from "@/public/logo.webp";
+import LogoLight from "@/public/logo-light.webp";
 import { useEffect, useMemo, useState } from "react";
 import CommandPalette from "@/components/CommandPalette";
 import JobsIndicator from "@/components/JobsIndicator";
@@ -60,20 +63,29 @@ function isActivePath(pathname: string, item: NavigationItem) {
 }
 
 function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const activeNavLabel = useMemo(() => {
-    return navigation.find((item) => isActivePath(pathname, item))?.name ?? "Admin Dashboard";
-  }, [pathname]);
-
   return (
-    <div className="flex grow flex-col gap-y-6 overflow-y-auto bg-slate-950 px-6 pb-4 text-slate-100 dark:bg-slate-950">
-      <div className="flex h-16 shrink-0 items-center border-b border-white/10">
+    <div className="flex grow flex-col gap-y-6 overflow-y-auto bg-white px-6 pb-4 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div className="flex h-16 shrink-0 items-center border-b border-slate-200 dark:border-white/10">
         <Link href="/" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/90 text-sm font-semibold text-white shadow-lg shadow-blue-950/40">
-            FO
-          </div>
+          <Image
+            src={LogoLight}
+            alt="Freelance OS"
+            width={144}
+            height={36}
+            priority
+            className="h-9 w-auto dark:hidden"
+          />
+          <Image
+            src={LogoDark}
+            alt="Freelance OS"
+            width={144}
+            height={36}
+            priority
+            className="h-9 w-auto hidden dark:block"
+          />
           <div>
-            <div className="text-sm font-semibold tracking-tight text-white">Freelance OS</div>
-            <div className="text-xs text-slate-400">Admin Dashboard</div>
+            <div className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">Freelance OS</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Admin Dashboard</div>
           </div>
         </Link>
       </div>
@@ -87,7 +99,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
       <nav className="flex flex-1 flex-col">
         <ul role="list" className="flex flex-1 flex-col gap-y-6">
           <li>
-            <div className="mb-2 px-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">Navigation</div>
+            <div className="mb-2 px-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-500">Navigation</div>
             <ul role="list" className="space-y-1">
               {navigation.map((item) => {
                 const active = isActivePath(pathname, item);
@@ -101,14 +113,16 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
                       aria-current={active ? "page" : undefined}
                       className={classNames(
                         active
-                          ? "bg-blue-500/15 text-white ring-1 ring-inset ring-blue-400/30"
-                          : "text-slate-400 hover:bg-white/5 hover:text-white",
+                          ? "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/15 dark:text-white dark:ring-blue-400/30"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white",
                         "group flex items-center gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
                       )}
                     >
                       <Icon
                         className={classNames(
-                          active ? "text-blue-300" : "text-slate-500 group-hover:text-slate-300",
+                          active
+                            ? "text-blue-600 dark:text-blue-300"
+                            : "text-slate-400 group-hover:text-slate-700 dark:text-slate-500 dark:group-hover:text-slate-300",
                           "h-5 w-5 shrink-0"
                         )}
                       />
@@ -127,12 +141,12 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
               onClick={onNavigate}
               className={classNames(
                 isActivePath(pathname, { name: "Debug", href: "/debug", icon: Bug })
-                  ? "bg-blue-500/15 text-white ring-1 ring-inset ring-blue-400/30"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+                  ? "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/15 dark:text-white dark:ring-blue-400/30"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white",
                 "group flex items-center gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
               )}
             >
-              <Bug className="h-5 w-5 shrink-0 text-slate-500 group-hover:text-slate-300" />
+              <Bug className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-slate-700 dark:text-slate-500 dark:group-hover:text-slate-300" />
               <span>Debug</span>
             </Link>
             <Link
@@ -140,12 +154,12 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
               onClick={onNavigate}
               className={classNames(
                 isActivePath(pathname, { name: "Settings", href: "/settings", icon: Settings })
-                  ? "bg-blue-500/15 text-white ring-1 ring-inset ring-blue-400/30"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+                  ? "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/15 dark:text-white dark:ring-blue-400/30"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white",
                 "group flex items-center gap-x-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
               )}
             >
-              <Settings className="h-5 w-5 shrink-0 text-slate-500 group-hover:text-slate-300" />
+              <Settings className="h-5 w-5 shrink-0 text-slate-400 group-hover:text-slate-700 dark:text-slate-500 dark:group-hover:text-slate-300" />
               <span>Settings</span>
             </Link>
           </li>
@@ -225,7 +239,7 @@ export default function AdminAppShell({ children }: AdminAppShellProps) {
         </div>
       </Dialog>
 
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-gray-200 lg:bg-slate-950 dark:lg:border-white/10">
+      <div className="hidden lg:fixed lg:inset-y-0 lg:z-40 lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-slate-200 lg:bg-white dark:lg:border-white/10 dark:lg:bg-slate-950">
         <SidebarContent pathname={pathname} />
       </div>
 
