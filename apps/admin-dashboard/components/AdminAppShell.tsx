@@ -17,7 +17,8 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import CommandPalette from "@/components/CommandPalette";
 import JobsIndicator from "@/components/JobsIndicator";
 import LogoutButton from "@/components/LogoutButton";
 
@@ -157,7 +158,35 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 export default function AdminAppShell({ children }: AdminAppShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const isLoginPage = pathname === "/login";
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+        return;
+      }
+
+      if (event.key === "/") {
+        const activeElement = document.activeElement;
+        const isTypingTarget =
+          activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement ||
+          activeElement instanceof HTMLSelectElement ||
+          activeElement?.getAttribute("contenteditable") === "true";
+
+        if (!isTypingTarget) {
+          event.preventDefault();
+          setCommandPaletteOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   if (isLoginPage) {
     return <>{children}</>;
@@ -165,6 +194,8 @@ export default function AdminAppShell({ children }: AdminAppShellProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+      <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} />
+
       <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="relative z-50 lg:hidden">
         <DialogBackdrop
           transition
@@ -215,6 +246,7 @@ export default function AdminAppShell({ children }: AdminAppShellProps) {
             <div className="flex flex-1 items-center gap-x-4 lg:gap-x-6">
               <button
                 type="button"
+                onClick={() => setCommandPaletteOpen(true)}
                 className="group grid flex-1 grid-cols-1"
                 aria-label="Open command palette"
               >
