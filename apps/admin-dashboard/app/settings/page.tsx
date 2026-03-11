@@ -12,6 +12,7 @@ import { Check, ChevronsUpDown, X } from 'lucide-react';
 const MASK_VALUE = "••••••••";
 const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
 const HIDDEN_APP_CLASSES_STORAGE_KEY = "hiddenAppClasses";
+const JMAP_MAILBOXES_STORAGE_KEY = "jmapAvailableMailboxes";
 
 const settingsSections = [
   { id: "freelancer-information", title: "Invoice Information" },
@@ -87,6 +88,7 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchSettings();
     fetchApiKeys();
+    hydrateStoredMailboxes();
   }, []);
 
   const persistAppTitleRenames = (entries: string[]) => {
@@ -103,6 +105,35 @@ export default function SettingsPage() {
     }
 
     window.localStorage.setItem(HIDDEN_APP_CLASSES_STORAGE_KEY, JSON.stringify(entries));
+  };
+
+  const persistAvailableMailboxes = (mailboxes: MailboxInfo[]) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(JMAP_MAILBOXES_STORAGE_KEY, JSON.stringify(mailboxes));
+  };
+
+  const hydrateStoredMailboxes = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const stored = window.localStorage.getItem(JMAP_MAILBOXES_STORAGE_KEY);
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setAvailableMailboxes(parsed as MailboxInfo[]);
+      }
+    } catch (error) {
+      console.error("Error hydrating stored mailboxes:", error);
+      window.localStorage.removeItem(JMAP_MAILBOXES_STORAGE_KEY);
+    }
   };
 
   const fetchSettings = async () => {
@@ -317,6 +348,7 @@ export default function SettingsPage() {
     try {
       const mailboxes = await fetchMailboxes();
       setAvailableMailboxes(mailboxes);
+      persistAvailableMailboxes(mailboxes);
       if (mailboxes.length === 0) {
         toast.error("No mailboxes found. Please check your JMAP configuration.");
       } else {
