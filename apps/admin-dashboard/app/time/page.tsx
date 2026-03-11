@@ -344,7 +344,7 @@ export default function TimeEntriesPage() {
           </div>
         )}
 
-        {/* Filters */}
+        {/* Filters
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Filters</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -427,8 +427,9 @@ export default function TimeEntriesPage() {
             </button>
           )}
         </div>
+ */}
 
-        {/* Time Entries List */}
+        {/* Time Entries List
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
           {loading ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -484,7 +485,6 @@ export default function TimeEntriesPage() {
             </div>
           )}
           
-          {/* Load More Button */}
           {!loading && !error && timeEntries.length > 0 && hasMore && (
             <div className="p-6 text-center border-t border-gray-200 dark:border-gray-700">
               <button
@@ -496,6 +496,7 @@ export default function TimeEntriesPage() {
             </div>
           )}
         </div>
+ */}
       </div>
 
       <APIFooter

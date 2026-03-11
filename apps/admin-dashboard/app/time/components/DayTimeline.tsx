@@ -12,6 +12,7 @@ import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
 import CurrentTimeLine from "./timeline/CurrentTimeLine";
 import ActivitySession from "./timeline/ActivitySession";
 import ActivityScrollbarMinimap, { MINIMAP_HEIGHT_PX } from "./timeline/ActivityScrollbarMinimap";
+import ProjectScrollbarMinimap from "./timeline/ProjectScrollbarMinimap";
 import TimeEntryBar from "./timeline/TimeEntryBar";
 import TimeEntryCreationDialog from "./timeline/TimeEntryCreationDialog";
 import {
@@ -194,8 +195,14 @@ export default function DayTimeline({
   const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
   const [importingRescueTime, setImportingRescueTime] = useState(false);
   const [appContextMenu, setAppContextMenu] = useState<AppSessionContextMenuState>(null);
-  const [isDraggingMinimapViewport, setIsDraggingMinimapViewport] = useState(false);
+  const [isDraggingActivityMinimapViewport, setIsDraggingActivityMinimapViewport] = useState(false);
+  const [isDraggingProjectMinimapViewport, setIsDraggingProjectMinimapViewport] = useState(false);
   const [activityScrollMetrics, setActivityScrollMetrics] = useState({
+    scrollTop: 0,
+    viewportHeight: MINIMAP_HEIGHT_PX,
+    scrollHeight: 24 * HOUR_HEIGHT + 40,
+  });
+  const [projectScrollMetrics, setProjectScrollMetrics] = useState({
     scrollTop: 0,
     viewportHeight: MINIMAP_HEIGHT_PX,
     scrollHeight: 24 * HOUR_HEIGHT + 40,
@@ -968,20 +975,42 @@ export default function DayTimeline({
   };
 
   const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const nextScrollTop = e.currentTarget.scrollTop;
     setActivityScrollMetrics({
-      scrollTop: e.currentTarget.scrollTop,
+      scrollTop: nextScrollTop,
       viewportHeight: e.currentTarget.clientHeight,
       scrollHeight: e.currentTarget.scrollHeight,
     });
 
+    setProjectScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: nextScrollTop,
+      viewportHeight: timelineRef.current?.clientHeight ?? prev.viewportHeight,
+      scrollHeight: timelineRef.current?.scrollHeight ?? prev.scrollHeight,
+    }));
+
     if (timelineRef.current) {
-      timelineRef.current.scrollTop = e.currentTarget.scrollTop;
+      timelineRef.current.scrollTop = nextScrollTop;
     }
   };
 
   const handleTimelineScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const nextScrollTop = e.currentTarget.scrollTop;
+    setProjectScrollMetrics({
+      scrollTop: nextScrollTop,
+      viewportHeight: e.currentTarget.clientHeight,
+      scrollHeight: e.currentTarget.scrollHeight,
+    });
+
+    setActivityScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: nextScrollTop,
+      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
+      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
+    }));
+
     if (activityScrollRef.current) {
-      activityScrollRef.current.scrollTop = e.currentTarget.scrollTop;
+      activityScrollRef.current.scrollTop = nextScrollTop;
     }
   };
 
@@ -1028,6 +1057,72 @@ export default function DayTimeline({
       viewportHeight: activityContainer.clientHeight,
       scrollHeight: activityContainer.scrollHeight,
     });
+
+    setProjectScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: nextScrollTop,
+      viewportHeight: timelineRef.current?.clientHeight ?? prev.viewportHeight,
+      scrollHeight: timelineRef.current?.scrollHeight ?? prev.scrollHeight,
+    }));
+  };
+
+  const jumpProjectMinimapToRatio = (ratio: number) => {
+    const projectContainer = timelineRef.current;
+    if (!projectContainer) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(projectContainer.scrollHeight - projectContainer.clientHeight, 0);
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
+
+    projectContainer.scrollTop = nextScrollTop;
+
+    if (activityScrollRef.current) {
+      activityScrollRef.current.scrollTop = nextScrollTop;
+    }
+
+    setProjectScrollMetrics({
+      scrollTop: nextScrollTop,
+      viewportHeight: projectContainer.clientHeight,
+      scrollHeight: projectContainer.scrollHeight,
+    });
+
+    setActivityScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: nextScrollTop,
+      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
+      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
+    }));
+  };
+
+  const dragProjectMinimapViewport = (deltaRatio: number) => {
+    const projectContainer = timelineRef.current;
+    if (!projectContainer) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(projectContainer.scrollHeight - projectContainer.clientHeight, 0);
+    const scrollDelta = deltaRatio * maxScrollTop;
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, projectContainer.scrollTop + scrollDelta));
+
+    projectContainer.scrollTop = nextScrollTop;
+
+    if (activityScrollRef.current) {
+      activityScrollRef.current.scrollTop = nextScrollTop;
+    }
+
+    setProjectScrollMetrics({
+      scrollTop: nextScrollTop,
+      viewportHeight: projectContainer.clientHeight,
+      scrollHeight: projectContainer.scrollHeight,
+    });
+
+    setActivityScrollMetrics((prev) => ({
+      ...prev,
+      scrollTop: nextScrollTop,
+      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
+      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
+    }));
   };
 
   // Render time entries with ghost entry
@@ -1205,8 +1300,8 @@ export default function DayTimeline({
                   scrollHeight={activityScrollMetrics.scrollHeight}
                   onJumpToRatio={jumpActivityMinimapToRatio}
                   onDragViewport={dragActivityMinimapViewport}
-                  isDraggingViewport={isDraggingMinimapViewport}
-                  setIsDraggingViewport={setIsDraggingMinimapViewport}
+                  isDraggingViewport={isDraggingActivityMinimapViewport}
+                  setIsDraggingViewport={setIsDraggingActivityMinimapViewport}
                 />
               </div>
             </div>
@@ -1249,10 +1344,10 @@ export default function DayTimeline({
                 {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
               </button>
             </div>
-            <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+            <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex">
               <div
                 ref={timelineRef}
-                className="relative overflow-y-auto overflow-x-visible cursor-crosshair pr-4"
+                className="relative min-w-0 flex-1 overflow-y-auto overflow-x-visible cursor-crosshair pr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
                 onMouseDown={handleTimelineMouseDown}
                 onMouseMove={throttle(handleTimelineMouseMove, 20)}
@@ -1276,6 +1371,16 @@ export default function DayTimeline({
                   />
                 </div>
               </div>
+              <ProjectScrollbarMinimap
+                entries={timeEntries}
+                scrollTop={projectScrollMetrics.scrollTop}
+                viewportHeight={projectScrollMetrics.viewportHeight}
+                scrollHeight={projectScrollMetrics.scrollHeight}
+                onJumpToRatio={jumpProjectMinimapToRatio}
+                onDragViewport={dragProjectMinimapViewport}
+                isDraggingViewport={isDraggingProjectMinimapViewport}
+                setIsDraggingViewport={setIsDraggingProjectMinimapViewport}
+              />
             </div>
           </div>
         </div>

@@ -2,21 +2,19 @@
 
 import { useMemo } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { formatAppTitle } from "@/lib/util";
-import type { ActivitySession as ActivitySessionType } from "./utils";
+import type { TimeEntry } from "./utils";
 import ScrollbarMinimap, {
   createEmptyMinimapCells,
   DEFAULT_MINIMAP_ROWS,
   getMinimapRowIndex,
-  MINIMAP_HEIGHT_PX,
 } from "./ScrollbarMinimap";
 
-const MINIMAP_COLUMNS = 2;
+const MINIMAP_COLUMNS = 1;
 const MINIMAP_ROWS = DEFAULT_MINIMAP_ROWS;
+const FALLBACK_COLOR = "rgb(107 114 128)";
 
-interface ActivityScrollbarMinimapProps {
-  sessions: ActivitySessionType[];
-  colorMap: Map<string, string>;
+interface ProjectScrollbarMinimapProps {
+  entries: TimeEntry[];
   scrollTop: number;
   viewportHeight: number;
   scrollHeight: number;
@@ -26,9 +24,8 @@ interface ActivityScrollbarMinimapProps {
   setIsDraggingViewport: (isDragging: boolean) => void;
 }
 
-export default function ActivityScrollbarMinimap({
-  sessions,
-  colorMap,
+export default function ProjectScrollbarMinimap({
+  entries,
   scrollTop,
   viewportHeight,
   scrollHeight,
@@ -36,14 +33,14 @@ export default function ActivityScrollbarMinimap({
   onDragViewport,
   isDraggingViewport,
   setIsDraggingViewport,
-}: ActivityScrollbarMinimapProps) {
+}: ProjectScrollbarMinimapProps) {
   const minimapCells = useMemo(() => {
     const tz = Temporal.Now.timeZoneId();
-    const cells = createEmptyMinimapCells(MINIMAP_ROWS, MINIMAP_COLUMNS);
+    const cells = createEmptyMinimapCells(MINIMAP_ROWS, MINIMAP_COLUMNS, "No project entries");
 
-    sessions.forEach((session) => {
-      const start = Temporal.Instant.from(session.startTime).toZonedDateTimeISO(tz);
-      let end = Temporal.Instant.from(session.endTime).toZonedDateTimeISO(tz);
+    entries.forEach((entry) => {
+      const start = Temporal.Instant.from(entry.startTime).toZonedDateTimeISO(tz);
+      let end = Temporal.Instant.from(entry.endTime).toZonedDateTimeISO(tz);
       const endOfDay = start.withPlainTime(Temporal.PlainTime.from("23:59:59.999"));
 
       if (Temporal.ZonedDateTime.compare(end, endOfDay) > 0) {
@@ -53,33 +50,29 @@ export default function ActivityScrollbarMinimap({
       const startMinutes = start.hour * 60 + start.minute;
       const endMinutes = Math.max(
         startMinutes,
-        end.hour * 60 + end.minute + (end.second > 0 || end.millisecond > 0 ? 1 : 0)
+        end.hour * 60 + end.minute + (end.second > 0 || end.millisecond > 0 ? 1 : 0),
       );
       const durationMinutes = Math.max(
         1,
-        Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n)
+        Number((end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000n),
       );
-  const startRow = getMinimapRowIndex(startMinutes, MINIMAP_ROWS);
-  const endRow = getMinimapRowIndex(endMinutes, MINIMAP_ROWS);
-      const preferredColumn = session.id % MINIMAP_COLUMNS;
-      const color = colorMap.get(session.appClass) ?? "rgb(107 114 128)";
-      const title = `${formatAppTitle(session.appClass)} • ${Math.round(durationMinutes)}m`;
+      const startRow = getMinimapRowIndex(startMinutes, MINIMAP_ROWS);
+      const endRow = getMinimapRowIndex(endMinutes, MINIMAP_ROWS);
+      const color = entry.project.color || FALLBACK_COLOR;
+      const title = `${entry.project.client.name} • ${entry.project.name}${entry.description ? ` • ${entry.description}` : ""}`;
 
       for (let row = startRow; row <= endRow; row++) {
-        const primaryIndex = row * MINIMAP_COLUMNS + preferredColumn;
-        const secondaryIndex = row * MINIMAP_COLUMNS + ((preferredColumn + 1) % MINIMAP_COLUMNS);
+        const cellIndex = row * MINIMAP_COLUMNS;
         const strength = durationMinutes + (row === startRow ? 0.5 : 0);
 
-        if (strength >= cells[primaryIndex]!.strength) {
-          cells[primaryIndex] = { color, strength, title };
-        } else if (strength >= cells[secondaryIndex]!.strength) {
-          cells[secondaryIndex] = { color, strength, title };
+        if (strength >= cells[cellIndex]!.strength) {
+          cells[cellIndex] = { color, strength, title };
         }
       }
     });
 
     return cells;
-  }, [colorMap, sessions]);
+  }, [entries]);
 
   if (minimapCells.length === 0) {
     return null;
@@ -100,5 +93,3 @@ export default function ActivityScrollbarMinimap({
     />
   );
 }
-
-export { MINIMAP_HEIGHT_PX };
