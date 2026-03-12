@@ -1,10 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
-import { APIFooter } from '@repo/ui';
+import {
+  APIFooter,
+  Badge,
+  Breadcrumbs,
+  Button,
+  EmptySurfaceState,
+  Page,
+  PageContent,
+  PageError,
+  PageHeader,
+  PageLoading,
+  Section,
+  Select,
+  StatCard,
+  Surface,
+} from '@repo/ui';
+import type { Client, Invoice, InvoiceStatus, Project } from '@freelance-os/types';
+import {
+  CircleDollarSign,
+  CreditCard,
+  FileText,
+  Filter,
+  Plus,
+  ReceiptText,
+  Trash2,
+} from 'lucide-react';
+import { Temporal } from '@/lib/temporal-polyfill';
 import { generateCode } from '@/lib/ai-actions';
+import { formatDate } from '@/lib/datetime';
 import { authFetch } from '@/lib/util';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
@@ -17,24 +43,56 @@ interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' |
   project?: Pick<Project, 'id' | 'name'> | null;
 }
 
+const invoiceStatusVariants: Record<InvoiceStatus, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'subtle'> = {
+  draft: 'subtle',
+  sent: 'info',
+  paid: 'success',
+  overdue: 'danger',
+  cancelled: 'default',
+};
+
+function InvoiceStatusBadge({ status }: { status: InvoiceStatus }) {
+  return (
+    <Badge variant={invoiceStatusVariants[status]} size="sm" className="capitalize">
+      {status}
+    </Badge>
+  );
+}
+
+function formatInvoiceDate(dateString: string) {
+  return formatDate(dateString, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+  }).format(amount);
+}
+
+function isInvoiceOverdue(invoice: InvoiceWithRelations) {
+  if (invoice.status === 'paid' || invoice.status === 'cancelled') return false;
+
+  const dueDate = Temporal.Instant.from(invoice.dueDate);
+  return Temporal.Instant.compare(dueDate, Temporal.Now.instant()) < 0;
+}
+
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Filters
   const [clientFilter, setClientFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  useEffect(() => {
-    fetchInvoices();
-    fetchClients();
-  }, [clientFilter, statusFilter]);
-
-  const fetchInvoices = async () => {
+  const fetchInvoices = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       if (clientFilter) params.append('clientId', clientFilter);
       if (statusFilter) params.append('status', statusFilter);
@@ -48,9 +106,9 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clientFilter, statusFilter]);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
@@ -59,9 +117,17 @@ export default function InvoicesPage() {
     } catch (err) {
       console.error('Error fetching clients:', err);
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: number) => {
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const handleDelete = useCallback(async (id: number) => {
     if (!confirm('Are you sure you want to delete this invoice?')) return;
 
     try {
@@ -74,347 +140,313 @@ export default function InvoicesPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete invoice');
     }
-  };
+  }, [fetchInvoices]);
 
-  const getStatusBadgeClass = (status: InvoiceStatus) => {
-    const baseClass = 'px-2 py-1 rounded-full text-xs font-medium';
-    switch (status) {
-      case 'draft':
-        return `${baseClass} bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200`;
-      case 'sent':
-        return `${baseClass} bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200`;
-      case 'paid':
-        return `${baseClass} bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200`;
-      case 'overdue':
-        return `${baseClass} bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200`;
-      case 'cancelled':
-        return `${baseClass} bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400`;
-      default:
-        return baseClass;
-    }
-  };
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const isOverdue = (invoice: InvoiceWithRelations) => {
-    if (invoice.status === 'paid' || invoice.status === 'cancelled') return false;
-    return new Date(invoice.dueDate) < new Date();
-  };
-
-  const calculateTotalAmount = () => {
-    return invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
-  };
-
-  const calculatePaidAmount = () => {
-    return invoices
-      .filter(inv => inv.status === 'paid')
+  const totals = useMemo(() => {
+    const totalAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+    const paidAmount = invoices
+      .filter((invoice) => invoice.status === 'paid')
       .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
-  };
-
-  const calculateOutstandingAmount = () => {
-    return invoices
-      .filter(inv => inv.status !== 'paid' && inv.status !== 'cancelled')
+    const outstandingAmount = invoices
+      .filter((invoice) => invoice.status !== 'paid' && invoice.status !== 'cancelled')
       .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
-  };
+    const overdueCount = invoices.filter((invoice) => isInvoiceOverdue(invoice)).length;
+
+    return { totalAmount, paidAmount, outstandingAmount, overdueCount };
+  }, [invoices]);
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
     return await generateCode(endpoint, language);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-500 dark:text-gray-400">Loading invoices...</div>
-      </div>
-    );
+  if (loading && invoices.length === 0) {
+    return <PageLoading title="Loading invoices" message="Fetching invoices, client filters, and payment status data." />;
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500 dark:text-red-400">Error: {error}</div>
-      </div>
+      <Page>
+        <PageContent>
+          <PageError title="Couldn’t load invoices" message={error} retry={fetchInvoices} />
+        </PageContent>
+      </Page>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold dark:text-white">Invoices</h1>
-        <Link
-          href="/invoices/new"
-          className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition"
-        >
-          Create Invoice
-        </Link>
-      </div>
+    <Page>
+      <PageContent>
+        <Section className="space-y-6">
+          <Breadcrumbs items={[{ label: 'Invoices' }]} LinkComponent={Link as any} />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Total Amount</h3>
-          <p className="text-2xl font-bold dark:text-white">{formatCurrency(calculateTotalAmount(), 'USD')}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Paid</h3>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-500">{formatCurrency(calculatePaidAmount(), 'USD')}</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-900">
-          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Outstanding</h3>
-          <p className="text-2xl font-bold text-orange-600 dark:text-orange-500">{formatCurrency(calculateOutstandingAmount(), 'USD')}</p>
-        </div>
-      </div>
+          <PageHeader
+            eyebrow="Admin dashboard"
+            title="Invoices"
+            description="Track invoice health, monitor collections, and manage billing records with a cleaner operational view."
+            actions={
+              <Link href="/invoices/new">
+                <Button leftIcon={<Plus className="h-4 w-4" />}>Create Invoice</Button>
+              </Link>
+            }
+          />
 
-      {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow dark:shadow-gray-900 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label htmlFor="client-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Filter by Client
-            </label>
-            <select
-              id="client-filter"
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-            >
-              <option value="">All Clients</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Total billed"
+              value={formatCurrency(totals.totalAmount, 'USD')}
+              icon={<ReceiptText className="h-5 w-5" />}
+              meta={`${invoices.length} invoice${invoices.length === 1 ? '' : 's'}`}
+            />
+            <StatCard
+              label="Paid"
+              value={formatCurrency(totals.paidAmount, 'USD')}
+              tone="success"
+              icon={<CreditCard className="h-5 w-5" />}
+              meta="Marked paid invoices"
+            />
+            <StatCard
+              label="Outstanding"
+              value={formatCurrency(totals.outstandingAmount, 'USD')}
+              tone="warning"
+              icon={<CircleDollarSign className="h-5 w-5" />}
+              meta="Open and unpaid invoices"
+            />
+            <StatCard
+              label="Overdue"
+              value={totals.overdueCount}
+              tone={totals.overdueCount > 0 ? 'danger' : 'default'}
+              icon={<FileText className="h-5 w-5" />}
+              meta="Past due and still unpaid"
+            />
           </div>
 
-          <div>
-            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Filter by Status
-            </label>
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-            >
-              <option value="">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="paid">Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
+          <Surface className="space-y-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  <Filter className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  Filters
+                </div>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Refine invoices by client account or current billing status.</p>
+              </div>
+              <Badge variant="subtle" size="sm">{invoices.length} result{invoices.length === 1 ? '' : 's'}</Badge>
+            </div>
 
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setClientFilter('');
-                setStatusFilter('');
-              }}
-              className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <Select
+                id="client-filter"
+                label="Client"
+                value={clientFilter}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setClientFilter(e.target.value)}
+              >
+                <option value="">All clients</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </Select>
 
-      {/* Invoices List */}
-      {invoices.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 p-8 text-center">
-          <p className="text-gray-500 dark:text-gray-400 mb-4">No invoices found.</p>
-          <Link
-            href="/invoices/new"
-            className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 font-medium"
-          >
-            Create your first invoice
-          </Link>
-        </div>
-      ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Invoice #
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Client
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Project
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Issue Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Due Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {invoices.map((invoice) => (
-                <tr key={invoice.id} className={isOverdue(invoice) ? 'bg-red-50 dark:bg-red-900/20' : ''}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link
-                      href={`/invoices/${invoice.id}`}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                    >
-                      {invoice.invoiceNumber}
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">{invoice.client.name}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{invoice.client.company}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {invoice.project?.name || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    {formatCurrency(Number(invoice.amount), invoice.currency)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {formatDate(invoice.issueDate)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {formatDate(invoice.dueDate)}
-                    {isOverdue(invoice) && (
-                      <span className="ml-2 text-red-600 dark:text-red-400 font-medium">Overdue</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={getStatusBadgeClass(invoice.status)}>
-                      {invoice.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <Link
-                      href={`/invoices/${invoice.id}`}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mr-4"
-                    >
-                      View
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(invoice.id)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              <Select
+                id="status-filter"
+                label="Status"
+                value={statusFilter}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+                <option value="cancelled">Cancelled</option>
+              </Select>
 
-      <APIFooter
-        enableApiKeys
-        enableCodeGen
-        onGenerateApiKey={() => window.location.href = '/api-demo'}
-        onGenerateCode={handleGenerateCode}
-        endpoints={[
-          {
-            method: "GET",
-            path: "/invoices",
-            description: "List all invoices with optional filters",
-            queryParams: [
+              <div className="flex items-end">
+                <Button
+                  variant="secondary"
+                  className="w-full md:w-auto"
+                  onClick={() => {
+                    setClientFilter('');
+                    setStatusFilter('');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            </div>
+          </Surface>
+
+          {invoices.length === 0 ? (
+            <EmptySurfaceState
+              icon={<ReceiptText className="h-16 w-16" />}
+              title="No invoices found"
+              description="Create your first invoice to start tracking receivables, payment state, and project billing history in one place."
+              action={
+                <Link href="/invoices/new">
+                  <Button leftIcon={<Plus className="h-4 w-4" />}>Create your first invoice</Button>
+                </Link>
+              }
+            />
+          ) : (
+            <Surface padding="none" className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 dark:divide-white/10">
+                  <thead className="bg-slate-50 dark:bg-slate-950/80">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Invoice</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Client</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Project</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amount</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Issued</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Due</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white dark:divide-white/10 dark:bg-slate-900">
+                    {invoices.map((invoice) => {
+                      const overdue = isInvoiceOverdue(invoice);
+
+                      return (
+                        <tr key={invoice.id} className={overdue ? 'bg-red-50/60 dark:bg-red-950/20' : 'hover:bg-slate-50 dark:hover:bg-white/5'}>
+                          <td className="px-6 py-4 align-top">
+                            <Link href={`/invoices/${invoice.id}`} className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                              {invoice.invoiceNumber}
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <div className="text-sm font-medium text-slate-900 dark:text-white">{invoice.client.name}</div>
+                            <div className="text-sm text-slate-500 dark:text-slate-400">{invoice.client.company || invoice.client.email}</div>
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
+                            {invoice.project?.name || '—'}
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm font-semibold text-slate-900 dark:text-white">
+                            {formatCurrency(Number(invoice.amount), invoice.currency)}
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
+                            {formatInvoiceDate(invoice.issueDate)}
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
+                            <div>{formatInvoiceDate(invoice.dueDate)}</div>
+                            {overdue ? <div className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">Past due</div> : null}
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <InvoiceStatusBadge status={invoice.status} />
+                          </td>
+                          <td className="px-6 py-4 align-top">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/invoices/${invoice.id}`}>
+                                <Button variant="secondary" size="sm">View</Button>
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(invoice.id)}
+                                leftIcon={<Trash2 className="h-4 w-4" />}
+                                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Surface>
+          )}
+
+          <APIFooter
+            enableApiKeys
+            enableCodeGen
+            onGenerateApiKey={() => {
+              window.location.href = '/api-demo';
+            }}
+            onGenerateCode={handleGenerateCode}
+            endpoints={[
               {
-                name: "clientId",
-                type: "number",
-                description: "Filter by client ID",
+                method: 'GET',
+                path: '/invoices',
+                description: 'List all invoices with optional filters',
+                queryParams: [
+                  {
+                    name: 'clientId',
+                    type: 'number',
+                    description: 'Filter by client ID',
+                  },
+                  {
+                    name: 'status',
+                    type: 'string',
+                    enum: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
+                    description: 'Filter by invoice status',
+                  },
+                  {
+                    name: 'projectId',
+                    type: 'number',
+                    description: 'Filter by project ID',
+                  },
+                  {
+                    name: 'startDate',
+                    type: 'string',
+                    description: 'Filter by issue date >= startDate (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'endDate',
+                    type: 'string',
+                    description: 'Filter by issue date <= endDate (YYYY-MM-DD)',
+                  },
+                ],
               },
               {
-                name: "status",
-                type: "string",
-                enum: ["draft", "sent", "paid", "overdue", "cancelled"],
-                description: "Filter by invoice status",
+                method: 'POST',
+                path: '/invoices',
+                description: 'Create a new invoice',
+                body: JSON.stringify(
+                  {
+                    clientId: 1,
+                    projectId: 1,
+                    invoiceNumber: 'INV-20251104-001',
+                    issueDate: '2025-11-04',
+                    dueDate: '2025-11-18',
+                    amount: '1500.00',
+                    currency: 'USD',
+                    status: 'draft',
+                    notes: 'Payment terms: Net 14',
+                  },
+                  null,
+                  2
+                ),
               },
               {
-                name: "projectId",
-                type: "number",
-                description: "Filter by project ID",
+                method: 'GET',
+                path: '/invoices/{id}',
+                description: 'Get a specific invoice with details',
               },
               {
-                name: "startDate",
-                type: "string",
-                description: "Filter by issue date >= startDate (YYYY-MM-DD)",
+                method: 'PUT',
+                path: '/invoices/{id}',
+                description: 'Update an invoice',
+                body: JSON.stringify(
+                  {
+                    status: 'sent',
+                    sentDate: '2025-11-04',
+                  },
+                  null,
+                  2
+                ),
               },
               {
-                name: "endDate",
-                type: "string",
-                description: "Filter by issue date <= endDate (YYYY-MM-DD)",
+                method: 'DELETE',
+                path: '/invoices/{id}',
+                description: 'Delete an invoice',
               },
-            ],
-          },
-          {
-            method: "POST",
-            path: "/invoices",
-            description: "Create a new invoice",
-            body: JSON.stringify(
-              {
-                clientId: 1,
-                projectId: 1,
-                invoiceNumber: "INV-20251104-001",
-                issueDate: "2025-11-04",
-                dueDate: "2025-11-18",
-                amount: "1500.00",
-                currency: "USD",
-                status: "draft",
-                notes: "Payment terms: Net 14",
-              },
-              null,
-              2
-            ),
-          },
-          {
-            method: "GET",
-            path: "/invoices/{id}",
-            description: "Get a specific invoice with details",
-          },
-          {
-            method: "PUT",
-            path: "/invoices/{id}",
-            description: "Update an invoice",
-            body: JSON.stringify(
-              {
-                status: "sent",
-                sentDate: "2025-11-04",
-              },
-              null,
-              2
-            ),
-          },
-          {
-            method: "DELETE",
-            path: "/invoices/{id}",
-            description: "Delete an invoice",
-          },
-        ]}
-      />
-    </div>
+            ]}
+          />
+        </Section>
+      </PageContent>
+    </Page>
   );
 }

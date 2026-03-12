@@ -35,6 +35,7 @@
     "typescript": "5.9.2"
   },
   "dependencies": {
+    "lucide-react": "^0.552.0",
     "sonner": "^2.0.7"
   }
 }

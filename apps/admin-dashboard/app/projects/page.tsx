@@ -1,9 +1,34 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { ChangeEvent, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { APIFooter } from '@repo/ui';
+import {
+  APIFooter,
+  Badge,
+  Breadcrumbs,
+  Button,
+  EmptySurfaceState,
+  Page,
+  PageContent,
+  PageError,
+  PageHeader,
+  PageLoading,
+  Section,
+  Select,
+  Surface,
+} from '@repo/ui';
+import {
+  BriefcaseBusiness,
+  CalendarRange,
+  ChevronRight,
+  Clock3,
+  Filter,
+  FolderKanban,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import { generateCode } from '@/lib/ai-actions';
+import { formatDate } from '@/lib/datetime';
 import { authFetch } from '@/lib/util';
 
 type Client = {
@@ -28,19 +53,38 @@ type Project = {
   };
 };
 
-const statusColors = {
-  active: 'bg-green-100 text-green-800',
-  completed: 'bg-blue-100 text-blue-800',
-  'on-hold': 'bg-yellow-100 text-yellow-800',
-};
+const statusVariants = {
+  active: 'success',
+  completed: 'info',
+  'on-hold': 'warning',
+} as const;
 
 const statusLabels = {
   active: 'Active',
   completed: 'Completed',
-  'on-hold': 'On Hold',
-};
+  'on-hold': 'On hold',
+} as const;
 
-// Memoized ProjectCard component
+function ProjectStatusBadge({ status }: { status: string }) {
+  const variant = statusVariants[status as keyof typeof statusVariants] ?? 'default';
+  const label = statusLabels[status as keyof typeof statusLabels] ?? status;
+
+  return (
+    <Badge variant={variant} size="sm">
+      {label}
+    </Badge>
+  );
+}
+
+function formatProjectDate(dateString: string | null) {
+  if (!dateString) return null;
+  return formatDate(dateString, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 const ProjectCard = memo(function ProjectCard({
   project,
   onDelete,
@@ -50,98 +94,108 @@ const ProjectCard = memo(function ProjectCard({
 }) {
   const handleDelete = useCallback(() => {
     onDelete(project.id);
-  }, [project.id, onDelete]);
+  }, [onDelete, project.id]);
+
+  const startLabel = formatProjectDate(project.startDate);
+  const endLabel = formatProjectDate(project.endDate);
 
   return (
-    <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-lg overflow-hidden hover:shadow-md dark:hover:shadow-gray-900 transition-shadow">
-      {/* Color accent bar on the left */}
-      <div className="flex">
-        <div 
-          className="w-1.5 shrink-0" 
-          style={{ backgroundColor: project.color || '#22C55E' }}
-        />
-        <div className="flex-1 p-6">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                {/* Color dot indicator */}
-                <div 
-                  className="w-3 h-3 rounded-full shrink-0" 
+    <Surface interactive className="overflow-hidden p-0">
+      <div className="flex h-full">
+        <div className="w-1.5 shrink-0" style={{ backgroundColor: project.color || '#22C55E' }} />
+        <div className="flex flex-1 flex-col gap-5 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full"
                   style={{ backgroundColor: project.color || '#22C55E' }}
+                  aria-hidden="true"
                 />
-                <Link href={`/projects/${project.id}`}>
-                  <h2 className="text-xl font-semibold dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
+                <Link href={`/projects/${project.id}`} className="min-w-0">
+                  <h2 className="truncate text-xl font-semibold text-slate-900 transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400">
                     {project.name}
                   </h2>
                 </Link>
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded ${
-                    statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {statusLabels[project.status as keyof typeof statusLabels] || project.status}
-                </span>
+                <ProjectStatusBadge status={project.status} />
               </div>
-              {project.clientDescription && (
-                <p className="text-gray-600 dark:text-gray-400 mb-3">{project.clientDescription}</p>
-              )}
-              {project.privateNotes && (
-                <p className="text-gray-500 dark:text-gray-500 mb-3 text-sm italic border-l-2 border-gray-300 dark:border-gray-600 pl-3">
-                  Private: {project.privateNotes}
-                </p>
-              )}
-              <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400">
-                <div>
-                  <span className="font-medium">Client:</span>{' '}
-                  <Link
-                    href={`/clients/${project.client.id}`}
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {project.client.name}
-                  </Link>
+
+              {project.clientDescription ? (
+                <p className="max-w-3xl text-sm text-slate-600 dark:text-slate-400">{project.clientDescription}</p>
+              ) : null}
+
+              {project.privateNotes ? (
+                <div className="rounded-xl border border-amber-200/70 bg-amber-50/70 p-3 text-sm text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+                  <span className="font-medium">Private notes:</span> {project.privateNotes}
                 </div>
-                <div>
-                  <span className="font-medium">Time Entries:</span> {project._count.timeEntries}
-                </div>
-                <div>
-                  <span className="font-medium">Total Hours:</span> {project.totalHours}
-                </div>
-              </div>
-              {(project.startDate || project.endDate) && (
-                <div className="flex gap-6 text-sm text-gray-500 dark:text-gray-400 mt-2">
-                  {project.startDate && (
-                    <div>
-                      <span className="font-medium">Start:</span>{' '}
-                      {new Date(project.startDate).toLocaleDateString()}
-                    </div>
-                  )}
-                  {project.endDate && (
-                    <div>
-                      <span className="font-medium">End:</span>{' '}
-                      {new Date(project.endDate).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              )}
+              ) : null}
             </div>
-            <div className="flex gap-2">
-              <Link
-                href={`/projects/${project.id}?edit=true`}
-                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1 text-sm"
-              >
-                Edit
+
+            <div className="flex shrink-0 items-center gap-2 self-start">
+              <Link href={`/projects/${project.id}?edit=true`}>
+                <Button variant="secondary" size="sm">Edit</Button>
               </Link>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleDelete}
-                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 px-3 py-1 text-sm"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/30 dark:hover:text-red-300"
               >
                 Delete
-              </button>
+              </Button>
             </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/80">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <BriefcaseBusiness className="h-3.5 w-3.5" />
+                Client
+              </div>
+              <Link href={`/clients/${project.client.id}`} className="font-medium text-slate-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400">
+                {project.client.name}
+              </Link>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/80">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <Clock3 className="h-3.5 w-3.5" />
+                Time entries
+              </div>
+              <div className="text-lg font-semibold text-slate-900 dark:text-white">{project._count.timeEntries}</div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/80">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <FolderKanban className="h-3.5 w-3.5" />
+                Total hours
+              </div>
+              <div className="text-lg font-semibold text-slate-900 dark:text-white">{project.totalHours}</div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/80">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <CalendarRange className="h-3.5 w-3.5" />
+                Schedule
+              </div>
+              <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                <div>{startLabel ? `Start · ${startLabel}` : 'No start date'}</div>
+                <div>{endLabel ? `End · ${endLabel}` : 'No end date'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-white/10">
+            <div className="text-sm text-slate-500 dark:text-slate-400">Open project details to review entries, summaries, and edit settings.</div>
+            <Link href={`/projects/${project.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+              View project
+              <ChevronRight className="h-4 w-4" />
+            </Link>
           </div>
         </div>
       </div>
-    </div>
+    </Surface>
   );
 });
 
@@ -153,16 +207,7 @@ export default function ProjectsPage() {
   const [filterClient, setFilterClient] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
 
-  useEffect(() => {
-    fetchClients();
-    fetchProjects();
-  }, []);
-
-  useEffect(() => {
-    fetchProjects();
-  }, [filterClient, filterStatus]);
-
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
     try {
       const res = await authFetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
@@ -171,18 +216,19 @@ export default function ProjectsPage() {
     } catch (err) {
       console.error('Error fetching clients:', err);
     }
-  };
+  }, []);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       if (filterClient) params.append('clientId', filterClient);
       if (filterStatus) params.append('status', filterStatus);
-      
+
       const url = `/api/projects${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await authFetch(url);
-      
+
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
       setProjects(data);
@@ -191,9 +237,16 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterClient, filterStatus]);
 
-  // Memoize delete handler
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
   const handleDelete = useCallback(async (id: number) => {
     if (!confirm('Are you sure you want to delete this project? This will also delete all associated time entries.')) {
       return;
@@ -205,7 +258,7 @@ export default function ProjectsPage() {
       });
 
       if (!res.ok) throw new Error('Failed to delete project');
-      
+
       const result = await res.json();
       alert(`Project deleted successfully. ${result.deletedTimeEntries} time entries were also deleted.`);
       fetchProjects();
@@ -214,174 +267,188 @@ export default function ProjectsPage() {
     }
   }, [fetchProjects]);
 
-  // Memoize filtered projects
-  const filteredProjects = useMemo(() => {
-    return projects;
-    // Note: API handles filtering, so no client-side filtering needed
-  }, [projects]);
+  const projectCountLabel = useMemo(() => {
+    if (projects.length === 1) return '1 project';
+    return `${projects.length} projects`;
+  }, [projects.length]);
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
     return await generateCode(endpoint, language);
   };
 
   if (loading && projects.length === 0) {
-    return (
-      <div className="p-8">
-        <div className="animate-pulse dark:text-white">Loading projects...</div>
-      </div>
-    );
+    return <PageLoading title="Loading projects" message="Fetching projects, clients, and activity counts." />;
   }
 
   if (error) {
     return (
-      <div className="p-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded">
-          Error: {error}
-        </div>
-      </div>
+      <Page>
+        <PageContent>
+          <PageError title="Couldn’t load projects" message={error} retry={fetchProjects} />
+        </PageContent>
+      </Page>
     );
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold dark:text-white">Projects</h1>
-        <Link
-          href="/projects/new"
-          className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600"
-        >
-          New Project
-        </Link>
-      </div>
+    <Page>
+      <PageContent>
+        <Section className="space-y-6">
+          <Breadcrumbs items={[{ label: 'Projects' }]} LinkComponent={Link as any} />
 
-      {/* Filters */}
-      <div className="mb-6 flex gap-4">
-        <div>
-          <label className="block text-sm font-medium dark:text-gray-300 mb-1">Filter by Client</label>
-          <select
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-          >
-            <option value="">All Clients</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium dark:text-gray-300 mb-1">Filter by Status</label>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-          >
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="on-hold">On Hold</option>
-          </select>
-        </div>
-      </div>
+          <PageHeader
+            eyebrow="Admin dashboard"
+            title="Projects"
+            description="Track delivery status, monitor billable effort, and keep each engagement aligned with its client record."
+            actions={
+              <Link href="/projects/new">
+                <Button leftIcon={<Plus className="h-4 w-4" />}>New Project</Button>
+              </Link>
+            }
+          />
 
-      {projects.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <p className="text-gray-600 dark:text-gray-400 mb-4">No projects found</p>
-          <Link
-            href="/projects/new"
-            className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-          >
-            Create your first project
-          </Link>
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onDelete={handleDelete}
+          <Surface className="space-y-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  <Filter className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  Filters
+                </div>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Narrow the project list by client or current delivery status.</p>
+              </div>
+              <Badge variant="subtle" size="sm">{projectCountLabel}</Badge>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <Select label="Client" value={filterClient} onChange={(e: ChangeEvent<HTMLSelectElement>) => setFilterClient(e.target.value)}>
+                <option value="">All clients</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </Select>
+
+              <Select label="Status" value={filterStatus} onChange={(e: ChangeEvent<HTMLSelectElement>) => setFilterStatus(e.target.value)}>
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="on-hold">On hold</option>
+              </Select>
+
+              <div className="flex items-end">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className="w-full md:w-auto"
+                  onClick={() => {
+                    setFilterClient('');
+                    setFilterStatus('');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            </div>
+          </Surface>
+
+          {projects.length === 0 ? (
+            <EmptySurfaceState
+              icon={<FolderKanban className="h-16 w-16" />}
+              title="No projects found"
+              description="Create your first project to start organizing work, tracking time entries, and connecting activity back to clients."
+              action={
+                <Link href="/projects/new">
+                  <Button leftIcon={<Plus className="h-4 w-4" />}>Create your first project</Button>
+                </Link>
+              }
             />
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="grid gap-5">
+              {projects.map((project) => (
+                <ProjectCard key={project.id} project={project} onDelete={handleDelete} />
+              ))}
+            </div>
+          )}
 
-      <APIFooter
-        enableApiKeys
-        enableCodeGen
-        onGenerateApiKey={() => window.location.href = '/api-demo'}
-        onGenerateCode={handleGenerateCode}
-        endpoints={[
-          {
-            method: "GET",
-            path: "/projects",
-            description: "List all projects with optional filtering",
-            queryParams: [
+          <APIFooter
+            enableApiKeys
+            enableCodeGen
+            onGenerateApiKey={() => {
+              window.location.href = '/api-demo';
+            }}
+            onGenerateCode={handleGenerateCode}
+            endpoints={[
               {
-                name: "clientId",
-                type: "number",
-                description: "Filter projects by client ID",
+                method: 'GET',
+                path: '/projects',
+                description: 'List all projects with optional filtering',
+                queryParams: [
+                  {
+                    name: 'clientId',
+                    type: 'number',
+                    description: 'Filter projects by client ID',
+                  },
+                  {
+                    name: 'status',
+                    type: 'string',
+                    enum: ['active', 'completed', 'on-hold'],
+                    description: 'Filter by project status',
+                  },
+                  {
+                    name: 'sortBy',
+                    type: 'string',
+                    enum: ['name', 'startDate', 'endDate', 'createdAt'],
+                    description: 'Sort field (default: createdAt desc)',
+                  },
+                ],
               },
               {
-                name: "status",
-                type: "string",
-                enum: ["active", "completed", "on-hold"],
-                description: "Filter by project status",
+                method: 'POST',
+                path: '/projects',
+                description: 'Create a new project',
+                body: JSON.stringify(
+                  {
+                    name: 'Project Name',
+                    clientId: 1,
+                    clientDescription: 'Description visible to client',
+                    privateNotes: 'Internal notes',
+                    status: 'active',
+                    color: '#22C55E',
+                    startDate: '2025-01-01',
+                    endDate: '2025-12-31',
+                  },
+                  null,
+                  2
+                ),
               },
               {
-                name: "sortBy",
-                type: "string",
-                enum: ["name", "startDate", "endDate", "createdAt"],
-                description: "Sort field (default: createdAt desc)",
+                method: 'GET',
+                path: '/projects/{id}',
+                description: 'Get a specific project with time entries',
               },
-            ],
-          },
-          {
-            method: "POST",
-            path: "/projects",
-            description: "Create a new project",
-            body: JSON.stringify(
               {
-                name: "Project Name",
-                clientId: 1,
-                clientDescription: "Description visible to client",
-                privateNotes: "Internal notes",
-                status: "active",
-                color: "#22C55E",
-                startDate: "2025-01-01",
-                endDate: "2025-12-31",
+                method: 'PUT',
+                path: '/projects/{id}',
+                description: 'Update a project',
+                body: JSON.stringify(
+                  {
+                    name: 'Updated Project Name',
+                    status: 'completed',
+                  },
+                  null,
+                  2
+                ),
               },
-              null,
-              2
-            ),
-          },
-          {
-            method: "GET",
-            path: "/projects/{id}",
-            description: "Get a specific project with time entries",
-          },
-          {
-            method: "PUT",
-            path: "/projects/{id}",
-            description: "Update a project",
-            body: JSON.stringify(
               {
-                name: "Updated Project Name",
-                status: "completed",
+                method: 'DELETE',
+                path: '/projects/{id}',
+                description: 'Delete a project (cascades to time entries)',
               },
-              null,
-              2
-            ),
-          },
-          {
-            method: "DELETE",
-            path: "/projects/{id}",
-            description: "Delete a project (cascades to time entries)",
-          },
-        ]}
-      />
-    </div>
+            ]}
+          />
+        </Section>
+      </PageContent>
+    </Page>
   );
 }
