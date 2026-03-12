@@ -51,6 +51,7 @@ model Client {
   email     String    @unique
   name      String
   company   String?
+  color     String    @default("#06B6D4") @db.VarChar(7) // Hex color for client visualizations
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   

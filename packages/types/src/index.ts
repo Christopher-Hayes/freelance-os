@@ -4,6 +4,7 @@ export interface Client {
   email: string;
   name: string;
   company?: string;
+  color: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -12,12 +13,14 @@ export interface CreateClientInput {
   email: string;
   name: string;
   company?: string;
+  color?: string;
 }
 
 export interface UpdateClientInput {
   email?: string;
   name?: string;
   company?: string;
+  color?: string;
 }
 
 // Project types

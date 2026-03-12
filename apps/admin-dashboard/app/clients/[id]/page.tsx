@@ -10,6 +10,7 @@ interface Client {
   name: string;
   email: string;
   company: string | null;
+  color: string;
   createdAt: string;
   updatedAt: string;
   _count: {
@@ -29,6 +30,17 @@ interface Client {
   }>;
 }
 
+const CLIENT_COLOR_PRESETS = [
+  '#06B6D4',
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#F43F5E',
+  '#F97316',
+  '#EAB308',
+  '#22C55E',
+];
+
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
@@ -42,6 +54,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
     name: '',
     email: '',
     company: '',
+    color: '#06B6D4',
   });
   const [clientId, setClientId] = useState<string>('');
 
@@ -64,6 +77,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           name: data.name,
           email: data.email,
           company: data.company || '',
+          color: data.color || '#06B6D4',
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load client');
@@ -210,11 +224,18 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
           ← Back to clients
         </Link>
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex items-center gap-3">
+            <span
+              className="h-4 w-4 rounded-full border border-black/10 dark:border-white/20"
+              style={{ backgroundColor: client.color || '#06B6D4' }}
+              aria-hidden="true"
+            />
+            <div>
             <h1 className="text-3xl font-bold dark:text-white">{client.name}</h1>
             {client.company && (
               <p className="text-gray-600 dark:text-gray-400 mt-1">{client.company}</p>
             )}
+            </div>
           </div>
           <div className="flex gap-3">
             {!editing && (
@@ -319,6 +340,46 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               />
             </div>
+
+            <div>
+              <label htmlFor="color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Client Color
+              </label>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {CLIENT_COLOR_PRESETS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, color })}
+                      className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${formData.color === color ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'}`}
+                      style={{ backgroundColor: color }}
+                      aria-label={`Select color ${color}`}
+                      title={color}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    id="color"
+                    name="color"
+                    value={formData.color}
+                    onChange={handleChange}
+                    className="h-10 w-16 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                  />
+                  <input
+                    type="text"
+                    name="color"
+                    value={formData.color}
+                    onChange={handleChange}
+                    className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 font-mono uppercase"
+                    placeholder="#06B6D4"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-3 mt-6">
@@ -336,6 +397,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   name: client.name,
                   email: client.email,
                   company: client.company || '',
+                  color: client.color || '#06B6D4',
                 });
                 setError('');
               }}
@@ -361,6 +423,17 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
                   <dd className="text-gray-900 dark:text-white">{client.company}</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</dt>
+                <dd className="flex items-center gap-2 text-gray-900 dark:text-white">
+                  <span
+                    className="h-3 w-3 rounded-full border border-black/10 dark:border-white/20"
+                    style={{ backgroundColor: client.color || '#06B6D4' }}
+                    aria-hidden="true"
+                  />
+                  <span className="font-mono uppercase">{client.color || '#06B6D4'}</span>
+                </dd>
+              </div>
               <div>
                 <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
                 <dd className="text-gray-900 dark:text-white">

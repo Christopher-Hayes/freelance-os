@@ -5,6 +5,17 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authFetch } from '@/lib/util';
 
+const CLIENT_COLOR_PRESETS = [
+  '#06B6D4',
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#F43F5E',
+  '#F97316',
+  '#EAB308',
+  '#22C55E',
+];
+
 export default function NewClientPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -13,6 +24,7 @@ export default function NewClientPage() {
     name: '',
     email: '',
     company: '',
+    color: '#06B6D4',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,6 +129,46 @@ export default function NewClientPage() {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
               placeholder="Acme Inc."
             />
+          </div>
+
+          <div>
+            <label htmlFor="color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Client Color
+            </label>
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {CLIENT_COLOR_PRESETS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setFormData({ ...formData, color })}
+                    className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${formData.color === color ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'}`}
+                    style={{ backgroundColor: color }}
+                    aria-label={`Select color ${color}`}
+                    title={color}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  id="color"
+                  name="color"
+                  value={formData.color}
+                  onChange={handleChange}
+                  className="h-10 w-16 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                />
+                <input
+                  type="text"
+                  name="color"
+                  value={formData.color}
+                  onChange={handleChange}
+                  className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 font-mono uppercase"
+                  placeholder="#06B6D4"
+                  maxLength={7}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

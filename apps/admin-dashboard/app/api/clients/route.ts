@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
-import type { Client } from '@freelance-os/types';
 import { getAdminAuth, hasPermission } from '@/lib/auth';
 
 // GET /api/clients - List all clients
@@ -78,6 +77,7 @@ export async function POST(request: Request) {
         name: body.name,
         email: body.email,
         company: body.company || null,
+        color: body.color || '#06B6D4',
       },
     });
 

@@ -128,6 +128,7 @@ export async function PUT(
         name: body.name,
         email: body.email,
         company: body.company || null,
+        color: body.color || '#06B6D4',
       },
       include: {
         projects: {

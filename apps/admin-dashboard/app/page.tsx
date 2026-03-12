@@ -31,6 +31,7 @@ type TopProject = {
   id: number;
   name: string;
   clientName: string;
+  color: string;
   minutes: number;
   share: number;
 };
@@ -38,9 +39,16 @@ type TopProject = {
 type TopClient = {
   id: number;
   name: string;
+  color: string;
   minutes: number;
   share: number;
   projectCount: number;
+};
+
+type DashboardClientLookup = {
+  id: number;
+  name: string;
+  color: string;
 };
 
 type DailyClientBar = {
@@ -50,6 +58,7 @@ type DailyClientBar = {
   segments: Array<{
     clientId: number;
     clientName: string;
+    color: string;
     minutes: number;
   }>;
 };
@@ -80,14 +89,8 @@ type DashboardData = {
   overdueInvoiceCount: number;
 };
 
-const CLIENT_BAR_COLORS = [
-  "bg-cyan-400/95",
-  "bg-violet-400/95",
-  "bg-emerald-400/95",
-  "bg-fuchsia-400/95",
-  "bg-amber-300/95",
-  "bg-sky-300/95",
-];
+const DEFAULT_CLIENT_COLOR = "#06B6D4";
+const DEFAULT_PROJECT_COLOR = "#22C55E";
 
 const HOME_TIPS = [
   "connect RescueTime and your homepage turns into a live focus report instead of a static summary.",
@@ -130,6 +133,17 @@ function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
+function withAlpha(hex: string, alpha: number) {
+  const normalized = hex.trim();
+  const validHex = /^#([0-9A-Fa-f]{6})$/.test(normalized) ? normalized : "#94A3B8";
+  const safeAlpha = Math.max(0, Math.min(1, alpha));
+  const red = parseInt(validHex.slice(1, 3), 16);
+  const green = parseInt(validHex.slice(3, 5), 16);
+  const blue = parseInt(validHex.slice(5, 7), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${safeAlpha})`;
+}
+
 function buildAppRenameMap(entries: string[] | null | undefined) {
   return (entries ?? []).reduce<Map<string, string>>((map, entry) => {
     const separatorIndex = entry.indexOf("=");
@@ -158,6 +172,10 @@ function formatAppName(appClass: string, renameMap?: Map<string, string>) {
   }
 
   return formatAppTitle(trimmed);
+}
+
+function isDefinedNumber(value: number | undefined | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 async function getDashboardData(): Promise<DashboardData> {
@@ -306,25 +324,19 @@ async function getDashboardData(): Promise<DashboardData> {
         startTime: "desc",
       },
       select: {
+        projectId: true,
         startTime: true,
         durationMinutes: true,
-        project: {
-          select: {
-            client: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
       },
     }),
   ]);
 
   const appRenameMap = buildAppRenameMap(settings?.appTitleRenames);
 
-  const projectIds = monthlyProjectGroups.map((group) => group.projectId);
+  const projectIds = Array.from(new Set(monthlyProjectGroups.map((group) => group.projectId).filter(isDefinedNumber)));
+  const clientProjectIds = Array.from(new Set(monthlyClientGroups.map((group) => group.projectId).filter(isDefinedNumber)));
+  const recentEntryProjectIds = Array.from(new Set(recentTimeEntries.map((entry) => entry.projectId).filter(isDefinedNumber)));
+  const allReferencedProjectIds = Array.from(new Set([...projectIds, ...clientProjectIds, ...recentEntryProjectIds]));
   const projectDetails = projectIds.length
     ? await prisma.project.findMany({
       where: {
@@ -333,18 +345,41 @@ async function getDashboardData(): Promise<DashboardData> {
       select: {
         id: true,
         name: true,
-        client: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        color: true,
+        clientId: true,
       },
     })
     : [];
 
+  const relatedProjects = allReferencedProjectIds.length
+    ? await prisma.project.findMany({
+      where: {
+        id: { in: allReferencedProjectIds },
+      },
+      select: {
+        id: true,
+        clientId: true,
+      },
+    })
+    : [];
+
+  const clientIds = Array.from(new Set(relatedProjects.map((project) => project.clientId).concat(projectDetails.map((project) => project.clientId))));
+  const clients: DashboardClientLookup[] = clientIds.length
+    ? (await prisma.client.findMany({
+      where: {
+        id: { in: clientIds },
+      },
+    })).map((client) => ({
+      id: client.id,
+      name: client.name,
+      color: ((client as unknown) as DashboardClientLookup & { color?: string }).color || DEFAULT_CLIENT_COLOR,
+    }))
+    : [];
+
   const projectMap = new Map(projectDetails.map((project) => [project.id, project]));
-  const clientAggregate = new Map<number, { name: string; minutes: number; projectIds: Set<number> }>();
+  const relatedProjectMap = new Map(relatedProjects.map((project) => [project.id, project]));
+  const clientMap = new Map(clients.map((client) => [client.id, client]));
+  const clientAggregate = new Map<number, { name: string; color: string; minutes: number; projectIds: Set<number> }>();
 
   const totalActivitySeconds = activitySessions.reduce(
     (sum, session) => sum + session.durationSeconds,
@@ -380,11 +415,14 @@ async function getDashboardData(): Promise<DashboardData> {
       const details = projectMap.get(group.projectId);
       const minutes = group._sum.durationMinutes ?? 0;
 
-      return details
+      const client = details ? clientMap.get(details.clientId) : null;
+
+      return details && client
         ? {
           id: details.id,
           name: details.name,
-          clientName: details.client.name,
+          clientName: client.name,
+          color: details.color || DEFAULT_PROJECT_COLOR,
           minutes,
           share: totalMonthlyMinutes > 0 ? (minutes / totalMonthlyMinutes) * 100 : 0,
         }
@@ -396,18 +434,22 @@ async function getDashboardData(): Promise<DashboardData> {
     const minutes = group._sum.durationMinutes ?? 0;
     if (!minutes) continue;
 
-    const project = projectMap.get(group.projectId);
+    const project = relatedProjectMap.get(group.projectId);
     if (!project) continue;
 
-    const current = clientAggregate.get(project.client.id) ?? {
-      name: project.client.name,
+    const client = clientMap.get(project.clientId);
+    if (!client) continue;
+
+    const current = clientAggregate.get(client.id) ?? {
+      name: client.name,
+      color: client.color || DEFAULT_CLIENT_COLOR,
       minutes: 0,
       projectIds: new Set<number>(),
     };
 
     current.minutes += minutes;
     current.projectIds.add(project.id);
-    clientAggregate.set(project.client.id, current);
+    clientAggregate.set(client.id, current);
   }
 
   const totalClientMinutes = Array.from(clientAggregate.values()).reduce(
@@ -419,6 +461,7 @@ async function getDashboardData(): Promise<DashboardData> {
     .map(([id, client]) => ({
       id,
       name: client.name,
+      color: client.color,
       minutes: client.minutes,
       projectCount: client.projectIds.size,
       share: totalClientMinutes > 0 ? (client.minutes / totalClientMinutes) * 100 : 0,
@@ -430,7 +473,7 @@ async function getDashboardData(): Promise<DashboardData> {
     weekday: "short",
     timeZone: "UTC",
   });
-  const workDayEntries = new Map<string, Map<number, { clientName: string; minutes: number }>>();
+  const workDayEntries = new Map<string, Map<number, { clientName: string; color: string; minutes: number }>>();
 
   for (const entry of recentTimeEntries) {
     const plainDate = Temporal.Instant.from(entry.startTime.toISOString())
@@ -440,10 +483,15 @@ async function getDashboardData(): Promise<DashboardData> {
     if (dayOfWeek === 6 || dayOfWeek === 7) continue;
 
     const dateKey = plainDate.toString();
-    const dayBucket = workDayEntries.get(dateKey) ?? new Map<number, { clientName: string; minutes: number }>();
-    const clientId = entry.project.client.id;
+    const dayBucket = workDayEntries.get(dateKey) ?? new Map<number, { clientName: string; color: string; minutes: number }>();
+    const project = relatedProjectMap.get(entry.projectId);
+    if (!project) continue;
+    const client = clientMap.get(project.clientId);
+    if (!client) continue;
+    const clientId = client.id;
     const existing = dayBucket.get(clientId) ?? {
-      clientName: entry.project.client.name,
+      clientName: client.name,
+      color: client.color || DEFAULT_CLIENT_COLOR,
       minutes: 0,
     };
 
@@ -459,6 +507,7 @@ async function getDashboardData(): Promise<DashboardData> {
       .map(([clientId, client]) => ({
         clientId,
         clientName: client.clientName,
+        color: client.color,
         minutes: client.minutes,
       }))
       .sort((a, b) => b.minutes - a.minutes);
@@ -536,12 +585,12 @@ function ProgressRow({
   label,
   detail,
   value,
-  accentClass,
+  color,
 }: {
   label: string;
   detail: string;
   value: number;
-  accentClass: string;
+  color: string;
 }) {
   return (
     <div className="space-y-2">
@@ -553,7 +602,13 @@ function ProgressRow({
         <div className="text-sm font-medium text-gray-600 dark:text-gray-300">{formatPercent(value)}</div>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-        <div className={`h-full rounded-full ${accentClass}`} style={{ width: `${Math.max(value, 6)}%` }} />
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.max(value, 6)}%`,
+            backgroundColor: color,
+          }}
+        />
       </div>
     </div>
   );
@@ -563,19 +618,18 @@ export default async function Page() {
   const data = await getDashboardData();
   const tipIndex = Math.abs(todayTipSeed()) % HOME_TIPS.length;
   const activeTip = HOME_TIPS[tipIndex];
-  const stackedClientIds = Array.from(new Set(data.recentWorkDays.flatMap((day) => day.segments.map((segment) => segment.clientId)))).slice(0, CLIENT_BAR_COLORS.length);
-  const clientColorMap = new Map(stackedClientIds.map((clientId, index) => [clientId, CLIENT_BAR_COLORS[index]]));
   const maxRecentWorkDayMinutes = Math.max(...data.recentWorkDays.map((day) => day.totalMinutes), 1);
-  const recentWorkDayLegend = stackedClientIds.map((clientId) => {
-    const segment = data.recentWorkDays.flatMap((day) => day.segments).find((item) => item.clientId === clientId);
-    return segment
-      ? {
-        clientId,
-        clientName: segment.clientName,
-        colorClass: clientColorMap.get(clientId) ?? CLIENT_BAR_COLORS[0],
-      }
-      : null;
-  }).filter((item): item is { clientId: number; clientName: string; colorClass: string } => item !== null);
+  const recentWorkDayLegend = Array.from(
+    new Map(
+      data.recentWorkDays
+        .flatMap((day) => day.segments)
+        .map((segment) => [segment.clientId, {
+          clientId: segment.clientId,
+          clientName: segment.clientName,
+          color: segment.color || DEFAULT_CLIENT_COLOR,
+        }])
+    ).values()
+  );
 
   return (
     <div className="min-h-screen p-6 md:p-8">
@@ -672,11 +726,14 @@ export default async function Page() {
                             className="flex w-full flex-col-reverse overflow-hidden rounded-2xl"
                             style={{ height: `${Math.max(18, Math.round((day.totalMinutes / maxRecentWorkDayMinutes) * 128))}px` }}
                           >
-                            {day.segments.filter((segment) => clientColorMap.has(segment.clientId)).map((segment) => (
+                            {day.segments.map((segment) => (
                               <div
                                 key={`${day.date}-${segment.clientId}`}
-                                className={`blur-sm transform scale-125 ${clientColorMap.get(segment.clientId)}`}
-                                style={{ height: `${(segment.minutes / day.totalMinutes) * 100}%` }}
+                                className="blur-sm transform scale-125"
+                                style={{
+                                  height: `${(segment.minutes / day.totalMinutes) * 100}%`,
+                                  backgroundColor: withAlpha(segment.color || DEFAULT_CLIENT_COLOR, 0.95),
+                                }}
                                 title={`${segment.clientName}: ${formatHoursFromMinutes(segment.minutes)}`}
                               />
                             ))}
@@ -694,7 +751,7 @@ export default async function Page() {
                     <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-blue-100/70">
                       {recentWorkDayLegend.map((item) => (
                         <div key={item.clientId} className="flex items-center gap-2">
-                          <span className={`h-2.5 w-2.5 rounded-full ${item.colorClass}`} />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                           <span className="max-w-28 truncate">{item.clientName}</span>
                         </div>
                       ))}
@@ -784,7 +841,7 @@ export default async function Page() {
                     label={`${index + 1}. ${formatAppTitle(app.appClass)}`}
                     detail={`${formatHoursFromSeconds(app.durationSeconds)} across ${app.sessions} sessions`}
                     value={app.share}
-                    accentClass={index === 0 ? "bg-emerald-500" : index === 1 ? "bg-teal-500" : index === 2 ? "bg-cyan-500" : "bg-slate-500"}
+                    color={index === 0 ? "#10B981" : index === 1 ? "#14B8A6" : index === 2 ? "#06B6D4" : "#64748B"}
                   />
                 ))
               ) : (
@@ -816,7 +873,7 @@ export default async function Page() {
                     label={`${index + 1}. ${project.name}`}
                     detail={`${project.clientName} · ${formatHoursFromMinutes(project.minutes)}`}
                     value={project.share}
-                    accentClass={index === 0 ? "bg-violet-500" : index === 1 ? "bg-fuchsia-500" : index === 2 ? "bg-purple-500" : "bg-indigo-500"}
+                    color={project.color || DEFAULT_PROJECT_COLOR}
                   />
                 ))
               ) : (
@@ -916,7 +973,7 @@ export default async function Page() {
                     label={`${index + 1}. ${client.name}`}
                     detail={`${formatHoursFromMinutes(client.minutes)} across ${client.projectCount} project${client.projectCount === 1 ? "" : "s"}`}
                     value={client.share}
-                    accentClass={index === 0 ? "bg-rose-500" : index === 1 ? "bg-pink-500" : index === 2 ? "bg-orange-500" : "bg-amber-500"}
+                    color={client.color || DEFAULT_CLIENT_COLOR}
                   />
                 ))
               ) : (
