@@ -88,7 +88,7 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
             <button
               onClick={onImportRescueTime}
               disabled={importingRescueTime}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-offset-slate-900"
             >
               {importingRescueTime ? (
                 <>
@@ -117,7 +117,7 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
     <>
       <TimelineHourMarkers />
       {loading ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
+        <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-slate-900/60">
           <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
         </div>
       ) : (
@@ -1215,7 +1215,7 @@ export default function DayTimeline({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+  <div className="rounded-3xl border border-slate-200/80 bg-white/95 shadow-sm ring-1 ring-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/90 dark:ring-white/5">
       <DateNavigationHeader
         selectedDate={selectedDate}
         onPrevDay={() => changeDay(-1)}
@@ -1239,17 +1239,17 @@ export default function DayTimeline({
           {/* Activity Sessions Column */}
           <div className="col-span-3 select-none">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                 App Activity
               </h3>
               <button
                 onClick={handleManualRefresh}
                 disabled={loading}
-                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
                 title="Refresh activity data"
               >
                 <svg
-                  className={`w-4 h-4 text-gray-600 dark:text-gray-400 ${loading ? 'animate-spin' : ''}`}
+                  className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1269,7 +1269,7 @@ export default function DayTimeline({
                 </span>
               )}
             </div>
-            <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700">
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
               <div className="flex h-full items-stretch">
                 <div
                   ref={activityScrollRef}
@@ -1310,13 +1310,13 @@ export default function DayTimeline({
           {/* Time Entries Column */}
           <div className="col-span-2">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 select-none">
+              <h3 className="select-none text-sm font-semibold text-slate-700 dark:text-slate-300">
                 Project Tracking
               </h3>
               <button
                 onClick={handleAutofill}
                 disabled={loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
                 title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
               >
                 <svg
@@ -1344,7 +1344,7 @@ export default function DayTimeline({
                 {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
               </button>
             </div>
-            <div className="relative bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 flex">
+            <div className="relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
               <div
                 ref={timelineRef}
                 className="relative min-w-0 flex-1 overflow-y-auto overflow-x-visible cursor-crosshair pr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -1358,7 +1358,7 @@ export default function DayTimeline({
                 <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
                   <TimelineHourMarkers />
                   {loading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-800 bg-opacity-50">
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-slate-900/60">
                       <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
                     </div>
                   ) : (
@@ -1389,16 +1389,16 @@ export default function DayTimeline({
           <>
             <div className="fixed inset-0 z-40" onClick={() => setAppContextMenu(null)} />
             <div
-              className="fixed z-50 min-w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+              className="fixed z-50 min-w-48 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/95"
               style={{ top: appContextMenu.y, left: appContextMenu.x }}
               role="menu"
             >
-              <div className="border-b border-gray-200 px-3 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
+              <div className="border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
                 {formatAppTitle(appContextMenu.session.appClass)}
               </div>
               <button
                 type="button"
-                className="flex w-full items-center rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                className="flex w-full items-center rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5"
                 onClick={() => void handleRenameApp(appContextMenu.session)}
                 role="menuitem"
               >
@@ -1406,7 +1406,7 @@ export default function DayTimeline({
               </button>
               <button
                 type="button"
-                className="flex w-full items-center rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                className="flex w-full items-center rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5"
                 onClick={() => void handleHideApp(appContextMenu.session)}
                 role="menuitem"
               >
@@ -1428,7 +1428,7 @@ export default function DayTimeline({
         )}
 
         <div className="mt-4 flex items-start justify-between gap-4">
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
           <p>
             <strong>Apps:</strong> Hover to see details. Data from external tracking utility.
           </p>
@@ -1440,7 +1440,7 @@ export default function DayTimeline({
             type="button"
             onClick={handleClearDayEntries}
             disabled={loading || timeEntries.length === 0}
-            className="shrink-0 text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 rounded-xl px-2 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
             title="Remove all project tracking entries for this day"
           >
             Clear today's entries

@@ -4,9 +4,10 @@ import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
 import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
-import { APIFooter } from "@repo/ui";
+import { APIFooter, Badge, Button, EmptySurfaceState, Input, Page, PageContent, PageError, PageHeader, PageLoading, Section, Select, StatCard, Surface, SurfaceHeader } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
 import { authFetch, formatAppTitle } from '@/lib/util';
+import { CalendarDays, Clock3, Filter, FolderKanban, Plus, RefreshCw, Sparkles, TimerReset } from 'lucide-react';
 
 interface TimeEntry {
   id: number;
@@ -78,6 +79,12 @@ const formatDuration = (minutes: number) => {
   return `${hours}h ${mins}m`;
 };
 
+const formatPlainDateLabel = (date: Temporal.PlainDate) =>
+  date.toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+const formatPlainMonthLabel = (date: Temporal.PlainDate) =>
+  date.toLocaleString("en-US", { month: 'long', year: 'numeric' });
+
 // Memoized TimeEntryRow component
 const TimeEntryRow = memo(function TimeEntryRow({
   entry,
@@ -106,17 +113,17 @@ const TimeEntryRow = memo(function TimeEntryRow({
   }, [entry.id, onDelete]);
 
   return (
-    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+    <tr className="transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
+      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
         {formattedDate}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
         {formattedTimes.start} - {formattedTimes.end}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
         {entry.project.client.name}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
         {entry.project.name}
       </td>
       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
@@ -126,24 +133,18 @@ const TimeEntryRow = memo(function TimeEntryRow({
           </span>
         )}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
         {formattedDuration}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span
-          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-            entry.billable
-              ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
-          }`}
-        >
-          {entry.billable ? "Yes" : "No"}
-        </span>
+      <td className="whitespace-nowrap px-6 py-4">
+        <Badge variant={entry.billable ? "success" : "subtle"} size="sm">
+          {entry.billable ? "Billable" : "Non-billable"}
+        </Badge>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+      <td className="whitespace-nowrap px-6 py-4 text-sm font-medium">
         <Link
           href={`/time/${entry.id}`}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3"
+          className="mr-3 text-blue-600 transition-colors hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Edit
         </Link>
@@ -285,221 +286,211 @@ export default function TimeEntriesPage() {
 
   // Get visible entries
   const visibleEntries = timeEntries.slice(0, displayCount);
+  const hasActiveFilters = Boolean(selectedClientId || selectedProjectId || startDate || endDate);
+  const selectedClient = clients.find((client) => String(client.id) === selectedClientId);
+  const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
     return await generateCode(endpoint, language);
   };
 
-  return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Time Tracking</h1>
-          <Link
-            href="/time/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            + New Time Entry
-          </Link>
-        </div>
+  const clearFilters = () => {
+    setSelectedClientId("");
+    setSelectedProjectId("");
+    setStartDate("");
+    setEndDate("");
+  };
 
-        {/* Day Timeline View */}
-        <div className="mb-6">
+  if (loading && !summary && timeEntries.length === 0) {
+    return <PageLoading title="Loading time tracking" message="Gathering your timeline, summaries, and recent entries." />;
+  }
+
+  return (
+    <Page>
+      <PageContent>
+        <Section className="space-y-6">
+          <PageHeader
+            eyebrow="Operations"
+            title="Time Tracking"
+            description="Review daily activity, manage project time entries, and inspect recent logged work from one place."
+            actions={
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href="/time/new"
+                  className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Time Entry
+                </Link>
+              </div>
+            }
+          />
+
+          {summary ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <StatCard
+                label="Hours logged this month"
+                value={summary.hoursThisMonth?.toFixed(1) ?? "0"}
+                meta={formatPlainMonthLabel(selectedDate)}
+                tone="info"
+                icon={<Clock3 className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Top app this week"
+                value={summary.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : "No data"}
+                meta={summary.topAppThisWeek ? `${summary.topAppThisWeek.hours} hours tracked` : "No activity sessions"}
+                tone="success"
+                icon={<Sparkles className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Top project this month"
+                value={summary.topProjectThisMonth?.projectName ?? "No projects"}
+                meta={summary.topProjectThisMonth ? `${summary.topProjectThisMonth.hours} hours in ${selectedDate.toLocaleString('en-US', { month: 'long' })}` : "No time entries"}
+                tone="warning"
+                icon={<FolderKanban className="h-4 w-4" />}
+              />
+            </div>
+          ) : null}
+
           <DayTimeline
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
           />
-        </div>
 
-        {/* Summary Cards */}
-        {summary && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Hours Logged This Month</div>
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {summary.hoursThisMonth?.toFixed(1) ?? '0'}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                {selectedDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Top App This Week</div>
-              <div className="text-xl font-bold text-green-600 dark:text-green-400 truncate">
-                {summary.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : 'No data'}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                {summary.topAppThisWeek ? `${summary.topAppThisWeek.hours} hours tracked` : 'No activity sessions'}
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Top Project This Month</div>
-              <div className="text-xl font-bold text-purple-600 dark:text-purple-400 truncate">
-                {summary.topProjectThisMonth?.projectName ?? 'No projects'}
-              </div>
-              <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                {summary.topProjectThisMonth ? `${summary.topProjectThisMonth.hours} hours in ${selectedDate.toLocaleString('en-US', { month: 'long'})}` : 'No time entries'}
-              </div>
-            </div>
-          </div>
-        )}
+          <Surface>
+            <SurfaceHeader
+              title="Recent entries"
+              description="Filter and review logged time entries across clients, projects, and date ranges."
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  {hasActiveFilters ? <Badge variant="info" size="sm">Filtered</Badge> : null}
+                  <Button variant="secondary" size="sm" onClick={() => void fetchTimeEntries()} disabled={loading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+              }
+            />
 
-        {/* Filters
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Client
-              </label>
-              <select
-                value={selectedClientId}
-                onChange={(e) => {
-                  setSelectedClientId(e.target.value);
-                  setSelectedProjectId(""); // Reset project filter
-                }}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Clients</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                    {client.company ? ` (${client.company})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Project
-              </label>
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Projects</option>
-                {filteredProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {(selectedClientId || selectedProjectId || startDate || endDate) && (
-            <button
-              onClick={() => {
-                setSelectedClientId("");
-                setSelectedProjectId("");
-                setStartDate("");
-                setEndDate("");
-              }}
-              className="mt-4 text-sm text-blue-600 hover:text-blue-800"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
- */}
-
-        {/* Time Entries List
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          {loading ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              Loading time entries...
-            </div>
-          ) : error ? (
-            <div className="p-8 text-center text-red-600 dark:text-red-400">{error}</div>
-          ) : timeEntries.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              No time entries found. Create your first one!
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Time
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Client
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Project
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Duration
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Billable
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {visibleEntries.map((entry) => (
-                    <TimeEntryRow
-                      key={entry.id}
-                      entry={entry}
-                      onDelete={handleDelete}
-                    />
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <Select
+                  label="Client"
+                  value={selectedClientId}
+                  onChange={(e) => {
+                    setSelectedClientId(e.target.value);
+                    setSelectedProjectId("");
+                  }}
+                >
+                  <option value="">All clients</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                      {client.company ? ` (${client.company})` : ""}
+                    </option>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          
-          {!loading && !error && timeEntries.length > 0 && hasMore && (
-            <div className="p-6 text-center border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={loadMore}
-                className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-              >
-                Load More ({timeEntries.length - displayCount} remaining)
-              </button>
-            </div>
-          )}
-        </div>
- */}
-      </div>
+                </Select>
 
-      <APIFooter
+                <Select
+                  label="Project"
+                  value={selectedProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                >
+                  <option value="">All projects</option>
+                  {filteredProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </Select>
+
+                <Input
+                  label="Start date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+
+                <Input
+                  label="End date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 dark:border-white/10 dark:bg-slate-900/40">
+                <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <Filter className="h-4 w-4" />
+                  <span>Showing {visibleEntries.length} of {timeEntries.length} entries</span>
+                  <span className="hidden sm:inline text-slate-400">•</span>
+                  <span className="inline-flex items-center gap-1"><CalendarDays className="h-4 w-4" /> Context date {selectedDate.toString()}</span>
+                </div>
+
+                {hasActiveFilters ? (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <TimerReset className="mr-2 h-4 w-4" />
+                    Clear filters
+                  </Button>
+                ) : null}
+              </div>
+
+              {loading ? (
+                <PageLoading title="Refreshing entries" message="Updating your recent time log for the selected filters." />
+              ) : error ? (
+                <PageError title="Couldn’t load time entries" message={error} retry={() => void fetchTimeEntries()} />
+              ) : timeEntries.length === 0 ? (
+                <EmptySurfaceState
+                  title="No time entries found"
+                  description="Try adjusting the filters, changing the date range, or create a new time entry."
+                  action={
+                    <Link
+                      href="/time/new"
+                      className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create time entry
+                    </Link>
+                  }
+                />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 dark:divide-white/10">
+                      <thead className="bg-slate-50 dark:bg-slate-900/80">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Time</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Client</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Project</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Description</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Duration</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white dark:divide-white/10 dark:bg-slate-950/20">
+                        {visibleEntries.map((entry) => (
+                          <TimeEntryRow key={entry.id} entry={entry} onDelete={handleDelete} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {hasMore ? (
+                    <div className="border-t border-slate-200 px-6 py-4 text-center dark:border-white/10">
+                      <Button variant="secondary" onClick={loadMore}>
+                        Load more ({timeEntries.length - displayCount} remaining)
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </Surface>
+        </Section>
+
+        <APIFooter
         enableApiKeys
         enableCodeGen
         onGenerateApiKey={() => window.location.href = '/api-demo'}
@@ -578,6 +569,7 @@ export default function TimeEntriesPage() {
           },
         ]}
       />
-    </div>
+      </PageContent>
+    </Page>
   );
 }
