@@ -7,6 +7,12 @@ export type { ButtonProps } from "./button";
 
 export { Card } from "./card";
 
+export { Page, PageContent, PageHeader, Section } from "./page";
+
+export { Surface, SurfaceHeader } from "./surface";
+
+export { StatCard } from "./stat-card";
+
 export { DownloadButton } from "./download-button";
 export type { DownloadButtonProps } from "./download-button";
 
@@ -22,6 +28,12 @@ export type { ErrorMessageProps } from "./error-message";
 export { Input } from "./input";
 export type { InputProps } from "./input";
 
+export { Select } from "./select";
+export type { SelectProps } from "./select";
+
+export { Textarea } from "./textarea";
+export type { TextareaProps } from "./textarea";
+
 export { Modal } from "./modal";
 export type { ModalProps } from "./modal";
 
@@ -30,6 +42,8 @@ export type { SkeletonProps } from "./skeleton";
 
 export { Spinner } from "./spinner";
 export type { SpinnerProps } from "./spinner";
+
+export { EmptySurfaceState, PageError, PageLoading, SectionLoading } from "./state";
 
 // Toast using Sonner
 export { toast } from "sonner";

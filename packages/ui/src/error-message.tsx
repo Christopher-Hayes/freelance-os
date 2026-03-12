@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from "./button";
 
 export interface ErrorMessageProps {
   title?: string;
@@ -37,12 +38,9 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({
             {message}
           </p>
           {retry && (
-            <button
-              onClick={retry}
-              className="mt-3 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 transition-colors"
-            >
+            <Button onClick={retry} variant="ghost" size="sm" className="mt-3 !text-red-600 dark:!text-red-400">
               Try again
-            </button>
+            </Button>
           )}
         </div>
       </div>

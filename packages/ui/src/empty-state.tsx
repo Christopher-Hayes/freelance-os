@@ -5,6 +5,7 @@ export interface EmptyStateProps {
   title: string;
   description?: string;
   action?: React.ReactNode;
+  compact?: boolean;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
@@ -12,19 +13,20 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
   action,
+  compact = false,
 }) => {
   return (
-    <div className="text-center py-12">
+    <div className={compact ? "text-center py-8" : "text-center py-12"}>
       {icon && (
-        <div className="flex justify-center mb-4 text-gray-400 dark:text-gray-600">
+        <div className="mb-4 flex justify-center text-slate-400 dark:text-slate-600">
           {icon}
         </div>
       )}
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+      <h3 className="mb-2 text-lg font-semibold text-slate-900 dark:text-white">
         {title}
       </h3>
       {description && (
-        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
+        <p className="mx-auto mb-6 max-w-md text-slate-600 dark:text-slate-400">
           {description}
         </p>
       )}

@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "./utils";
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -24,11 +25,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ) => {
     const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
 
-    const baseStyles = "block w-full rounded-md border shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  const baseStyles = "block w-full rounded-xl border bg-white shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-900";
     
     const stateStyles = error
-      ? "border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:text-red-100 dark:placeholder-red-700"
-      : "border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-500";
+  ? "border-red-300 text-red-900 placeholder-red-300 focus:border-red-500 focus:ring-red-500 dark:border-red-700 dark:text-red-100 dark:placeholder-red-700"
+  : "border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-white/10 dark:text-slate-100 dark:focus:border-blue-500";
 
     const paddingStyles = leftIcon && rightIcon
       ? "pl-10 pr-10"
@@ -57,7 +58,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
-            className={`${baseStyles} ${stateStyles} ${paddingStyles} py-2 ${className}`}
+            className={cn(baseStyles, stateStyles, paddingStyles, "py-2.5", className)}
             {...props}
           />
           {rightIcon && (
