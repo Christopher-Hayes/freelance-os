@@ -77,6 +77,7 @@ type DashboardData = {
   projectCount: number;
   invoiceCount: number;
   hoursLoggedThisMonth: number;
+  billableHoursLast7Days: number;
   aiTokensLast7Days: number;
   aiRunsLast7Days: number;
   avgTokensPerRun: number;
@@ -327,6 +328,7 @@ async function getDashboardData(): Promise<DashboardData> {
         projectId: true,
         startTime: true,
         durationMinutes: true,
+        billable: true,
       },
     }),
   ]);
@@ -520,6 +522,18 @@ async function getDashboardData(): Promise<DashboardData> {
     };
   });
 
+  const billableHoursLast7Days = recentTimeEntries.reduce((sum, entry) => {
+    if (!entry.billable) return sum;
+
+    const plainDate = Temporal.Instant.from(entry.startTime.toISOString())
+      .toZonedDateTimeISO("UTC")
+      .toPlainDate();
+    const dayOfWeek = plainDate.dayOfWeek;
+    if (dayOfWeek === 6 || dayOfWeek === 7) return sum;
+
+    return sum + entry.durationMinutes;
+  }, 0) / 60;
+
   const aiTokensLast7Days = aiTelemetryRuns.reduce(
     (sum, run) => sum + (run.totalTokens ?? 0),
     0
@@ -540,6 +554,7 @@ async function getDashboardData(): Promise<DashboardData> {
     projectCount,
     invoiceCount,
     hoursLoggedThisMonth: (monthlyTimeAggregate._sum.durationMinutes ?? 0) / 60,
+    billableHoursLast7Days,
     aiTokensLast7Days,
     aiRunsLast7Days,
     avgTokensPerRun:
@@ -759,7 +774,7 @@ export default async function Page() {
                   ) : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <div className="text-xs uppercase tracking-[0.18em] text-blue-100/70">Draft invoices</div>
                     <div className="mt-2 text-2xl font-semibold">{formatNumber(data.draftInvoiceCount)}</div>
@@ -768,9 +783,13 @@ export default async function Page() {
                     <div className="text-xs uppercase tracking-[0.18em] text-blue-100/70">Overdue invoices</div>
                     <div className="mt-2 text-2xl font-semibold">{formatNumber(data.overdueInvoiceCount)}</div>
                   </div>
+                  <div className="col-span-2 rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-xs uppercase tracking-[0.18em] text-blue-100/70">7-day Hours billable</div>
+                    <div className="mt-2 text-2xl font-semibold">{formatNumber(Math.round(data.billableHoursLast7Days))}</div>
+                  </div>
                   <Link
                     href="/debug"
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/10"
+                    className="col-span-2 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/10"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="text-xs uppercase tracking-[0.18em] text-blue-100/70">AI debug</div>
