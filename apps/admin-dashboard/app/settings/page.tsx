@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
-import { toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
+import { Badge, Button, Input, Page, PageContent, PageHeader, PageLoading, Section, Select, Surface, Textarea, toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
 import { authFetch } from '@/lib/util';
 import { fetchMailboxes } from '@/lib/jmap-actions';
@@ -10,7 +10,7 @@ import { fetchCalendars } from '@/lib/webdav-actions';
 import type { MailboxInfo } from '@/lib/jmap-provider';
 import type { CalendarInfo } from '@/lib/webdav-provider';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, Settings2, Sparkles, X } from 'lucide-react';
 
 const MASK_VALUE = "••••••••";
 const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
@@ -71,6 +71,190 @@ function normalizeApiKeyListItem(raw: ApiKeyListItem & Record<string, unknown>):
           ? raw.lastUsedAt
           : new Date(raw.lastUsedAt as string | number | Date).toISOString(),
   };
+}
+
+function SettingsSectionHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <header className="mb-4">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
+    </header>
+  );
+}
+
+function InlineCode({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300">
+      {children}
+    </code>
+  );
+}
+
+function PrivacyCallout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 dark:border-amber-900/60 dark:bg-amber-950/20">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">Privacy Warning</h3>
+          <div className="mt-2 flex flex-col gap-2 text-sm text-amber-800 dark:text-amber-200">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationCard({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id?: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Surface id={id} className="scroll-mt-24">
+      <SettingsSectionHeader title={title} description={description} />
+      <div className="space-y-4">{children}</div>
+    </Surface>
+  );
+}
+
+function IntegrationProviderCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-slate-900/40">
+      <legend className="px-1 text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+function ToggleRow({
+  id,
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+      <div className="pr-4">
+        <label htmlFor={id} className="text-sm font-medium text-gray-900 dark:text-white">
+          {title}
+        </label>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{description}</p>
+      </div>
+
+      <label htmlFor={id} className="relative inline-flex cursor-pointer items-center">
+        <input
+          id={id}
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <div className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-blue-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 dark:bg-gray-600 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-5" />
+      </label>
+    </div>
+  );
+}
+
+function MultiSelectShell({
+  label,
+  action,
+  helperText,
+  children,
+}: {
+  label: string;
+  action?: React.ReactNode;
+  helperText: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+        {action}
+      </div>
+      {children}
+      <p className="text-sm text-gray-500 dark:text-gray-400">{helperText}</p>
+    </div>
+  );
+}
+
+function SelectionChip({
+  label,
+  onRemove,
+  leading,
+}: {
+  label: React.ReactNode;
+  onRemove: () => void;
+  leading?: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:border-blue-900 dark:bg-blue-900 dark:text-blue-200">
+      {leading}
+      <span>{label}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="hover:text-blue-900 dark:hover:text-blue-100"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+function MultiSelectTrigger({
+  emptyText,
+  children,
+}: {
+  emptyText: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <ComboboxButton className="relative min-h-[46px] w-full cursor-default rounded-xl border border-slate-300 bg-white py-2.5 pl-3 pr-10 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/60 dark:border-white/10 dark:bg-slate-900">
+      <span className="flex flex-wrap gap-1">{children ?? <span className="text-gray-500 dark:text-gray-400">{emptyText}</span>}</span>
+      <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+        <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
+      </span>
+    </ComboboxButton>
+  );
+}
+
+function MultiSelectOptions({ children }: { children: React.ReactNode }) {
+  return (
+    <ComboboxOptions className="absolute z-10 mt-2 max-h-84 w-full overflow-auto rounded-2xl border border-slate-200 bg-white py-1 shadow-xl ring-1 ring-black/5 focus:outline-none dark:border-white/10 dark:bg-slate-900">
+      {children}
+    </ComboboxOptions>
+  );
 }
 
 export default function SettingsPage() {
@@ -765,307 +949,200 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="p-6">
-        <div className="text-gray-500 dark:text-gray-400">Loading...</div>
-      </div>
-    );
+    return <PageLoading title="Loading settings" message="Pulling your integrations, billing defaults, and admin preferences." />;
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Settings
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Configure your integrations and preferences. Changes are saved automatically.
-        </p>
-      </div>
+    <Page>
+      <PageContent>
+        <Section className="space-y-6">
+          <PageHeader
+            eyebrow="Admin dashboard"
+            title="Settings"
+            description="Configure billing defaults, integrations, and admin capabilities. Changes continue to save automatically as you work."
+            actions={
+              <Badge variant="subtle" size="sm">
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+                Auto-save enabled
+              </Badge>
+            }
+          />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         <aside className="lg:sticky lg:top-6 lg:w-72 lg:shrink-0">
-          <nav className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <Surface className="p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              <Settings2 className="h-4 w-4" />
               Jump to section
-            </h2>
+            </div>
             <ul className="mt-4 space-y-1">
               {settingsSections.map((section) => (
                 <li key={section.id}>
                   <a
                     href={`#${section.id}`}
-                    className="block rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                    className="block rounded-xl px-3 py-2.5 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white"
                   >
                     {section.title}
                   </a>
                 </li>
               ))}
             </ul>
-          </nav>
+          </Surface>
         </aside>
 
         <div className="min-w-0 flex-1 space-y-6">
-          <section
-            id="freelancer-information"
-            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-          >
-            <header className="mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Invoice Information
-              </h2>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                This information will be used in your invoices and official documents.
-              </p>
-            </header>
+          <Surface id="freelancer-information" className="scroll-mt-24">
+            <SettingsSectionHeader
+              title="Invoice Information"
+              description="This information will be used in your invoices and official documents."
+            />
 
             <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="company_name"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Company/Business Name
-                </label>
-                <input
-                  type="text"
-                  id="company_name"
-                  value={companyName}
-                  onChange={(e) => handleCompanyNameChange(e.target.value)}
-                  placeholder="Your Company Name"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Used in invoices and email communications
-                </p>
-              </div>
+              <Input
+                type="text"
+                id="company_name"
+                label="Company/Business Name"
+                value={companyName}
+                onChange={(e) => handleCompanyNameChange(e.target.value)}
+                placeholder="Your Company Name"
+                helperText="Used in invoices and email communications"
+              />
 
-              <div>
-                <label
-                  htmlFor="freelancer_name"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  id="freelancer_name"
-                  value={freelancerName}
-                  onChange={(e) => handleFreelancerNameChange(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <Input
+                type="text"
+                id="freelancer_name"
+                label="Your Name"
+                value={freelancerName}
+                onChange={(e) => handleFreelancerNameChange(e.target.value)}
+                placeholder="John Doe"
+              />
 
-              <div>
-                <label
-                  htmlFor="freelancer_email"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Business Email
-                </label>
-                <input
-                  type="email"
-                  id="freelancer_email"
-                  value={freelancerEmail}
-                  onChange={(e) => handleFreelancerEmailChange(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <Input
+                type="email"
+                id="freelancer_email"
+                label="Business Email"
+                value={freelancerEmail}
+                onChange={(e) => handleFreelancerEmailChange(e.target.value)}
+                placeholder="you@example.com"
+              />
 
-              <div>
-                <label
-                  htmlFor="address"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Business Address
-                </label>
-                <textarea
-                  id="address"
-                  value={address}
-                  onChange={(e) => handleAddressChange(e.target.value)}
-                  placeholder="123 Main St&#10;City, State 12345&#10;Country"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Appears on invoices and official documents
-                </p>
-              </div>
+              <Textarea
+                id="address"
+                label="Business Address"
+                value={address}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                placeholder="123 Main St&#10;City, State 12345&#10;Country"
+                rows={3}
+                helperText="Appears on invoices and official documents"
+              />
 
-              <div>
-                <label
-                  htmlFor="phone"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  value={phone}
-                  onChange={(e) => handlePhoneChange(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <Input
+                type="tel"
+                id="phone"
+                label="Phone Number"
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                placeholder="+1 (555) 123-4567"
+              />
 
-              <div>
-                <label
-                  htmlFor="website"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                >
-                  Website
-                </label>
-                <input
-                  type="url"
-                  id="website"
-                  value={website}
-                  onChange={(e) => handleWebsiteChange(e.target.value)}
-                  placeholder="https://yourwebsite.com"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              <Input
+                type="url"
+                id="website"
+                label="Website"
+                value={website}
+                onChange={(e) => handleWebsiteChange(e.target.value)}
+                placeholder="https://yourwebsite.com"
+              />
             </div>
-          </section>
+          </Surface>
 
           <section id="display-options" className="space-y-6 scroll-mt-24">
-            <header>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Display Options
-              </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Customize how apps display and which apps are visible.
-              </p>
-            </header>
-            <section
-              id="app-name-display-overrides"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                App Name Display Overrides
-              </h2>
+            <SettingsSectionHeader
+              title="Display Options"
+              description="Customize how apps display and which apps are visible."
+            />
+            <Surface id="app-name-display-overrides" className="scroll-mt-24">
+              <SettingsSectionHeader
+                title="App Name Display Overrides"
+                description="Set friendlier labels for raw app classes without changing the underlying activity data."
+              />
 
               <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="app_title_renames"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    Custom App Name Renames
-                  </label>
-                  <textarea
-                    id="app_title_renames"
-                    value={appTitleRenamesText}
-                    onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
-                    placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
-                    rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    One rename per line using <code className="rounded bg-gray-100 dark:bg-gray-700 px-1 py-0.5">rawAppClass=Display Name</code>. These are cosmetic only and override the built-in formatting when present.
-                  </p>
+                <Textarea
+                  id="app_title_renames"
+                  label="Custom App Name Renames"
+                  value={appTitleRenamesText}
+                  onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
+                  placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
+                  rows={6}
+                  className="font-mono text-sm"
+                  helperText="One rename per line using rawAppClass=Display Name. These are cosmetic only and override the built-in formatting when present."
+                />
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  Example format: <InlineCode>rawAppClass=Display Name</InlineCode>
                 </div>
               </div>
-            </section>
+            </Surface>
 
-            <section
-              id="hidden-apps"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Hidden Apps
-              </h2>
+            <Surface id="hidden-apps" className="scroll-mt-24">
+              <SettingsSectionHeader
+                title="Hidden Apps"
+                description="Hide noisy apps from the timeline and analytics while preserving the original captured data."
+              />
 
               <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="hidden_app_classes"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    Hide App Classes From Timeline and Analytics
-                  </label>
-                  <textarea
-                    id="hidden_app_classes"
-                    value={hiddenAppClassesText}
-                    onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
-                    placeholder={"Easyeffects\nSteam"}
-                    rows={5}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    One raw app class per line. Hidden apps won&apos;t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged.
-                  </p>
-                </div>
+                <Textarea
+                  id="hidden_app_classes"
+                  label="Hide App Classes From Timeline and Analytics"
+                  value={hiddenAppClassesText}
+                  onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
+                  placeholder={"Easyeffects\nSteam"}
+                  rows={5}
+                  className="font-mono text-sm"
+                  helperText="One raw app class per line. Hidden apps won’t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged."
+                />
               </div>
-            </section>
+            </Surface>
           </section>
 
           <section
             id="integrations"
             className="space-y-6 scroll-mt-24"
           >
-            <header>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Integrations
-              </h2>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Connect external services used for AI, time tracking, and email context.
-              </p>
-            </header>
+            <SettingsSectionHeader
+              title="Integrations"
+              description="Connect external services used for AI, time tracking, email context, calendar context, and code intelligence."
+            />
 
-            <section
-              id="ai-integration"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <header className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  AI Integration
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Use AI to automatically categorize app activity into project entries, generate work summaries, and more.
-                </p>
-              </header>
+            <Surface id="ai-integration" className="scroll-mt-24">
+              <SettingsSectionHeader
+                title="AI Integration"
+                description="Use AI to automatically categorize app activity into project entries, generate work summaries, and more."
+              />
 
               <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="ai_provider"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    AI Provider
-                  </label>
-                  <select
-                    id="ai_provider"
-                    value={aiProvider}
-                    onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="openai">OpenAI (gpt-5.4)</option>
-                    <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
-                  </select>
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    Choose which AI provider to use for AI-powered features
-                  </p>
-                </div>
+                <Select
+                  id="ai_provider"
+                  label="AI Provider"
+                  value={aiProvider}
+                  onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
+                  helperText="Choose which AI provider to use for AI-powered features."
+                >
+                  <option value="openai">OpenAI (gpt-5.4)</option>
+                  <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
+                </Select>
 
                 {aiProvider === "openai" && (
-                  <div>
-                    <label
-                      htmlFor="openai_api_key"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                    >
-                      OpenAI API Key
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Input
                       type="password"
                       id="openai_api_key"
+                      label="OpenAI API Key"
                       value={openaiApiKey}
                       onChange={(e) => handleOpenaiChange(e.target.value)}
                       placeholder="sk-..."
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {openaiApiKey === MASK_VALUE ? (
                         <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
                       ) : (
@@ -1086,22 +1163,16 @@ export default function SettingsPage() {
                 )}
 
                 {aiProvider === "gemini" && (
-                  <div>
-                    <label
-                      htmlFor="google_api_key"
-                      className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                    >
-                      Google API Key
-                    </label>
-                    <input
+                  <div className="space-y-2">
+                    <Input
                       type="password"
                       id="google_api_key"
+                      label="Google API Key"
                       value={googleApiKey}
                       onChange={(e) => handleGoogleChange(e.target.value)}
                       placeholder="Enter your Google API key"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {googleApiKey === MASK_VALUE ? (
                         <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
                       ) : (
@@ -1121,38 +1192,25 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
-            </section>
+            </Surface>
 
-            <section
-              id="rescuetime-integration"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-            >
-              <header className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  RescueTime Integration
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Automatically populate your App Activity with data from RescueTime.
-                </p>
-              </header>
+            <Surface id="rescuetime-integration" className="scroll-mt-24">
+              <SettingsSectionHeader
+                title="RescueTime Integration"
+                description="Automatically populate your App Activity with data from RescueTime."
+              />
 
               <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="rescuetime_api_key"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    RescueTime API Key
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Input
                     type="password"
                     id="rescuetime_api_key"
+                    label="RescueTime API Key"
                     value={rescueTimeApiKey}
                     onChange={(e) => handleRescueTimeChange(e.target.value)}
                     placeholder="Enter your RescueTime API key"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {rescueTimeApiKey === MASK_VALUE ? (
                       <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
                     ) : (
@@ -1171,83 +1229,51 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-            </section>
+            </Surface>
 
-            <section
+            <IntegrationCard
               id="email-integration-jmap"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+              title="Email Integration (JMAP)"
+              description="Cross reference your emails with clients to more accurately categorize and summarize your work. This integration uses JMAP, a modern email protocol, and depends on your provider offering JMAP access."
             >
-              <header className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Email Integration (JMAP)
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Cross reference your emails with clients to more accurately categorize and summarize your work. This integration uses JMAP, a modern email protocol, your email provider must support JMAP for this to work (e.g. Fastmail, iCloud, Gmail with a JMAP proxy).
-                </p>
-              </header>
-
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="can_read_mailbox"
-                      type="checkbox"
-                      checked={canReadMailbox}
-                      onChange={(e) => handleJmapEnabledChange(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label htmlFor="can_read_mailbox" className="font-medium text-gray-700 dark:text-gray-300">
-                      Allow AI to read emails via JMAP
-                    </label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy.
-                    </p>
-                  </div>
-                </div>
+              <ToggleRow
+                id="can_read_mailbox"
+                checked={canReadMailbox}
+                onChange={handleJmapEnabledChange}
+                title="Allow AI to read emails via JMAP"
+                description="When generating weekly summaries, AI can search your emails for additional context about client requests and deliverables. This is disabled by default for privacy."
+              />
 
                 {canReadMailbox && (
                   <>
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
-                      <div className="flex items-start">
-                        <div className="shrink-0">
-                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                            Privacy Warning
-                          </h3>
-                          <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
-                            <p>
-                              When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
-                            </p>
-                            <p>
-                              In the field below, you can restrict which folders AI is allowed to access. Leaving it empty will allow AI to search all email folders.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PrivacyCallout>
+                      <p>
+                        When enabled, AI will be able to search your email inbox to enrich weekly summaries with context from client communications. This may expose sensitive or private information to the AI provider.
+                      </p>
+                      <p>
+                        In the field below, you can restrict which folders AI is allowed to access. Leaving it empty will allow AI to search all email folders.
+                      </p>
+                    </PrivacyCallout>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          Restrict JMAP to Folders (Optional)
-                        </label>
-                        <button
+                    <MultiSelectShell
+                      label="Restrict JMAP to Folders (Optional)"
+                      action={
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={handleRefreshMailboxes}
                           disabled={loadingMailboxes}
-                          className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {loadingMailboxes ? "Loading..." : "Refresh Mailboxes"}
-                        </button>
-                      </div>
+                        </Button>
+                      }
+                      helperText={
+                        jmapAllowedMailboxes.length === 0
+                          ? "AI can search all mailboxes by default. Select specific folders to restrict access."
+                          : `AI can only search ${jmapAllowedMailboxes.length} selected folder(s). Click a tag to remove it.`
+                      }
+                    >
 
                       <Combobox
                         multiple
@@ -1258,45 +1284,27 @@ export default function SettingsPage() {
                         }}
                       >
                         <div className="relative">
-                          <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
-                            <span className="flex flex-wrap gap-1">
-                              {jmapAllowedMailboxes.length === 0 ? (
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {availableMailboxes.length === 0 ? "Click 'Refresh Mailboxes' first" : "Select folders to restrict (or leave empty for all)"}
-                                </span>
-                              ) : (
-                                availableMailboxes
-                                  .filter(m => jmapAllowedMailboxes.includes(m.id))
-                                  .map(mailbox => (
-                                    <span
-                                      key={mailbox.id}
-                                      className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
-                                    >
-                                      {mailbox.name}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleJmapAllowedMailboxesChange(
-                                            jmapAllowedMailboxes.filter(id => id !== mailbox.id)
-                                          );
-                                        }}
-                                        className="hover:text-blue-900 dark:hover:text-blue-100"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </span>
-                                  ))
-                              )}
-                            </span>
-                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                              <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
-                            </span>
-                          </ComboboxButton>
-
-                          <ComboboxOptions
-                            className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
+                          <MultiSelectTrigger
+                            emptyText={availableMailboxes.length === 0 ? "Click 'Refresh Mailboxes' first" : "Select folders to restrict (or leave empty for all)"}
                           >
+                            {jmapAllowedMailboxes.length > 0
+                              ? availableMailboxes
+                                  .filter((m) => jmapAllowedMailboxes.includes(m.id))
+                                  .map((mailbox) => (
+                                    <SelectionChip
+                                      key={mailbox.id}
+                                      label={mailbox.name}
+                                      onRemove={() =>
+                                        handleJmapAllowedMailboxesChange(
+                                          jmapAllowedMailboxes.filter((id) => id !== mailbox.id)
+                                        )
+                                      }
+                                    />
+                                  ))
+                              : null}
+                          </MultiSelectTrigger>
+
+                          <MultiSelectOptions>
                             {availableMailboxes.length === 0 ? (
                               <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                                 Click "Refresh Mailboxes" to load available folders
@@ -1313,7 +1321,7 @@ export default function SettingsPage() {
                                   <ComboboxOption
                                     key={mailbox.id}
                                     value={mailbox}
-                                    className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
+                                    className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 data-focus:bg-blue-100 data-focus:text-blue-900 dark:text-gray-100 dark:data-focus:bg-blue-900 dark:data-focus:text-blue-100"
                                   >
                                     {({ selected }) => (
                                       <>
@@ -1330,36 +1338,23 @@ export default function SettingsPage() {
                                   </ComboboxOption>
                                 ))
                             )}
-                          </ComboboxOptions>
+                          </MultiSelectOptions>
                         </div>
                       </Combobox>
-
-                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        {jmapAllowedMailboxes.length === 0
-                          ? "AI can search all mailboxes by default. Select specific folders to restrict access."
-                          : `AI can only search ${jmapAllowedMailboxes.length} selected folder(s). Click a tag to remove it.`
-                        }
-                      </p>
-                    </div>
+                    </MultiSelectShell>
                   </>
                 )}
 
-                <div>
-                  <label
-                    htmlFor="jmap_token"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    JMAP API Token
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Input
                     type="password"
                     id="jmap_token"
+                    label="JMAP API Token"
                     value={jmapToken}
                     onChange={(e) => handleJmapTokenChange(e.target.value)}
                     placeholder="Enter your JMAP API token or app password"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {jmapToken === MASK_VALUE ? (
                       <span className="text-green-600 dark:text-green-400">✓ API token is configured. Edit to update.</span>
                     ) : (
@@ -1378,123 +1373,70 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="jmap_username"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    JMAP Username (Email)
-                  </label>
-                  <input
-                    type="email"
-                    id="jmap_username"
-                    value={jmapUsername}
-                    onChange={(e) => handleJmapUsernameChange(e.target.value)}
-                    placeholder="sender@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    Your email address for JMAP authentication
-                  </p>
-                </div>
+                <Input
+                  type="email"
+                  id="jmap_username"
+                  label="JMAP Username (Email)"
+                  value={jmapUsername}
+                  onChange={(e) => handleJmapUsernameChange(e.target.value)}
+                  placeholder="sender@example.com"
+                  helperText="Your email address for JMAP authentication"
+                />
 
-                <div>
-                  <label
-                    htmlFor="jmap_hostname"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    JMAP Hostname
-                  </label>
-                  <input
-                    type="text"
-                    id="jmap_hostname"
-                    value={jmapHostname}
-                    onChange={(e) => handleJmapHostnameChange(e.target.value)}
-                    placeholder="api.fastmail.com"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    JMAP server hostname
-                  </p>
-                </div>
-              </div>
-            </section>
+                <Input
+                  type="text"
+                  id="jmap_hostname"
+                  label="JMAP Hostname"
+                  value={jmapHostname}
+                  onChange={(e) => handleJmapHostnameChange(e.target.value)}
+                  placeholder="api.fastmail.com"
+                  helperText="JMAP server hostname"
+                />
+            </IntegrationCard>
 
-            <section
+            <IntegrationCard
               id="calendar-integration-webdav"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+              title="Calendar Integration (CalDAV)"
+              description="Cross reference your calendar events with projects to more accurately categorize and summarize your work. This integration uses CalDAV (WebDAV), which is supported by most calendar services."
             >
-              <header className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Calendar Integration (CalDAV)
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Cross reference your calendar events with projects to more accurately categorize and summarize your work. This integration uses CalDAV (WebDAV), which is supported by most calendar services (Nextcloud, Radicale, Fastmail, iCloud, Google via CalDAV, etc.).
-                </p>
-              </header>
-
-              <div className="space-y-4">
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="can_read_calendar"
-                      type="checkbox"
-                      checked={canReadCalendar}
-                      onChange={(e) => handleCalendarEnabledChange(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-700"
-                    />
-                  </div>
-                  <div className="ml-3">
-                    <label htmlFor="can_read_calendar" className="font-medium text-gray-700 dark:text-gray-300">
-                      Allow AI to read calendar events via CalDAV
-                    </label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      When generating time entries and weekly summaries, AI can search your calendar for meetings and events that indicate project work. This is disabled by default for privacy.
-                    </p>
-                  </div>
-                </div>
+              <ToggleRow
+                id="can_read_calendar"
+                checked={canReadCalendar}
+                onChange={handleCalendarEnabledChange}
+                title="Allow AI to read calendar events via CalDAV"
+                description="When generating time entries and weekly summaries, AI can search your calendar for meetings and events that indicate project work. This is disabled by default for privacy."
+              />
 
                 {canReadCalendar && (
                   <>
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
-                      <div className="flex items-start">
-                        <div className="shrink-0">
-                          <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                            Privacy Warning
-                          </h3>
-                          <div className="mt-2 flex flex-col gap-2 text-sm text-yellow-700 dark:text-yellow-300">
-                            <p>
-                              When enabled, AI will be able to search your calendar events to enrich time entries with context from meetings and appointments. This may expose sensitive or private information to the AI provider.
-                            </p>
-                            <p>
-                              In the field below, you can restrict which calendars AI is allowed to access. Leaving it empty will allow AI to search all calendars.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <PrivacyCallout>
+                      <p>
+                        When enabled, AI will be able to search your calendar events to enrich time entries with context from meetings and appointments. This may expose sensitive or private information to the AI provider.
+                      </p>
+                      <p>
+                        In the field below, you can restrict which calendars AI is allowed to access. Leaving it empty will allow AI to search all calendars.
+                      </p>
+                    </PrivacyCallout>
 
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label
-                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                        >
-                          Restrict to Calendars (Optional)
-                        </label>
-                        <button
+                    <MultiSelectShell
+                      label="Restrict to Calendars (Optional)"
+                      action={
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={handleRefreshCalendars}
                           disabled={loadingCalendars}
-                          className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {loadingCalendars ? "Loading..." : "Refresh Calendars"}
-                        </button>
-                      </div>
+                        </Button>
+                      }
+                      helperText={
+                        webdavAllowedCalendars.length === 0
+                          ? "AI can search all calendars by default. Select specific calendars to restrict access."
+                          : `AI can only search ${webdavAllowedCalendars.length} selected calendar(s). Click a tag to remove it.`
+                      }
+                    >
 
                       <Combobox
                         multiple
@@ -1505,51 +1447,35 @@ export default function SettingsPage() {
                         }}
                       >
                         <div className="relative">
-                          <ComboboxButton className="relative w-full cursor-default rounded-md bg-white dark:bg-gray-700 py-2 pl-3 pr-10 text-left border border-gray-300 dark:border-gray-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[42px]">
-                            <span className="flex flex-wrap gap-1">
-                              {webdavAllowedCalendars.length === 0 ? (
-                                <span className="text-gray-500 dark:text-gray-400">
-                                  {availableCalendars.length === 0 ? "Click 'Refresh Calendars' first" : "Select calendars to restrict (or leave empty for all)"}
-                                </span>
-                              ) : (
-                                availableCalendars
-                                  .filter(c => webdavAllowedCalendars.includes(c.url))
-                                  .map(calendar => (
-                                    <span
-                                      key={calendar.url}
-                                      className="inline-flex items-center gap-1 rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-200"
-                                    >
-                                      {calendar.color && (
-                                        <span
-                                          className="inline-block h-2.5 w-2.5 rounded-full"
-                                          style={{ backgroundColor: calendar.color }}
-                                        />
-                                      )}
-                                      {calendar.displayName}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleWebdavAllowedCalendarsChange(
-                                            webdavAllowedCalendars.filter(url => url !== calendar.url)
-                                          );
-                                        }}
-                                        className="hover:text-blue-900 dark:hover:text-blue-100"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </span>
-                                  ))
-                              )}
-                            </span>
-                            <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                              <ChevronsUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
-                            </span>
-                          </ComboboxButton>
-
-                          <ComboboxOptions
-                            className="absolute z-10 mt-1 max-h-84 w-full overflow-auto rounded-md bg-white dark:bg-gray-700 py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none border border-gray-200 dark:border-gray-600"
+                          <MultiSelectTrigger
+                            emptyText={availableCalendars.length === 0 ? "Click 'Refresh Calendars' first" : "Select calendars to restrict (or leave empty for all)"}
                           >
+                            {webdavAllowedCalendars.length > 0
+                              ? availableCalendars
+                                  .filter((c) => webdavAllowedCalendars.includes(c.url))
+                                  .map((calendar) => (
+                                    <SelectionChip
+                                      key={calendar.url}
+                                      label={calendar.displayName}
+                                      leading={
+                                        calendar.color ? (
+                                          <span
+                                            className="inline-block h-2.5 w-2.5 rounded-full"
+                                            style={{ backgroundColor: calendar.color }}
+                                          />
+                                        ) : undefined
+                                      }
+                                      onRemove={() =>
+                                        handleWebdavAllowedCalendarsChange(
+                                          webdavAllowedCalendars.filter((url) => url !== calendar.url)
+                                        )
+                                      }
+                                    />
+                                  ))
+                              : null}
+                          </MultiSelectTrigger>
+
+                          <MultiSelectOptions>
                             {availableCalendars.length === 0 ? (
                               <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                                 Click &quot;Refresh Calendars&quot; to load available calendars
@@ -1593,76 +1519,47 @@ export default function SettingsPage() {
                                   </ComboboxOption>
                                 ))
                             )}
-                          </ComboboxOptions>
+                          </MultiSelectOptions>
                         </div>
                       </Combobox>
-
-                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                        {webdavAllowedCalendars.length === 0
-                          ? "AI can search all calendars by default. Select specific calendars to restrict access."
-                          : `AI can only search ${webdavAllowedCalendars.length} selected calendar(s). Click a tag to remove it.`
-                        }
-                      </p>
-                    </div>
+                    </MultiSelectShell>
                   </>
                 )}
 
-                <div>
-                  <label
-                    htmlFor="webdav_url"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    CalDAV Server URL
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Input
                     type="text"
                     id="webdav_url"
+                    label="CalDAV Server URL"
                     value={webdavUrl}
                     onChange={(e) => handleWebdavUrlChange(e.target.value)}
                     placeholder="https://cloud.example.com/remote.php/dav"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    The CalDAV server URL. For Nextcloud: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">https://your-server/remote.php/dav</code>, for Fastmail: <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">https://caldav.fastmail.com/dav</code>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    The CalDAV server URL. For Nextcloud: <InlineCode>https://your-server/remote.php/dav</InlineCode>, for Fastmail: <InlineCode>https://caldav.fastmail.com/dav</InlineCode>
                   </p>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="webdav_username"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    CalDAV Username
-                  </label>
-                  <input
-                    type="text"
-                    id="webdav_username"
-                    value={webdavUsername}
-                    onChange={(e) => handleWebdavUsernameChange(e.target.value)}
-                    placeholder="user@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    Your CalDAV username (often your email address)
-                  </p>
-                </div>
+                <Input
+                  type="text"
+                  id="webdav_username"
+                  label="CalDAV Username"
+                  value={webdavUsername}
+                  onChange={(e) => handleWebdavUsernameChange(e.target.value)}
+                  placeholder="user@example.com"
+                  helperText="Your CalDAV username (often your email address)"
+                />
 
-                <div>
-                  <label
-                    htmlFor="webdav_password"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-                  >
-                    CalDAV Password
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Input
                     type="password"
                     id="webdav_password"
+                    label="CalDAV Password"
                     value={webdavPassword}
                     onChange={(e) => handleWebdavPasswordChange(e.target.value)}
                     placeholder="Enter your CalDAV password or app password"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                   />
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     {webdavPassword === MASK_VALUE ? (
                       <span className="text-green-600 dark:text-green-400">✓ Password is configured. Edit to update.</span>
                     ) : (
@@ -1670,57 +1567,40 @@ export default function SettingsPage() {
                     )}
                   </p>
                 </div>
-              </div>
-            </section>
+            </IntegrationCard>
 
-            <section
+            <IntegrationCard
               id="git-forges"
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
+              title="Git Forges"
+              description="Connect GitHub, GitLab, and/or Codeberg so the AI can cross-reference your commit history when categorizing work and generating time entries. Only configure the forges you use."
             >
-              <header className="mb-4">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Git Forges
-                </h3>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Connect GitHub, GitLab, and/or Codeberg so the AI can cross-reference your commit history when categorizing work and generating time entries. Only configure the forges you use.
-                </p>
-              </header>
 
               <div className="space-y-6">
                 {/* GitHub */}
-                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">GitHub</legend>
-                  <div>
-                    <label htmlFor="github_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      id="github_username"
-                      value={githubUsername}
-                      onChange={(e) => handleGithubUsernameChange(e.target.value)}
-                      placeholder="octocat"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="github_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Personal Access Token
-                    </label>
-                    <input
+                <IntegrationProviderCard title="GitHub">
+                  <Input
+                    type="text"
+                    id="github_username"
+                    label="Username"
+                    value={githubUsername}
+                    onChange={(e) => handleGithubUsernameChange(e.target.value)}
+                    placeholder="octocat"
+                  />
+                  <div className="space-y-2">
+                    <Input
                       type="password"
                       id="github_token"
+                      label="Personal Access Token"
                       value={githubToken}
                       onChange={(e) => handleGithubTokenChange(e.target.value)}
                       placeholder="ghp_..."
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {githubToken === MASK_VALUE ? (
                         <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
                       ) : (
                         <>
-                          Create a token with <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">repo</code> (read) scope from{" "}
+                          Create a token with <InlineCode>repo</InlineCode> (read) scope from{" "}
                           <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                             GitHub Settings
                           </a>
@@ -1728,42 +1608,33 @@ export default function SettingsPage() {
                       )}
                     </p>
                   </div>
-                </fieldset>
+                </IntegrationProviderCard>
 
                 {/* GitLab */}
-                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">GitLab</legend>
-                  <div>
-                    <label htmlFor="gitlab_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      id="gitlab_username"
-                      value={gitlabUsername}
-                      onChange={(e) => handleGitlabUsernameChange(e.target.value)}
-                      placeholder="gitlab-user"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="gitlab_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Personal Access Token
-                    </label>
-                    <input
+                <IntegrationProviderCard title="GitLab">
+                  <Input
+                    type="text"
+                    id="gitlab_username"
+                    label="Username"
+                    value={gitlabUsername}
+                    onChange={(e) => handleGitlabUsernameChange(e.target.value)}
+                    placeholder="gitlab-user"
+                  />
+                  <div className="space-y-2">
+                    <Input
                       type="password"
                       id="gitlab_token"
+                      label="Personal Access Token"
                       value={gitlabToken}
                       onChange={(e) => handleGitlabTokenChange(e.target.value)}
                       placeholder="glpat-..."
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {gitlabToken === MASK_VALUE ? (
                         <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
                       ) : (
                         <>
-                          Create a token with <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">read_api</code> scope from{" "}
+                          Create a token with <InlineCode>read_api</InlineCode> scope from{" "}
                           <a href="https://gitlab.com/-/user_settings/personal_access_tokens" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                             GitLab Settings
                           </a>
@@ -1771,53 +1642,37 @@ export default function SettingsPage() {
                       )}
                     </p>
                   </div>
-                  <div>
-                    <label htmlFor="gitlab_url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      GitLab URL (optional)
-                    </label>
-                    <input
-                      type="text"
-                      id="gitlab_url"
-                      value={gitlabUrl}
-                      onChange={(e) => handleGitlabUrlChange(e.target.value)}
-                      placeholder="https://gitlab.com"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      Leave blank to use gitlab.com. Set this for self-hosted GitLab instances.
-                    </p>
-                  </div>
-                </fieldset>
+                  <Input
+                    type="text"
+                    id="gitlab_url"
+                    label="GitLab URL (optional)"
+                    value={gitlabUrl}
+                    onChange={(e) => handleGitlabUrlChange(e.target.value)}
+                    placeholder="https://gitlab.com"
+                    helperText="Leave blank to use gitlab.com. Set this for self-hosted GitLab instances."
+                  />
+                </IntegrationProviderCard>
 
                 {/* Codeberg */}
-                <fieldset className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                  <legend className="text-sm font-semibold text-gray-800 dark:text-gray-200 px-1">Codeberg</legend>
-                  <div>
-                    <label htmlFor="codeberg_username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      id="codeberg_username"
-                      value={codebergUsername}
-                      onChange={(e) => handleCodebergUsernameChange(e.target.value)}
-                      placeholder="codeberg-user"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="codeberg_token" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      API Token
-                    </label>
-                    <input
+                <IntegrationProviderCard title="Codeberg">
+                  <Input
+                    type="text"
+                    id="codeberg_username"
+                    label="Username"
+                    value={codebergUsername}
+                    onChange={(e) => handleCodebergUsernameChange(e.target.value)}
+                    placeholder="codeberg-user"
+                  />
+                  <div className="space-y-2">
+                    <Input
                       type="password"
                       id="codeberg_token"
+                      label="API Token"
                       value={codebergToken}
                       onChange={(e) => handleCodebergTokenChange(e.target.value)}
                       placeholder="Enter your Codeberg API token"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {codebergToken === MASK_VALUE ? (
                         <span className="text-green-600 dark:text-green-400">✓ Token is configured. Edit to update.</span>
                       ) : (
@@ -1830,67 +1685,44 @@ export default function SettingsPage() {
                       )}
                     </p>
                   </div>
-                </fieldset>
+                </IntegrationProviderCard>
               </div>
-            </section>
+            </IntegrationCard>
           </section>
 
-          <section
-            id="mcp-server"
-            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-          >
-            <header className="mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                MCP Server
-              </h2>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Expose the admin dashboard as a local MCP server for ChatGPT, Copilot, and other compatible tools.
-              </p>
-            </header>
+          <Surface id="mcp-server" className="scroll-mt-24">
+            <SettingsSectionHeader
+              title="MCP Server"
+              description="Expose the admin dashboard as a local MCP server for ChatGPT, Copilot, and other compatible tools."
+            />
 
             <div className="space-y-4">
-              <div className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                <div className="pr-4">
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                    Enable MCP endpoint
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    When enabled, the dashboard serves MCP tools at <code className="rounded bg-gray-100 px-1 py-0.5 text-xs dark:bg-gray-900">/api/mcp</code>. Disable this to immediately block MCP access without revoking your API keys.
-                  </p>
-                </div>
+              <ToggleRow
+                id="mcp_enabled"
+                checked={mcpEnabled}
+                onChange={handleMcpEnabledChange}
+                title="Enable MCP endpoint"
+                description="When enabled, the dashboard serves MCP tools at /api/mcp. Disable this to immediately block MCP access without revoking your API keys."
+              />
 
-                <label className="relative inline-flex cursor-pointer items-center">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={mcpEnabled}
-                    onChange={(e) => handleMcpEnabledChange(e.target.checked)}
-                  />
-                  <div className="h-6 w-11 rounded-full bg-gray-300 transition peer-checked:bg-blue-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 dark:bg-gray-600 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-5"></div>
-                </label>
-              </div>
-
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-100">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/90 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-100">
                 <p className="font-medium">API keys must include MCP access</p>
                 <p className="mt-1">
-                  To use the MCP server, generate an admin API key with <code className="rounded bg-white/70 px-1 py-0.5 text-xs dark:bg-gray-900/60">mcp:use</code> plus whichever read/write scopes you want the AI to have.
+                  To use the MCP server, generate an admin API key with <InlineCode>mcp:use</InlineCode> plus whichever read/write scopes you want the AI to have.
                 </p>
                 <div className="mt-3">
                   <Link
                     href="/mcp"
-                    className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+                    className="inline-flex items-center rounded-xl bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
                   >
                     View MCP setup guide
                   </Link>
                 </div>
               </div>
             </div>
-          </section>
+          </Surface>
 
-          <section
-            id="api-keys"
-            className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm scroll-mt-24 dark:border-gray-700 dark:bg-gray-800"
-          >
+          <Surface id="api-keys" className="scroll-mt-24">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -1900,16 +1732,15 @@ export default function SettingsPage() {
                   Generate API keys for programmatic access to your data
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => setIsApiKeyModalOpen(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
               >
                 Generate New Key
-              </button>
+              </Button>
             </div>
 
             <ApiKeyList apiKeys={apiKeys} onRevoke={handleRevokeApiKey} />
-          </section>
+          </Surface>
         </div>
       </div>
 
@@ -1919,6 +1750,8 @@ export default function SettingsPage() {
         onGenerate={handleGenerateApiKey}
         availablePermissions={availablePermissions}
       />
-    </div>
+        </Section>
+      </PageContent>
+    </Page>
   );
 }

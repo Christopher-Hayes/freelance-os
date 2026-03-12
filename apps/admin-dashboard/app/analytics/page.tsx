@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
 import { formatAppTitle, authFetch } from '@/lib/util';
-import { APIFooter } from '@repo/ui';
+import { APIFooter, Breadcrumbs, Button, Page, PageContent, PageError, PageHeader, PageLoading, Section, StatCard, Surface } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
+import { parseUTC } from '@/lib/datetime';
+import { ChartColumn, Clock3, Filter, Laptop2, TrendingUp } from 'lucide-react';
+import Link from 'next/link';
+import { Temporal } from '@/lib/temporal-polyfill';
 
 interface SummaryData {
   totalHours: number;
@@ -30,18 +34,22 @@ interface ActivityData {
   totalSessions: number;
 }
 
+function getDefaultDateRange() {
+  const today = Temporal.Now.plainDateISO();
+  return {
+    startDate: today.subtract({ days: 30 }).toString(),
+    endDate: today.toString(),
+  };
+}
+
 export default function AnalyticsPage() {
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return date.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const defaults = useMemo(() => getDefaultDateRange(), []);
+  const [startDate, setStartDate] = useState(defaults.startDate);
+  const [endDate, setEndDate] = useState(defaults.endDate);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -49,6 +57,7 @@ export default function AnalyticsPage() {
 
   async function fetchData() {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
@@ -59,206 +68,249 @@ export default function AnalyticsPage() {
         authFetch(`/api/analytics/activity?${params}`),
       ]);
 
-      const summaryData = await summaryRes.json() as SummaryData;
-      const activityData = await activityRes.json() as ActivityData;
+      if (!summaryRes.ok || !activityRes.ok) {
+        throw new Error('Failed to fetch analytics data');
+      }
+
+      const summaryData = (await summaryRes.json()) as SummaryData;
+      const activityData = (await activityRes.json()) as ActivityData;
 
       setSummary(summaryData);
       setActivity(activityData);
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
+    } catch (fetchError) {
+      console.error('Error fetching analytics:', fetchError);
+      setError(fetchError instanceof Error ? fetchError.message : 'Failed to load analytics');
     } finally {
       setLoading(false);
     }
   }
 
-  // Memoize chart data to prevent unnecessary re-renders
-  const dailyChartData = useMemo(
-    () => activity?.dailyData || [],
-    [activity?.dailyData]
-  );
+  const dailyChartData = useMemo(() => activity?.dailyData || [], [activity?.dailyData]);
+  const topAppsData = useMemo(() => activity?.topApps || [], [activity?.topApps]);
+  const weeklyData = useMemo(() => summary?.weeklyData || [], [summary?.weeklyData]);
 
-  const topAppsData = useMemo(
-    () => activity?.topApps || [],
-    [activity?.topApps]
-  );
+  const rangeLabel = useMemo(() => {
+    if (!startDate || !endDate) return 'Custom range';
 
-  const weeklyData = useMemo(
-    () => summary?.weeklyData || [],
-    [summary?.weeklyData]
-  );
+    try {
+      const start = parseUTC(`${startDate}T00:00:00Z`);
+      const end = parseUTC(`${endDate}T00:00:00Z`);
+      return `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(start.epochMilliseconds))} – ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(end.epochMilliseconds))}`;
+    } catch {
+      return 'Custom range';
+    }
+  }, [endDate, startDate]);
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
     return await generateCode(endpoint, language);
   };
 
+  if (loading && !summary && !activity) {
+    return <PageLoading title="Loading analytics" message="Crunching activity sessions, trends, and app usage." />;
+  }
+
+  if (error) {
+    return (
+      <Page>
+        <PageContent>
+          <PageError title="Couldn’t load analytics" message={error} retry={fetchData} />
+        </PageContent>
+      </Page>
+    );
+  }
+
   return (
-    <div className="min-h-screen p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8 text-gray-900 dark:text-white">
-          Activity Analytics
-        </h1>
+    <Page>
+      <PageContent>
+        <Section className="space-y-6">
+          <Breadcrumbs items={[{ label: 'Analytics' }]} LinkComponent={Link as any} />
 
-        {/* Date Range Selector */}
-        <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 mb-8 border border-gray-200 dark:border-gray-800">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white"
-              />
+          <PageHeader
+            eyebrow="Admin dashboard"
+            title="Activity analytics"
+            description="Review captured activity trends, compare weekly performance, and spot the apps taking the most of your attention."
+            actions={
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const nextDefaults = getDefaultDateRange();
+                  setStartDate(nextDefaults.startDate);
+                  setEndDate(nextDefaults.endDate);
+                }}
+              >
+                Reset range
+              </Button>
+            }
+          />
+
+          <Surface className="space-y-5">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                  <Filter className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  Date range
+                </div>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Adjust the reporting window to compare workload, focus, and app usage over time.</p>
+              </div>
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-600 dark:border-white/10 dark:bg-slate-800 dark:text-slate-300">
+                {rangeLabel}
+              </div>
             </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white"
-              />
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Start date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/60 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">End date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/60 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+              <div className="flex items-end">
+                <Button variant="secondary" className="w-full md:w-auto" onClick={fetchData}>
+                  Refresh
+                </Button>
+              </div>
             </div>
+          </Surface>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Total hours"
+              value={summary?.totalHours.toFixed(1) || '0.0'}
+              meta="Tracked from activity sessions"
+              icon={<Clock3 className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Total sessions"
+              value={summary?.totalSessions || 0}
+              meta="Captured activity intervals"
+              icon={<ChartColumn className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Avg daily hours"
+              value={summary?.avgDailyHours.toFixed(1) || '0.0'}
+              tone="info"
+              meta="Average over selected range"
+              icon={<TrendingUp className="h-5 w-5" />}
+            />
+            <StatCard
+              label="Top app"
+              value={formatAppTitle(summary?.mostUsedApp?.name ?? '') || 'N/A'}
+              meta={summary?.mostUsedApp ? `${summary.mostUsedApp.hours.toFixed(1)}h • ${summary.mostUsedApp.sessions} sessions` : 'No activity yet'}
+              icon={<Laptop2 className="h-5 w-5" />}
+            />
           </div>
-        </div>
 
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading analytics...</p>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Surface className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Daily activity</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Compare day-to-day workload and see how activity volume shifts across the selected range.</p>
+              </div>
+              <DailyActivityChart data={dailyChartData} />
+            </Surface>
+
+            <Surface className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Top apps</h2>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">See which apps dominate your attention and how much time they consumed.</p>
+              </div>
+              <TopAppsChart data={topAppsData} />
+            </Surface>
           </div>
-        ) : (
-          <>
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Hours</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {summary?.totalHours.toFixed(1) || '0'}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Sessions</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {summary?.totalSessions || '0'}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Avg Daily Hours</p>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {summary?.avgDailyHours.toFixed(1) || '0'}
-                </p>
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Most Used App</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white truncate">
-                  {formatAppTitle(summary?.mostUsedApp?.name ?? '') || 'N/A'}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {summary?.mostUsedApp?.hours.toFixed(1) || '0'}h
-                </p>
-              </div>
-            </div>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-                  Daily Activity
-                </h2>
-                <DailyActivityChart data={dailyChartData} />
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-                <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-                  Top 10 Apps
-                </h2>
-                <TopAppsChart data={topAppsData} />
-              </div>
+          <Surface className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Weekly trends</h2>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Spot broader momentum changes and weekly pacing with a cleaner trend overview.</p>
             </div>
+            <WeeklyTrendChart data={weeklyData} />
+          </Surface>
 
-            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-800">
-              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-                Weekly Trends
-              </h2>
-              <WeeklyTrendChart data={weeklyData} />
-            </div>
-          </>
-        )}
-      </div>
-
-      <APIFooter
-        enableApiKeys
-        enableCodeGen
-        onGenerateApiKey={() => window.location.href = '/api-demo'}
-        onGenerateCode={handleGenerateCode}
-        endpoints={[
-          {
-            method: "GET",
-            path: "/analytics/summary",
-            description: "Get activity summary for a date range",
-            queryParams: [
+          <APIFooter
+            enableApiKeys
+            enableCodeGen
+            onGenerateApiKey={() => {
+              window.location.href = '/api-demo';
+            }}
+            onGenerateCode={handleGenerateCode}
+            endpoints={[
               {
-                name: "startDate",
-                type: "string",
-                description: "Start date for analytics range (YYYY-MM-DD)",
+                method: 'GET',
+                path: '/analytics/summary',
+                description: 'Get activity summary for a date range',
+                queryParams: [
+                  {
+                    name: 'startDate',
+                    type: 'string',
+                    description: 'Start date for analytics range (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'endDate',
+                    type: 'string',
+                    description: 'End date for analytics range (YYYY-MM-DD)',
+                  },
+                ],
               },
               {
-                name: "endDate",
-                type: "string",
-                description: "End date for analytics range (YYYY-MM-DD)",
-              },
-            ],
-          },
-          {
-            method: "GET",
-            path: "/analytics/activity",
-            description: "Get detailed activity data (daily breakdown and top apps)",
-            queryParams: [
-              {
-                name: "startDate",
-                type: "string",
-                description: "Start date for analytics range (YYYY-MM-DD)",
-              },
-              {
-                name: "endDate",
-                type: "string",
-                description: "End date for analytics range (YYYY-MM-DD)",
-              },
-              {
-                name: "limit",
-                type: "number",
-                description: "Limit number of top apps returned (default: 10)",
-              },
-            ],
-          },
-          {
-            method: "GET",
-            path: "/analytics/sessions",
-            description: "Get raw activity sessions",
-            queryParams: [
-              {
-                name: "startDate",
-                type: "string",
-                description: "Start date for sessions (YYYY-MM-DD)",
+                method: 'GET',
+                path: '/analytics/activity',
+                description: 'Get detailed activity data (daily breakdown and top apps)',
+                queryParams: [
+                  {
+                    name: 'startDate',
+                    type: 'string',
+                    description: 'Start date for analytics range (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'endDate',
+                    type: 'string',
+                    description: 'End date for analytics range (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'limit',
+                    type: 'number',
+                    description: 'Limit number of top apps returned (default: 10)',
+                  },
+                ],
               },
               {
-                name: "endDate",
-                type: "string",
-                description: "End date for sessions (YYYY-MM-DD)",
+                method: 'GET',
+                path: '/analytics/sessions',
+                description: 'Get raw activity sessions',
+                queryParams: [
+                  {
+                    name: 'startDate',
+                    type: 'string',
+                    description: 'Start date for sessions (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'endDate',
+                    type: 'string',
+                    description: 'End date for sessions (YYYY-MM-DD)',
+                  },
+                  {
+                    name: 'appName',
+                    type: 'string',
+                    description: 'Filter by application name',
+                  },
+                ],
               },
-              {
-                name: "appName",
-                type: "string",
-                description: "Filter by application name",
-              },
-            ],
-          },
-        ]}
-      />
-    </div>
+            ]}
+          />
+        </Section>
+      </PageContent>
+    </Page>
   );
 }
