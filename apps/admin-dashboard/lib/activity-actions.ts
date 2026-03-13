@@ -152,10 +152,10 @@ export async function importRescueTimeData(date: string) {
  * @param startDate Temporal.PlainDate for the start of the range
  * @param endDate Temporal.PlainDate for the end of the range (inclusive)
  */
-export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
-  // Convert PlainDate to UTC Instant at start/end of day
-  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
-  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate, timeZone: string = Temporal.Now.timeZoneId()) {
+  // Convert PlainDate to local-timezone Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
   
   const hiddenAppClasses = await getHiddenAppClasses();
 
@@ -206,10 +206,10 @@ export async function getMostUsedApp(startDate: Temporal.PlainDate, endDate: Tem
  * @param startDate Temporal.PlainDate for the start of the range
  * @param endDate Temporal.PlainDate for the end of the range (inclusive)
  */
-export async function getTopProject(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
-  // Convert PlainDate to UTC Instant at start/end of day
-  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
-  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+export async function getTopProject(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate, timeZone: string = Temporal.Now.timeZoneId()) {
+  // Convert PlainDate to local-timezone Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
   
   const projectTimes = await prisma.timeEntry.groupBy({
     by: ['projectId'],
@@ -255,10 +255,10 @@ export async function getTopProject(startDate: Temporal.PlainDate, endDate: Temp
  * @param startDate Temporal.PlainDate for the start of the range
  * @param endDate Temporal.PlainDate for the end of the range (inclusive)
  */
-export async function getHoursInRange(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) {
-  // Convert PlainDate to UTC Instant at start/end of day
-  const startInstant = startDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
-  const endInstant = endDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
+export async function getHoursInRange(startDate: Temporal.PlainDate, endDate: Temporal.PlainDate, timeZone: string = Temporal.Now.timeZoneId()) {
+  // Convert PlainDate to local-timezone Instant at start/end of day
+  const startInstant = startDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('00:00:00') }).toInstant();
+  const endInstant = endDate.toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant();
   
   const entries = await prisma.timeEntry.aggregate({
     where: {

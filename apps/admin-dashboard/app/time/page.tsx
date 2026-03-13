@@ -9,6 +9,10 @@ import { generateCode } from '@/lib/ai-actions';
 import { authFetch, formatAppTitle } from '@/lib/util';
 import { CalendarDays, Clock3, Filter, FolderKanban, Plus, RefreshCw, Sparkles, TimerReset } from 'lucide-react';
 
+function getAppAnalyticsHref(appClass: string) {
+  return `/analytics/apps/${appClass}`;
+}
+
 interface TimeEntry {
   id: number;
   projectId: number;
@@ -338,7 +342,14 @@ export default function TimeEntriesPage() {
               <StatCard
                 label="Top app this week"
                 value={summary.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : "No data"}
-                meta={summary.topAppThisWeek ? `${summary.topAppThisWeek.hours} hours tracked` : "No activity sessions"}
+                meta={summary.topAppThisWeek ? (
+                  <Link
+                    href={getAppAnalyticsHref(summary.topAppThisWeek.appClass)}
+                    className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    {summary.topAppThisWeek.hours} hours tracked · Open app analytics
+                  </Link>
+                ) : "No activity sessions"}
                 tone="success"
                 icon={<Sparkles className="h-4 w-4" />}
               />

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
+import type React from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import {
   APP_COLORS,
@@ -28,11 +29,12 @@ interface ActivitySessionProps {
   session: ActivitySession;
   position: { column: number; totalColumns: number; columnSpan?: number };
   colorMap: Map<string, string>;
+  onClick?: (session: ActivitySession) => void;
   onContextMenu?: (event: React.MouseEvent<HTMLDivElement>, session: ActivitySession) => void;
 }
 
 // Memoized component - only re-renders if session or position changes
-const ActivitySession = memo(function ActivitySession({ session, position, colorMap, onContextMenu }: ActivitySessionProps) {
+const ActivitySession = memo(function ActivitySession({ session, position, colorMap, onClick, onContextMenu }: ActivitySessionProps) {
   const getAppColor = (appClass: string): string => {
     // Use the color map if available, otherwise fall back to hash-based color
     return colorMap.get(appClass) || APP_COLORS[0]!;
@@ -88,7 +90,8 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
   if (useIntervalUI) {
     return (
       <div
-        className="timeline-session absolute z-10 border backdrop-blur-sm rounded overflow-hidden cursor-help"
+        className="timeline-session absolute z-10 border backdrop-blur-sm rounded overflow-hidden cursor-pointer"
+        onClick={() => onClick?.(session)}
         onContextMenu={(event) => onContextMenu?.(event, session)}
         style={{
           top: `${top}px`,
@@ -179,7 +182,8 @@ const ActivitySession = memo(function ActivitySession({ session, position, color
   // Default rendering for short sessions
   return (
     <div
-      className={`timeline-session absolute z-10 flex ${height > 35 ? 'items-start' : 'items-center'} border backdrop-blur-sm rounded pr-1 overflow-hidden cursor-help`}
+      className={`timeline-session absolute z-10 flex ${height > 35 ? 'items-start' : 'items-center'} border backdrop-blur-sm rounded pr-1 overflow-hidden cursor-pointer`}
+      onClick={() => onClick?.(session)}
       onContextMenu={(event) => onContextMenu?.(event, session)}
       style={{
         top: `${top}px`,

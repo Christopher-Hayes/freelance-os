@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo, memo } from "react";
+import { useRouter } from "next/navigation";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { toast } from "@repo/ui";
 import { useJobs } from "@/components/JobsProvider";
@@ -31,18 +32,24 @@ import { calculateActivityOverlaps, calculateTimeEntryOverlaps } from "./timelin
 import { throttle, isAppHidden, formatAppTitle } from "@/lib/util";
 import { authFetch } from '@/lib/util';
 
+function getAppAnalyticsHref(appClass: string) {
+  return `/analytics/apps/${encodeURIComponent(appClass)}`;
+}
+
 // Memoized component for activity sessions timeline - only re-renders when sessions change
 const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
   sessions,
   loading,
   onImportRescueTime,
   importingRescueTime,
+  onSessionClick,
   onSessionContextMenu,
 }: {
   sessions: ActivitySessionType[];
   loading: boolean;
   onImportRescueTime: () => void;
   importingRescueTime: boolean;
+  onSessionClick: (session: ActivitySessionType) => void;
   onSessionContextMenu: (event: React.MouseEvent<HTMLDivElement>, session: ActivitySessionType) => void;
 }) {
   // Memoize the merged sessions calculation
@@ -130,6 +137,7 @@ const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
                 session={session}
                 position={activityOverlapPositions[session.id]!}
                 colorMap={appColorMap}
+                onClick={onSessionClick}
                 onContextMenu={onSessionContextMenu}
               />
             ))}
@@ -148,6 +156,7 @@ export default function DayTimeline({
   selectedDate,
   onDateChange,
 }: DayTimelineProps) {
+  const router = useRouter();
   type AppSessionContextMenuState = {
     x: number;
     y: number;
@@ -657,6 +666,11 @@ export default function DayTimeline({
       y: event.clientY,
       session,
     });
+  };
+
+  const handleSessionClick = (session: ActivitySessionType) => {
+    setAppContextMenu(null);
+    router.push(getAppAnalyticsHref(session.appClass));
   };
 
   // Manual refresh handler
@@ -1283,6 +1297,7 @@ export default function DayTimeline({
                       loading={loading}
                       onImportRescueTime={handleImportFromRescueTime}
                       importingRescueTime={importingRescueTime}
+                      onSessionClick={handleSessionClick}
                       onSessionContextMenu={handleSessionContextMenu}
                     />
                     <CurrentTimeLine

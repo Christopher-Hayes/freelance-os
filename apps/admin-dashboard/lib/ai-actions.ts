@@ -633,7 +633,7 @@ function mergeSessionsForAI(sessions: ActivitySessionForAI[]): ActivitySessionFo
       : title;
 
   const formatIntervalLabel = (instant: Temporal.Instant) => {
-    const zdt = instant.toZonedDateTimeISO("UTC");
+    const zdt = instant.toZonedDateTimeISO(Temporal.Now.timeZoneId());
     const hour = zdt.hour;
     const minute = zdt.minute;
     const period = hour >= 12 ? "PM" : "AM";

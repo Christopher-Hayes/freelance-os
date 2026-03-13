@@ -23,9 +23,9 @@ const DailyActivityChart = memo(function DailyActivityChart({ data }: Props) {
     d3.select(svgRef.current).selectAll('*').remove();
 
     // Set dimensions
-    const margin = { top: 20, right: 20, bottom: 60, left: 60 };
+  const margin = { top: 12, right: 20, bottom: 46, left: 52 };
     const width = 600 - margin.left - margin.right;
-    const height = 300 - margin.top - margin.bottom;
+  const height = 240 - margin.top - margin.bottom;
 
     // Create SVG
     const svg = d3
@@ -118,14 +118,14 @@ const DailyActivityChart = memo(function DailyActivityChart({ data }: Props) {
 
   if (!data.length) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
+      <div className="flex h-52 items-center justify-center text-gray-500 dark:text-gray-400">
         No activity data for this date range
       </div>
     );
   }
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto [&_svg]:h-auto [&_svg]:max-w-full">
       <svg ref={svgRef} className="mx-auto"></svg>
     </div>
   );

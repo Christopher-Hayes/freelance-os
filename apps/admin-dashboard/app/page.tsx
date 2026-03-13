@@ -20,8 +20,13 @@ import {
 import { ClientDateTime } from "@/components/ClientDateTime";
 import { formatAppTitle } from "@/lib/util";
 
+function getAppAnalyticsHref(appClass: string) {
+  return `/analytics/apps/${appClass}`;
+}
+
 type TopApp = {
   appClass: string;
+  appName: string;
   durationSeconds: number;
   sessions: number;
   share: number;
@@ -66,6 +71,7 @@ type DailyClientBar = {
 type RecentActivity = {
   id: number;
   appClass: string;
+  appName: string;
   windowTitle: string | null;
   durationSeconds: number;
   startTime: string;
@@ -88,6 +94,13 @@ type DashboardData = {
   recentActivities: RecentActivity[];
   draftInvoiceCount: number;
   overdueInvoiceCount: number;
+};
+
+type ProgressRowProps = {
+  label: React.ReactNode;
+  detail: string;
+  value: number;
+  color: string;
 };
 
 const DEFAULT_CLIENT_COLOR = "#06B6D4";
@@ -180,19 +193,28 @@ function isDefinedNumber(value: number | undefined | null): value is number {
 }
 
 async function getDashboardData(): Promise<DashboardData> {
-  const today = Temporal.Now.plainDateISO();
+  const timeZone = Temporal.Now.timeZoneId();
+  const today = Temporal.Now.plainDateISO(timeZone);
   const monthStart = Temporal.PlainDate.from({
     year: today.year,
     month: today.month,
     day: 1,
   });
   const last7DaysStart = today.subtract({ days: 6 });
-  const recentWorkDayStart = today.subtract({ days: 9 });
+  const recentWorkDayDates: Temporal.PlainDate[] = [];
+  let recentWorkDayCursor = today;
+  while (recentWorkDayDates.length < 5) {
+    if (recentWorkDayCursor.dayOfWeek <= 5) {
+      recentWorkDayDates.unshift(recentWorkDayCursor);
+    }
+    recentWorkDayCursor = recentWorkDayCursor.subtract({ days: 1 });
+  }
+  const recentWorkDayStart = recentWorkDayDates[0] ?? today;
 
   const monthStartDate = new Date(
     monthStart
       .toZonedDateTime({
-        timeZone: "UTC",
+        timeZone,
         plainTime: Temporal.PlainTime.from("00:00:00"),
       })
       .toInstant().epochMilliseconds
@@ -200,7 +222,7 @@ async function getDashboardData(): Promise<DashboardData> {
   const last7DaysStartDate = new Date(
     last7DaysStart
       .toZonedDateTime({
-        timeZone: "UTC",
+        timeZone,
         plainTime: Temporal.PlainTime.from("00:00:00"),
       })
       .toInstant().epochMilliseconds
@@ -208,7 +230,7 @@ async function getDashboardData(): Promise<DashboardData> {
   const recentWorkDayStartDate = new Date(
     recentWorkDayStart
       .toZonedDateTime({
-        timeZone: "UTC",
+        timeZone,
         plainTime: Temporal.PlainTime.from("00:00:00"),
       })
       .toInstant().epochMilliseconds
@@ -387,19 +409,22 @@ async function getDashboardData(): Promise<DashboardData> {
     (sum, session) => sum + session.durationSeconds,
     0
   );
-  const appAggregate = new Map<string, { durationSeconds: number; sessions: number }>();
+  const appAggregate = new Map<string, { appName: string; durationSeconds: number; sessions: number }>();
 
   for (const session of activitySessions) {
-    const appName = formatAppName(session.appClass || "Unknown app", appRenameMap);
-    const existing = appAggregate.get(appName) ?? { durationSeconds: 0, sessions: 0 };
+    const appClass = session.appClass || "Unknown app";
+    const appName = formatAppName(appClass, appRenameMap);
+    const existing = appAggregate.get(appClass) ?? { appName, durationSeconds: 0, sessions: 0 };
+    existing.appName = appName;
     existing.durationSeconds += session.durationSeconds;
     existing.sessions += 1;
-    appAggregate.set(appName, existing);
+    appAggregate.set(appClass, existing);
   }
 
   const topApps = Array.from(appAggregate.entries())
     .map(([appClass, value]) => ({
       appClass,
+      appName: value.appName,
       durationSeconds: value.durationSeconds,
       sessions: value.sessions,
       share: totalActivitySeconds > 0 ? (value.durationSeconds / totalActivitySeconds) * 100 : 0,
@@ -473,13 +498,13 @@ async function getDashboardData(): Promise<DashboardData> {
 
   const dateFormatter = new Intl.DateTimeFormat("en-US", {
     weekday: "short",
-    timeZone: "UTC",
+    timeZone,
   });
   const workDayEntries = new Map<string, Map<number, { clientName: string; color: string; minutes: number }>>();
 
   for (const entry of recentTimeEntries) {
     const plainDate = Temporal.Instant.from(entry.startTime.toISOString())
-      .toZonedDateTimeISO("UTC")
+      .toZonedDateTimeISO(timeZone)
       .toPlainDate();
     const dayOfWeek = plainDate.dayOfWeek;
     if (dayOfWeek === 6 || dayOfWeek === 7) continue;
@@ -502,8 +527,8 @@ async function getDashboardData(): Promise<DashboardData> {
     workDayEntries.set(dateKey, dayBucket);
   }
 
-  const sortedWorkDayKeys = Array.from(workDayEntries.keys()).sort();
-  const recentWorkDays: DailyClientBar[] = sortedWorkDayKeys.slice(-5).map((dateKey) => {
+  const recentWorkDays: DailyClientBar[] = recentWorkDayDates.map((plainDate) => {
+    const dateKey = plainDate.toString();
     const dayBucket = workDayEntries.get(dateKey) ?? new Map();
     const segments = Array.from(dayBucket.entries())
       .map(([clientId, client]) => ({
@@ -516,7 +541,16 @@ async function getDashboardData(): Promise<DashboardData> {
 
     return {
       date: dateKey,
-      label: dateFormatter.format(new Date(`${dateKey}T00:00:00.000Z`)),
+      label: dateFormatter.format(
+        new Date(
+          plainDate
+            .toZonedDateTime({
+              timeZone,
+              plainTime: Temporal.PlainTime.from("12:00:00"),
+            })
+            .toInstant().epochMilliseconds
+        )
+      ),
       totalMinutes: segments.reduce((sum, segment) => sum + segment.minutes, 0),
       segments,
     };
@@ -526,7 +560,7 @@ async function getDashboardData(): Promise<DashboardData> {
     if (!entry.billable) return sum;
 
     const plainDate = Temporal.Instant.from(entry.startTime.toISOString())
-      .toZonedDateTimeISO("UTC")
+      .toZonedDateTimeISO(timeZone)
       .toPlainDate();
     const dayOfWeek = plainDate.dayOfWeek;
     if (dayOfWeek === 6 || dayOfWeek === 7) return sum;
@@ -543,6 +577,7 @@ async function getDashboardData(): Promise<DashboardData> {
   const recentActivities = recentActivityRows.map((activity) => ({
     id: activity.id,
     appClass: activity.appClass,
+    appName: formatAppName(activity.appClass || "Unknown app", appRenameMap),
     windowTitle: activity.windowTitle,
     durationSeconds: activity.durationSeconds,
     startTime: activity.startTime.toISOString(),
@@ -601,12 +636,7 @@ function ProgressRow({
   detail,
   value,
   color,
-}: {
-  label: string;
-  detail: string;
-  value: number;
-  color: string;
-}) {
+}: ProgressRowProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-start justify-between gap-4">
@@ -857,7 +887,17 @@ export default async function Page() {
                 data.topApps.map((app, index) => (
                   <ProgressRow
                     key={app.appClass}
-                    label={`${index + 1}. ${formatAppTitle(app.appClass)}`}
+                    label={
+                      <>
+                        {index + 1}.{" "}
+                        <Link
+                          href={getAppAnalyticsHref(app.appClass)}
+                          className="transition hover:text-emerald-700 dark:hover:text-emerald-300"
+                        >
+                          {app.appName}
+                        </Link>
+                      </>
+                    }
                     detail={`${formatHoursFromSeconds(app.durationSeconds)} across ${app.sessions} sessions`}
                     value={app.share}
                     color={index === 0 ? "#10B981" : index === 1 ? "#14B8A6" : index === 2 ? "#06B6D4" : "#64748B"}
@@ -925,9 +965,12 @@ export default async function Page() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="text-base font-semibold text-gray-950 dark:text-white">
-                          {formatAppTitle(activity.appClass)}
-                        </div>
+                        <Link
+                          href={getAppAnalyticsHref(activity.appClass)}
+                          className="text-base font-semibold text-gray-950 transition hover:text-blue-700 dark:text-white dark:hover:text-blue-300"
+                        >
+                          {activity.appName}
+                        </Link>
                         <div className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
                           {activity.windowTitle || "No window title captured for this session."}
                         </div>
