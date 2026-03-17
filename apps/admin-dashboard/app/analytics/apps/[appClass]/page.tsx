@@ -8,6 +8,7 @@ import { getAppAnalytics, getAppRenameMap, getOrCreateApp } from "@/lib/app-anal
 import { suggestAppName } from "@/lib/ai-actions";
 import { formatAppTitle } from "@/lib/util";
 import AppNameSuggestionBanner from "./AppNameSuggestionBanner";
+import { DashboardApiFooter } from "@/components/DashboardApiFooter";
 
 type PageProps = {
   params: Promise<{ appClass: string }>;
@@ -425,6 +426,28 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
               </div>
             </Surface>
           </div>
+          <DashboardApiFooter
+            endpoints={[
+              {
+                method: "GET",
+                path: `/api/analytics/apps/${appClass}`,
+                description: "Fetch the full analytics detail for this specific app, including daily usage, hourly rhythm, window titles, client/project attribution, and insights.",
+                queryParams: [
+                  { name: "startDate", type: "date", required: false, description: "Inclusive start of the reporting window (YYYY-MM-DD). Defaults to 30 days ago." },
+                  { name: "endDate",   type: "date", required: false, description: "Inclusive end of the reporting window (YYYY-MM-DD). Defaults to today." },
+                ],
+              },
+              {
+                method: "GET",
+                path: "/api/analytics/apps",
+                description: "List all tracked apps with aggregate stats (total hours, sessions, active days, coverage score) for the requested date range.",
+                queryParams: [
+                  { name: "startDate", type: "date", required: false, description: "Inclusive start of the reporting window (YYYY-MM-DD)." },
+                  { name: "endDate",   type: "date", required: false, description: "Inclusive end of the reporting window (YYYY-MM-DD)." },
+                ],
+              },
+            ]}
+          />
         </Section>
       </PageContent>
     </Page>
