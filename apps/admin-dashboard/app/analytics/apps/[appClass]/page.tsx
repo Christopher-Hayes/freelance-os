@@ -8,6 +8,7 @@ import { getAppAnalytics, getAppRenameMap, getOrCreateApp } from "@/lib/app-anal
 import { suggestAppName } from "@/lib/ai-actions";
 import { formatAppTitle } from "@/lib/util";
 import AppNameSuggestionBanner from "./AppNameSuggestionBanner";
+import AppOptionsMenu from "./AppOptionsMenu";
 import { DashboardApiFooter } from "@/components/DashboardApiFooter";
 
 type PageProps = {
@@ -142,13 +143,20 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
             title={displayName}
             description="Dive into a single app’s usage patterns, mapped delivery work, and a few extra signals that help turn activity data into insight."
             actions={
-              <Link
-                href="/analytics"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to analytics
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/analytics"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to analytics
+                </Link>
+                <AppOptionsMenu
+                  appClass={appClass}
+                  displayName={displayName}
+                  hasCustomName={!!appRecord.displayName}
+                />
+              </div>
             }
           />
 
@@ -169,15 +177,15 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
                   <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Shown in the UI as {displayName}</p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex flex-col gap-2 text-xs text-slate-500 dark:text-slate-400">
                 {analytics.summary.firstSeen ? (
                   <span className="rounded-full border border-slate-200 px-3 py-1 dark:border-white/10">
-                    First seen <ClientDateTime value={analytics.summary.firstSeen} className="ml-1 inline" />
+                    <strong>First</strong> seen <ClientDateTime value={analytics.summary.firstSeen} className="ml-1 inline" />
                   </span>
                 ) : null}
                 {analytics.summary.lastSeen ? (
                   <span className="rounded-full border border-slate-200 px-3 py-1 dark:border-white/10">
-                    Last seen <ClientDateTime value={analytics.summary.lastSeen} className="ml-1 inline" />
+                    <strong>Last</strong> seen <ClientDateTime value={analytics.summary.lastSeen} className="ml-1 inline" />
                   </span>
                 ) : null}
               </div>
@@ -392,7 +400,7 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
               <div className="flex items-start gap-3">
                 <Lightbulb className="mt-0.5 h-5 w-5 text-amber-500" />
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Insights and cool signals</h2>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Insights</h2>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">A few quick observations to help you act on the raw data faster.</p>
                 </div>
               </div>
@@ -407,7 +415,7 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
 
             <Surface className="space-y-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Top window titles</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Most common window titles</h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Files, pages, or contexts that show up most with this app.</p>
               </div>
               <div className="space-y-3">
