@@ -2,8 +2,8 @@
 import { ActivitySession } from '@/app/time/components/timeline/utils';
 import { Temporal } from '@/lib/temporal-polyfill';
 
-const APP_TITLE_RENAMES_STORAGE_KEY = 'appTitleRenames';
-const HIDDEN_APP_CLASSES_STORAGE_KEY = 'hiddenAppClasses';
+const APP_RENAME_MAP_STORAGE_KEY = 'appRenameMap';
+const HIDDEN_APPS_STORAGE_KEY = 'hiddenApps';
 
 /**
  * Fetch wrapper that redirects to login on 401 Unauthorized
@@ -83,35 +83,24 @@ function getUserAppTitleRenames(): Record<string, string> {
   }
 
   try {
-    const stored = window.localStorage.getItem(APP_TITLE_RENAMES_STORAGE_KEY);
+    const stored = window.localStorage.getItem(APP_RENAME_MAP_STORAGE_KEY);
     if (!stored) {
       return {};
     }
 
     const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed)) {
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return {};
     }
 
-    return parsed.reduce<Record<string, string>>((acc, entry) => {
-      if (typeof entry !== 'string') {
-        return acc;
+    // The stored format is { "appclass": "Display Name" } (keys already lowercased)
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string' && value.trim()) {
+        result[key.toLowerCase()] = value.trim();
       }
-
-      const separatorIndex = entry.indexOf('=');
-      if (separatorIndex <= 0) {
-        return acc;
-      }
-
-      const source = entry.slice(0, separatorIndex).trim();
-      const target = entry.slice(separatorIndex + 1).trim();
-
-      if (source && target) {
-        acc[source.toLowerCase()] = target;
-      }
-
-      return acc;
-    }, {});
+    }
+    return result;
   } catch {
     return {};
   }
@@ -143,7 +132,7 @@ function getStoredStringList(storageKey: string): string[] {
 }
 
 export function getHiddenAppClasses(): Set<string> {
-  return new Set(getStoredStringList(HIDDEN_APP_CLASSES_STORAGE_KEY).map((entry) => entry.toLowerCase()));
+  return new Set(getStoredStringList(HIDDEN_APPS_STORAGE_KEY).map((entry) => entry.toLowerCase()));
 }
 
 export function isAppHidden(appClass: string): boolean {
@@ -152,6 +141,44 @@ export function isAppHidden(appClass: string): boolean {
   }
 
   return getHiddenAppClasses().has(appClass.toLowerCase());
+}
+
+/**
+ * Fetch app records from /api/apps and cache renames + hidden status in localStorage.
+ * Call this after any rename/hide action to keep the client-side cache fresh.
+ */
+export async function syncAppDataToLocalStorage(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const response = await authFetch('/api/apps');
+    if (!response.ok) {
+      return;
+    }
+
+    const data = await response.json();
+    const apps: Array<{ appClass: string; displayName: string | null; hidden: boolean }> = data.apps ?? [];
+
+    // Build rename map: { "appclass": "Display Name" }
+    const renameMap: Record<string, string> = {};
+    const hiddenApps: string[] = [];
+
+    for (const app of apps) {
+      if (app.displayName) {
+        renameMap[app.appClass.toLowerCase()] = app.displayName;
+      }
+      if (app.hidden) {
+        hiddenApps.push(app.appClass);
+      }
+    }
+
+    window.localStorage.setItem(APP_RENAME_MAP_STORAGE_KEY, JSON.stringify(renameMap));
+    window.localStorage.setItem(HIDDEN_APPS_STORAGE_KEY, JSON.stringify(hiddenApps));
+  } catch (error) {
+    console.error('Error syncing app data to localStorage:', error);
+  }
 }
 
 export function formatAppTitle(appClass: string): string {

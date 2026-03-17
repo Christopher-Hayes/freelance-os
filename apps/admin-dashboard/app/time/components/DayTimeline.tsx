@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo, memo } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { toast } from "@repo/ui";
@@ -29,7 +30,7 @@ import {
   buildAppColorMap,
 } from "./timeline/utils";
 import { calculateActivityOverlaps, calculateTimeEntryOverlaps } from "./timeline/overlapCalculations";
-import { throttle, isAppHidden, formatAppTitle } from "@/lib/util";
+import { throttle, isAppHidden, formatAppTitle, syncAppDataToLocalStorage } from "@/lib/util";
 import { authFetch } from '@/lib/util';
 
 function getAppAnalyticsHref(appClass: string) {
@@ -274,6 +275,7 @@ export default function DayTimeline({
 
   // Effects
   useEffect(() => {
+    syncAppDataToLocalStorage();
     fetchDayData();
   }, [selectedDate]);
 
@@ -536,41 +538,18 @@ export default function DayTimeline({
     }
   };
 
-  const fetchSettings = async () => {
-    const response = await authFetch("/api/settings/all");
-    if (!response.ok) {
-      throw new Error("Failed to load settings");
-    }
-
-    return response.json();
-  };
-
-  const updateSettings = async (payload: Record<string, unknown>) => {
-    const response = await authFetch("/api/settings/all", {
+  const upsertApp = async (appClass: string, data: Record<string, unknown>) => {
+    const response = await authFetch(`/api/apps/${encodeURIComponent(appClass)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(data),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to update settings");
+      throw new Error("Failed to update app");
     }
 
     return response.json();
-  };
-
-  const syncSettingsToLocalStorage = (settings: { appTitleRenames?: unknown; hiddenAppClasses?: unknown }) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (Array.isArray(settings.appTitleRenames)) {
-      window.localStorage.setItem("appTitleRenames", JSON.stringify(settings.appTitleRenames));
-    }
-
-    if (Array.isArray(settings.hiddenAppClasses)) {
-      window.localStorage.setItem("hiddenAppClasses", JSON.stringify(settings.hiddenAppClasses));
-    }
   };
 
   const showUndoToast = (message: string, undo: () => Promise<void>) => {
@@ -604,22 +583,19 @@ export default function DayTimeline({
     }
 
     try {
-      const settings = await fetchSettings();
-  const previousRenames = Array.isArray(settings.appTitleRenames) ? settings.appTitleRenames.filter((entry: unknown): entry is string => typeof entry === "string") : [];
-      const normalizedKey = session.appClass.toLowerCase();
-      const nextRenames = [
-  ...previousRenames.filter((entry: string) => entry.split("=")[0]?.trim().toLowerCase() !== normalizedKey),
-        `${session.appClass}=${trimmedName}`,
-      ];
+      // Get the current displayName so we can undo
+      const currentRes = await authFetch(`/api/apps/${encodeURIComponent(session.appClass)}`);
+      const currentData = await currentRes.json();
+      const previousDisplayName = currentData.app?.displayName ?? null;
 
-      const updatedSettings = await updateSettings({ appTitleRenames: nextRenames });
-      syncSettingsToLocalStorage(updatedSettings);
+      await upsertApp(session.appClass, { displayName: trimmedName });
+      await syncAppDataToLocalStorage();
       setAppContextMenu(null);
       await fetchDayData();
 
       showUndoToast(`Renamed ${currentFriendlyName} to ${trimmedName}`, async () => {
-        const undoneSettings = await updateSettings({ appTitleRenames: previousRenames });
-        syncSettingsToLocalStorage(undoneSettings);
+        await upsertApp(session.appClass, { displayName: previousDisplayName });
+        await syncAppDataToLocalStorage();
         await fetchDayData();
         toast.success(`Restored ${currentFriendlyName}`);
       });
@@ -633,21 +609,14 @@ export default function DayTimeline({
     const currentFriendlyName = formatAppTitle(session.appClass);
 
     try {
-      const settings = await fetchSettings();
-  const previousHiddenApps = Array.isArray(settings.hiddenAppClasses) ? settings.hiddenAppClasses.filter((entry: unknown): entry is string => typeof entry === "string") : [];
-      const normalizedKey = session.appClass.toLowerCase();
-  const nextHiddenApps = previousHiddenApps.some((entry: string) => entry.toLowerCase() === normalizedKey)
-        ? previousHiddenApps
-        : [...previousHiddenApps, session.appClass];
-
-      const updatedSettings = await updateSettings({ hiddenAppClasses: nextHiddenApps });
-      syncSettingsToLocalStorage(updatedSettings);
+      await upsertApp(session.appClass, { hidden: true });
+      await syncAppDataToLocalStorage();
       setAppContextMenu(null);
       await fetchDayData();
 
       showUndoToast(`Hid ${currentFriendlyName} from timeline and analytics`, async () => {
-        const undoneSettings = await updateSettings({ hiddenAppClasses: previousHiddenApps });
-        syncSettingsToLocalStorage(undoneSettings);
+        await upsertApp(session.appClass, { hidden: false });
+        await syncAppDataToLocalStorage();
         await fetchDayData();
         toast.success(`Unhid ${currentFriendlyName}`);
       });
@@ -1400,7 +1369,7 @@ export default function DayTimeline({
           </div>
         </div>
 
-        {appContextMenu && (
+        {appContextMenu && isClient && createPortal(
           <>
             <div className="fixed inset-0 z-40" onClick={() => setAppContextMenu(null)} />
             <div
@@ -1428,7 +1397,8 @@ export default function DayTimeline({
                 Hide
               </button>
             </div>
-          </>
+          </>,
+          document.body
         )}
 
         {creatingEntry && (

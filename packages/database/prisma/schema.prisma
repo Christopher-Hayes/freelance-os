@@ -349,6 +349,21 @@ model AiTelemetryToolCall {
   @@map("ai_telemetry_tool_calls")
 }
 
+// App-level metadata (display names, AI suggestions, visibility)
+model App {
+  id                   Int      @id @default(autoincrement())
+  appClass             String   @unique @map("app_class") @db.VarChar(255) // The WM_CLASS / window class from the activity tracker
+  displayName          String?  @map("display_name") @db.VarChar(255) // User-set display name override
+  hidden               Boolean  @default(false) // Hidden from timeline and analytics UI
+  suggestedName        String?  @map("suggested_name") @db.VarChar(255) // AI-suggested display name
+  suggestNameDismissed Boolean  @default(false) @map("suggest_name_dismissed") // User dismissed the AI suggestion
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([hidden])
+  @@map("apps")
+}
+
 // Settings for storing user preferences and API keys
 model Setting {
   id              Int         @id @default(autoincrement())

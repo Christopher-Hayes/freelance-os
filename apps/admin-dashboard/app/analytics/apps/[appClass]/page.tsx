@@ -4,8 +4,10 @@ import { Activity, ArrowLeft, BarChart3, BriefcaseBusiness, Clock3, Lightbulb, R
 import { Breadcrumbs, Page, PageContent, PageHeader, Section, StatCard, Surface } from "@repo/ui";
 import { ClientDateTime } from "@/components/ClientDateTime";
 import DailyActivityChart from "@/app/analytics/components/DailyActivityChart";
-import { getAppAnalytics, getAppRenameMap } from "@/lib/app-analytics";
+import { getAppAnalytics, getAppRenameMap, getOrCreateApp } from "@/lib/app-analytics";
+import { suggestAppName } from "@/lib/ai-actions";
 import { formatAppTitle } from "@/lib/util";
+import AppNameSuggestionBanner from "./AppNameSuggestionBanner";
 
 type PageProps = {
   params: Promise<{ appClass: string }>;
@@ -104,8 +106,24 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
     notFound();
   }
 
+  // Ensure the app row exists and fetch current state
+  const appRecord = await getOrCreateApp(appClass);
+
+  // Trigger AI name suggestion (fire-and-forget, non-blocking on first visit)
+  // This is safe to call every time — it returns immediately if already handled.
+  const windowTitles = analytics.topWindowTitles.map((w) => w.title);
+  let nameSuggestion: string | null = appRecord.suggestedName;
+  if (!appRecord.displayName && !appRecord.suggestedName && !appRecord.suggestNameDismissed && windowTitles.length > 0) {
+    try {
+      const result = await suggestAppName(appClass, windowTitles);
+      nameSuggestion = result.suggestedName;
+    } catch {
+      // AI unavailable — don't block the page
+    }
+  }
+
   const renameMap = await getAppRenameMap();
-  const displayName = renameMap.get(appClass.toLowerCase()) ?? formatAppTitle(appClass);
+  const displayName = appRecord.displayName ?? renameMap.get(appClass.toLowerCase()) ?? formatAppTitle(appClass);
   const maxHourlySeconds = Math.max(...analytics.hourlyUsage.map((item) => item.seconds), 1);
   const maxDailyHours = Math.max(...analytics.dailyUsage.map((item) => item.hours), 0);
   const dailyUsageByDate = new Map(analytics.dailyUsage.map((point) => [point.date, point]));
@@ -132,6 +150,14 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
               </Link>
             }
           />
+
+          {nameSuggestion && !appRecord.suggestNameDismissed && (
+            <AppNameSuggestionBanner
+              appClass={appClass}
+              suggestedName={nameSuggestion}
+              currentDisplayName={displayName}
+            />
+          )}
 
           <Surface className="space-y-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

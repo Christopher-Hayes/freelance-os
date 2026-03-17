@@ -6,7 +6,7 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
 import { APIFooter, Badge, Button, EmptySurfaceState, Input, Page, PageContent, PageError, PageHeader, PageLoading, Section, Select, StatCard, Surface, SurfaceHeader } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
-import { authFetch, formatAppTitle } from '@/lib/util';
+import { authFetch, formatAppTitle, syncAppDataToLocalStorage } from '@/lib/util';
 import { CalendarDays, Clock3, Filter, FolderKanban, Plus, RefreshCw, Sparkles, TimerReset } from 'lucide-react';
 
 function getAppAnalyticsHref(appClass: string) {
@@ -188,6 +188,7 @@ export default function TimeEntriesPage() {
 
   // Fetch clients and projects for filters
   useEffect(() => {
+    syncAppDataToLocalStorage();
     Promise.all([
       authFetch("/api/clients").then((res) => res.json()),
       authFetch("/api/projects").then((res) => res.json()),

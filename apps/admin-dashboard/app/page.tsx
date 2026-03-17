@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ClientDateTime } from "@/components/ClientDateTime";
 import { formatAppTitle } from "@/lib/util";
+import { getAppRenameMap } from "@/lib/app-analytics";
 
 function getAppAnalyticsHref(appClass: string) {
   return `/analytics/apps/${appClass}`;
@@ -158,24 +159,6 @@ function withAlpha(hex: string, alpha: number) {
   return `rgba(${red}, ${green}, ${blue}, ${safeAlpha})`;
 }
 
-function buildAppRenameMap(entries: string[] | null | undefined) {
-  return (entries ?? []).reduce<Map<string, string>>((map, entry) => {
-    const separatorIndex = entry.indexOf("=");
-    if (separatorIndex <= 0) {
-      return map;
-    }
-
-    const source = entry.slice(0, separatorIndex).trim().toLowerCase();
-    const target = entry.slice(separatorIndex + 1).trim();
-
-    if (source && target) {
-      map.set(source, target);
-    }
-
-    return map;
-  }, new Map<string, string>());
-}
-
 function formatAppName(appClass: string, renameMap?: Map<string, string>) {
   const trimmed = appClass.trim();
   if (!trimmed) return "Unknown app";
@@ -237,7 +220,7 @@ async function getDashboardData(): Promise<DashboardData> {
   );
 
   const [
-    settings,
+    appRenameMap,
     clientCount,
     projectCount,
     invoiceCount,
@@ -251,10 +234,7 @@ async function getDashboardData(): Promise<DashboardData> {
     monthlyClientGroups,
     recentTimeEntries,
   ] = await Promise.all([
-    prisma.setting.findUnique({
-      where: { key: "main" },
-      select: { appTitleRenames: true },
-    }),
+    getAppRenameMap(),
     prisma.client.count(),
     prisma.project.count(),
     prisma.invoice.count(),
@@ -354,8 +334,6 @@ async function getDashboardData(): Promise<DashboardData> {
       },
     }),
   ]);
-
-  const appRenameMap = buildAppRenameMap(settings?.appTitleRenames);
 
   const projectIds = Array.from(new Set(monthlyProjectGroups.map((group) => group.projectId).filter(isDefinedNumber)));
   const clientProjectIds = Array.from(new Set(monthlyClientGroups.map((group) => group.projectId).filter(isDefinedNumber)));
@@ -685,8 +663,8 @@ export default async function Page() {
               <h1 className="text-4xl font-semibold tracking-tight text-gray-950 dark:text-white md:text-5xl">
                 A sharper pulse on your freelance business.
               </h1>
-              <div className="mt-4 flex max-w-2xl items-start gap-3 rounded-2xl text-sm text-gray-900 dark:text-pink-100">
-                <span>Btw, {activeTip}</span>
+              <div className="mt-4 flex max-w-2xl items-start gap-3 rounded-2xl text-sm text-gray-900/70 dark:text-white/70">
+                <span>Btw, you can {activeTip}</span>
               </div>
             </div>
           </div>

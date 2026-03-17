@@ -164,6 +164,25 @@ export interface UpdateInvoiceInput {
   notes?: string;
 }
 
+// App metadata types
+export interface App {
+  id: number;
+  appClass: string;
+  displayName?: string;
+  hidden: boolean;
+  suggestedName?: string;
+  suggestNameDismissed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UpdateAppInput {
+  displayName?: string | null;
+  hidden?: boolean;
+  suggestedName?: string | null;
+  suggestNameDismissed?: boolean;
+}
+
 // Activity tracking types (from existing utility)
 export interface ActivitySession {
   id: number;

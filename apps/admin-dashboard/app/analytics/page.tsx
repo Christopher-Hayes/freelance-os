@@ -4,7 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import DailyActivityChart from './components/DailyActivityChart';
 import TopAppsChart from './components/TopAppsChart';
 import WeeklyTrendChart from './components/WeeklyTrendChart';
-import { formatAppTitle, authFetch } from '@/lib/util';
+import { formatAppTitle, authFetch, syncAppDataToLocalStorage } from '@/lib/util';
 import { APIFooter, Breadcrumbs, Button, Page, PageContent, PageError, PageHeader, PageLoading, Section, StatCard, Surface } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
 import { parseUTC } from '@/lib/datetime';
@@ -52,6 +52,7 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    syncAppDataToLocalStorage();
     fetchData();
   }, [startDate, endDate]);
 

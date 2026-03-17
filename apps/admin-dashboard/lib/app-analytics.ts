@@ -80,36 +80,51 @@ export type AppAnalyticsResult = {
   insights: string[];
 };
 
-async function getSettings() {
-  return prisma.setting.findUnique({
-    where: { key: "main" },
-    select: { hiddenAppClasses: true, appTitleRenames: true },
-  });
-}
-
 export async function getHiddenAppClasses(): Promise<Set<string>> {
-  const settings = await getSettings();
-  return new Set((settings?.hiddenAppClasses || []).map((app) => app.toLowerCase()));
+  const hiddenApps = await prisma.app.findMany({
+    where: { hidden: true },
+    select: { appClass: true },
+  });
+
+  return new Set(hiddenApps.map((app) => app.appClass.toLowerCase()));
 }
 
 export async function getAppRenameMap(): Promise<Map<string, string>> {
-  const settings = await getSettings();
-
-  return (settings?.appTitleRenames ?? []).reduce<Map<string, string>>((map, entry) => {
-    const separatorIndex = entry.indexOf("=");
-    if (separatorIndex <= 0) {
-      return map;
+  const renamedApps = await prisma.app.findMany({
+    where: {
+      displayName: { not: null },
+    },
+    select: { appClass: true, displayName: true },
+  });
+  const map = new Map<string, string>();
+  for (const app of renamedApps) {
+    if (app.displayName) {
+      map.set(app.appClass.toLowerCase(), app.displayName);
     }
+  }
 
-    const source = entry.slice(0, separatorIndex).trim().toLowerCase();
-    const target = entry.slice(separatorIndex + 1).trim();
+  return map;
+}
 
-    if (source && target) {
-      map.set(source, target);
-    }
+/**
+ * Get the App record for a given appClass, or null if none exists.
+ */
+export async function getAppRecord(appClass: string) {
+  return prisma.app.findUnique({
+    where: { appClass },
+  });
+}
 
-    return map;
-  }, new Map<string, string>());
+/**
+ * Get or create an App record for a given appClass.
+ * The record is lazily created the first time the app detail page is visited.
+ */
+export async function getOrCreateApp(appClass: string) {
+  return prisma.app.upsert({
+    where: { appClass },
+    create: { appClass },
+    update: {},
+  });
 }
 
 export function resolveDateRange(input: DateRangeInput = {}, timeZone: string = Temporal.Now.timeZoneId()): RangeResult {

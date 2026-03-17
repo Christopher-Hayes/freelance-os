@@ -4,19 +4,25 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { Badge, Button, Input, Page, PageContent, PageHeader, PageLoading, Section, Select, Surface, Textarea, toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
-import { authFetch } from '@/lib/util';
+import { authFetch, syncAppDataToLocalStorage } from '@/lib/util';
 import { fetchMailboxes } from '@/lib/jmap-actions';
 import { fetchCalendars } from '@/lib/webdav-actions';
 import type { MailboxInfo } from '@/lib/jmap-provider';
 import type { CalendarInfo } from '@/lib/webdav-provider';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
-import { AlertTriangle, Check, ChevronsUpDown, Settings2, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, Eye, EyeOff, Pencil, Plus, Settings2, Sparkles, Trash2, X } from 'lucide-react';
 
 const MASK_VALUE = "••••••••";
-const APP_TITLE_RENAMES_STORAGE_KEY = "appTitleRenames";
-const HIDDEN_APP_CLASSES_STORAGE_KEY = "hiddenAppClasses";
 const JMAP_MAILBOXES_STORAGE_KEY = "jmapAvailableMailboxes";
 const WEBDAV_CALENDARS_STORAGE_KEY = "webdavAvailableCalendars";
+
+type AppRecord = {
+  appClass: string;
+  displayName: string | null;
+  hidden: boolean;
+  suggestedName: string | null;
+  suggestNameDismissed: boolean;
+};
 
 const settingsSections = [
   { id: "freelancer-information", title: "Invoice Information" },
@@ -262,8 +268,12 @@ export default function SettingsPage() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
-  const [appTitleRenamesText, setAppTitleRenamesText] = useState("");
-  const [hiddenAppClassesText, setHiddenAppClassesText] = useState("");
+  const [appRecords, setAppRecords] = useState<AppRecord[]>([]);
+  const [newRenameAppClass, setNewRenameAppClass] = useState("");
+  const [newRenameDisplayName, setNewRenameDisplayName] = useState("");
+  const [editingRename, setEditingRename] = useState<string | null>(null);
+  const [editingRenameValue, setEditingRenameValue] = useState("");
+  const [newHiddenAppClass, setNewHiddenAppClass] = useState("");
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
   const [jmapHostname, setJmapHostname] = useState("");
@@ -306,8 +316,6 @@ export default function SettingsPage() {
   const rescueTimeTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const openaiTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const googleTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const appTitleRenamesTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const hiddenAppClassesTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -330,26 +338,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    fetchAppRecords();
     fetchApiKeys();
     hydrateStoredMailboxes();
     hydrateStoredCalendars();
   }, []);
-
-  const persistAppTitleRenames = (entries: string[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(APP_TITLE_RENAMES_STORAGE_KEY, JSON.stringify(entries));
-  };
-
-  const persistHiddenAppClasses = (entries: string[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(HIDDEN_APP_CLASSES_STORAGE_KEY, JSON.stringify(entries));
-  };
 
   const persistAvailableMailboxes = (mailboxes: MailboxInfo[]) => {
     if (typeof window === "undefined") {
@@ -419,12 +412,6 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
-        const appTitleRenames = Array.isArray(data.appTitleRenames) ? data.appTitleRenames : [];
-        setAppTitleRenamesText(appTitleRenames.join("\n"));
-        persistAppTitleRenames(appTitleRenames);
-        const hiddenAppClasses = Array.isArray(data.hiddenAppClasses) ? data.hiddenAppClasses : [];
-        setHiddenAppClassesText(hiddenAppClasses.join("\n"));
-        persistHiddenAppClasses(hiddenAppClasses);
         setJmapToken(data.jmapToken || "");
         setCanReadMailbox(data.canReadMailbox || false);
         setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
@@ -475,20 +462,111 @@ export default function SettingsPage() {
         throw new Error("Failed to save setting");
       }
 
-      if (field === "appTitleRenames") {
-        const payload = typeof value === "string" ? JSON.parse(value) : [];
-        persistAppTitleRenames(Array.isArray(payload) ? payload : []);
-      }
-
-      if (field === "hiddenAppClasses") {
-        const payload = typeof value === "string" ? JSON.parse(value) : [];
-        persistHiddenAppClasses(Array.isArray(payload) ? payload : []);
-      }
-
       toast.success("Saved successfully");
     } catch (error) {
       console.error(`Error saving ${field}:`, error);
       toast.error(`Failed to save ${field}`);
+    }
+  };
+
+  // ── App record handlers (renames + hidden) ──
+
+  const fetchAppRecords = async () => {
+    try {
+      const response = await authFetch("/api/apps");
+      if (response.ok) {
+        const data = await response.json();
+        setAppRecords(data.apps ?? []);
+      }
+    } catch (error) {
+      console.error("Error fetching app records:", error);
+    }
+  };
+
+  const upsertApp = async (appClass: string, data: Record<string, unknown>) => {
+    const response = await authFetch(`/api/apps/${encodeURIComponent(appClass)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to update app");
+    }
+
+    return response.json();
+  };
+
+  const handleAddRename = async () => {
+    const trimmedClass = newRenameAppClass.trim();
+    const trimmedName = newRenameDisplayName.trim();
+    if (!trimmedClass || !trimmedName) return;
+
+    try {
+      await upsertApp(trimmedClass, { displayName: trimmedName });
+      await fetchAppRecords();
+      await syncAppDataToLocalStorage();
+      setNewRenameAppClass("");
+      setNewRenameDisplayName("");
+      toast.success(`Renamed ${trimmedClass} → ${trimmedName}`);
+    } catch (error) {
+      console.error("Error adding rename:", error);
+      toast.error("Failed to save rename");
+    }
+  };
+
+  const handleSaveEditRename = async (appClass: string) => {
+    const trimmedName = editingRenameValue.trim();
+
+    try {
+      await upsertApp(appClass, { displayName: trimmedName || null });
+      await fetchAppRecords();
+      await syncAppDataToLocalStorage();
+      setEditingRename(null);
+      toast.success(trimmedName ? `Updated rename for ${appClass}` : `Removed rename for ${appClass}`);
+    } catch (error) {
+      console.error("Error updating rename:", error);
+      toast.error("Failed to update rename");
+    }
+  };
+
+  const handleRemoveRename = async (appClass: string) => {
+    try {
+      await upsertApp(appClass, { displayName: null });
+      await fetchAppRecords();
+      await syncAppDataToLocalStorage();
+      toast.success(`Removed rename for ${appClass}`);
+    } catch (error) {
+      console.error("Error removing rename:", error);
+      toast.error("Failed to remove rename");
+    }
+  };
+
+  const handleAddHiddenApp = async () => {
+    const trimmedClass = newHiddenAppClass.trim();
+    if (!trimmedClass) return;
+
+    try {
+      await upsertApp(trimmedClass, { hidden: true });
+      await fetchAppRecords();
+      await syncAppDataToLocalStorage();
+      setNewHiddenAppClass("");
+      toast.success(`Hid ${trimmedClass}`);
+    } catch (error) {
+      console.error("Error hiding app:", error);
+      toast.error("Failed to hide app");
+    }
+  };
+
+  const handleUnhideApp = async (appClass: string) => {
+    try {
+      await upsertApp(appClass, { hidden: false });
+      await fetchAppRecords();
+      await syncAppDataToLocalStorage();
+      toast.success(`Unhid ${appClass}`);
+    } catch (error) {
+      console.error("Error unhiding app:", error);
+      toast.error("Failed to unhide app");
     }
   };
 
@@ -543,40 +621,6 @@ export default function SettingsPage() {
   const handleAiProviderChange = (value: AiProvider) => {
     setAiProvider(value);
     saveSetting("aiProvider", value);
-  };
-
-  const handleAppTitleRenamesChange = (value: string) => {
-    setAppTitleRenamesText(value);
-
-    if (appTitleRenamesTimerRef.current) {
-      clearTimeout(appTitleRenamesTimerRef.current);
-    }
-
-    appTitleRenamesTimerRef.current = setTimeout(() => {
-      const lines = value
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-
-      saveSetting("appTitleRenames", JSON.stringify(lines));
-    }, 1000);
-  };
-
-  const handleHiddenAppClassesChange = (value: string) => {
-    setHiddenAppClassesText(value);
-
-    if (hiddenAppClassesTimerRef.current) {
-      clearTimeout(hiddenAppClassesTimerRef.current);
-    }
-
-    hiddenAppClassesTimerRef.current = setTimeout(() => {
-      const lines = value
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean);
-
-      saveSetting("hiddenAppClasses", JSON.stringify(lines));
-    }, 1000);
   };
 
   const handleJmapTokenChange = (value: string) => {
@@ -1068,18 +1112,114 @@ export default function SettingsPage() {
               />
 
               <div className="space-y-4">
-                <Textarea
-                  id="app_title_renames"
-                  label="Custom App Name Renames"
-                  value={appTitleRenamesText}
-                  onChange={(e) => handleAppTitleRenamesChange(e.target.value)}
-                  placeholder={"nautilus=Files\nfirefox_firefox=Firefox"}
-                  rows={6}
-                  className="font-mono text-sm"
-                  helperText="One rename per line using rawAppClass=Display Name. These are cosmetic only and override the built-in formatting when present."
-                />
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  Example format: <InlineCode>rawAppClass=Display Name</InlineCode>
+                {appRecords.filter((app) => app.displayName).length > 0 ? (
+                  <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-white/10 dark:border-white/10">
+                    {appRecords
+                      .filter((app) => app.displayName)
+                      .map((app) => (
+                        <div key={app.appClass} className="flex items-center gap-3 px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-mono text-slate-500 dark:text-slate-400">{app.appClass}</div>
+                            {editingRename === app.appClass ? (
+                              <div className="mt-1 flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editingRenameValue}
+                                  onChange={(e) => setEditingRenameValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveEditRename(app.appClass);
+                                    if (e.key === "Escape") setEditingRename(null);
+                                  }}
+                                  className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:focus:border-blue-400"
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleSaveEditRename(app.appClass)}
+                                  className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
+                                  title="Save"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => setEditingRename(null)}
+                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                                  title="Cancel"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-sm font-medium text-slate-900 dark:text-white">{app.displayName}</div>
+                            )}
+                          </div>
+                          {editingRename !== app.appClass && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  setEditingRename(app.appClass);
+                                  setEditingRenameValue(app.displayName ?? "");
+                                }}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300"
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveRename(app.appClass)}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                                title="Remove rename"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    No custom renames yet. Add one below, or right-click an app in the timeline to rename it.
+                  </p>
+                )}
+
+                <div className="flex items-end gap-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/20">
+                  <div className="flex-1 space-y-1.5">
+                    <label htmlFor="new_rename_appclass" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      App Class
+                    </label>
+                    <input
+                      id="new_rename_appclass"
+                      type="text"
+                      value={newRenameAppClass}
+                      onChange={(e) => setNewRenameAppClass(e.target.value)}
+                      placeholder="nautilus"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-blue-400"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label htmlFor="new_rename_displayname" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      Display Name
+                    </label>
+                    <input
+                      id="new_rename_displayname"
+                      type="text"
+                      value={newRenameDisplayName}
+                      onChange={(e) => setNewRenameDisplayName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddRename();
+                      }}
+                      placeholder="Files"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-blue-400"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddRename}
+                    disabled={!newRenameAppClass.trim() || !newRenameDisplayName.trim()}
+                    size="sm"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add
+                  </Button>
                 </div>
               </div>
             </Surface>
@@ -1091,16 +1231,61 @@ export default function SettingsPage() {
               />
 
               <div className="space-y-4">
-                <Textarea
-                  id="hidden_app_classes"
-                  label="Hide App Classes From Timeline and Analytics"
-                  value={hiddenAppClassesText}
-                  onChange={(e) => handleHiddenAppClassesChange(e.target.value)}
-                  placeholder={"Easyeffects\nSteam"}
-                  rows={5}
-                  className="font-mono text-sm"
-                  helperText="One raw app class per line. Hidden apps won’t appear in the day timeline or analytics stats, but the underlying activity data remains unchanged."
-                />
+                {appRecords.filter((app) => app.hidden).length > 0 ? (
+                  <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-white/10 dark:border-white/10">
+                    {appRecords
+                      .filter((app) => app.hidden)
+                      .map((app) => (
+                        <div key={app.appClass} className="flex items-center justify-between px-4 py-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-mono text-slate-900 dark:text-white">{app.appClass}</div>
+                            {app.displayName && (
+                              <div className="text-xs text-slate-500 dark:text-slate-400">Display name: {app.displayName}</div>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => handleUnhideApp(app.appClass)}
+                            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-300"
+                            title="Unhide"
+                          >
+                            <Eye className="h-4 w-4" />
+                            Unhide
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    No hidden apps. Right-click an app in the timeline to hide it.
+                  </p>
+                )}
+
+                <div className="flex items-end gap-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/20">
+                  <div className="flex-1 space-y-1.5">
+                    <label htmlFor="new_hidden_appclass" className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                      App Class
+                    </label>
+                    <input
+                      id="new_hidden_appclass"
+                      type="text"
+                      value={newHiddenAppClass}
+                      onChange={(e) => setNewHiddenAppClass(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddHiddenApp();
+                      }}
+                      placeholder="Easyeffects"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-blue-400"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddHiddenApp}
+                    disabled={!newHiddenAppClass.trim()}
+                    size="sm"
+                  >
+                    <EyeOff className="mr-1.5 h-4 w-4" />
+                    Hide
+                  </Button>
+                </div>
               </div>
             </Surface>
           </section>

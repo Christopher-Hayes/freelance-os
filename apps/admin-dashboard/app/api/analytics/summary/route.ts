@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 
 async function getHiddenAppClasses(): Promise<Set<string>> {
-  const settings = await prisma.setting.findUnique({
-    where: { key: 'main' },
-    select: { hiddenAppClasses: true },
+  const hiddenApps = await prisma.app.findMany({
+    where: { hidden: true },
+    select: { appClass: true },
   });
 
-  return new Set((settings?.hiddenAppClasses || []).map((app) => app.toLowerCase()));
+  return new Set(hiddenApps.map((app) => app.appClass.toLowerCase()));
 }
 
 export async function GET(request: Request) {
