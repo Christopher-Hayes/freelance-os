@@ -29,6 +29,7 @@ const settingsSections = [
   { id: "display-options", title: "Display Options" },
   // { id: "app-name-display-overrides", title: "App Name Display Overrides" },
   // { id: "hidden-apps", title: "Hidden Apps" },
+  { id: "authentication", title: "Authentication" },
   { id: "integrations", title: "Integrations" },
   { id: "mcp-server", title: "MCP Server" },
   // { id: "ai-integration", title: "AI Integration" },
@@ -1287,6 +1288,29 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               </div>
+            </Surface>
+          </section>
+
+          <section
+            id="authentication"
+            className="space-y-6 scroll-mt-24"
+          >
+            <SettingsSectionHeader
+              title="Authentication"
+              description="Configure how users sign in to the admin dashboard and client portal."
+            />
+
+            <Surface className="p-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Manage authentication providers, enable or disable sign-in methods, and configure provider settings.
+              </p>
+              <Link
+                href="/settings/auth"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors text-sm font-medium"
+              >
+                <Settings2 className="h-4 w-4" />
+                Manage Auth Providers
+              </Link>
             </Surface>
           </section>
 

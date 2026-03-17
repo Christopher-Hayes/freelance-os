@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
+import bcrypt from 'bcryptjs';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -62,7 +63,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const { name, email, clientId } = body;
+    const { name, email, clientId, role, password } = body;
 
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
@@ -101,12 +102,20 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
+    // Hash password if a new one is provided
+    const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
+
+    // Validate role
+    const validRole = role === 'admin' || role === 'user' ? role : undefined;
+
     // Update the user
     const user = await prisma.user.update({
       where: { id },
       data: {
         name: name !== undefined ? name : undefined,
         email: email !== undefined ? email : undefined,
+        role: validRole,
+        passwordHash,
         clientId: clientId !== undefined ? (clientId ? parseInt(clientId) : null) : undefined,
       },
       include: {

@@ -10,6 +10,7 @@ interface User {
   id: string;
   email: string;
   name: string | null;
+  role: string;
   emailVerified: string | null;
   clientId: number | null;
   image: string | null;
@@ -56,8 +57,12 @@ export default function UserDetailPage() {
     email: '',
     name: '',
     clientId: '',
+    role: 'user',
+    password: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUser();
@@ -74,6 +79,8 @@ export default function UserDetailPage() {
         email: data.user.email,
         name: data.user.name || '',
         clientId: data.user.clientId?.toString() || '',
+        role: data.user.role || 'user',
+        password: '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load user');
@@ -87,7 +94,7 @@ export default function UserDetailPage() {
       const response = await authFetch('/api/clients');
       if (!response.ok) throw new Error('Failed to fetch clients');
       const data = await response.json();
-      setClients(data.clients);
+      setClients(Array.isArray(data) ? data : data.clients ?? []);
     } catch (err) {
       console.error('Failed to fetch clients:', err);
     }
@@ -106,6 +113,8 @@ export default function UserDetailPage() {
           email: formData.email,
           name: formData.name || null,
           clientId: formData.clientId || null,
+          role: formData.role,
+          password: formData.password || undefined,
         }),
       });
 
@@ -151,6 +160,23 @@ export default function UserDetailPage() {
     }
   }
 
+  async function handleResendVerification() {
+    setResendingVerification(true);
+    setResendMessage(null);
+    try {
+      const response = await authFetch(`/api/users/${userId}/resend-verification`, {
+        method: 'POST',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to send verification email');
+      setResendMessage(data.message);
+    } catch (err) {
+      setResendMessage(err instanceof Error ? err.message : 'Failed to send verification email');
+    } finally {
+      setResendingVerification(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -185,7 +211,19 @@ export default function UserDetailPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">{user.name || user.email}</h1>
+            <h1 className="text-3xl font-bold">
+              {user.name || user.email}
+              {' '}
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium align-middle ${
+                  user.role === 'admin'
+                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {user.role}
+              </span>
+            </h1>
             <p className="mt-2 text-gray-600 dark:text-gray-400">User Details</p>
           </div>
           <div className="flex gap-2">
@@ -212,6 +250,8 @@ export default function UserDetailPage() {
                     email: user.email,
                     name: user.name || '',
                     clientId: user.clientId?.toString() || '',
+                    role: user.role || 'user',
+                    password: '',
                   });
                 }}
                 className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
@@ -274,6 +314,35 @@ export default function UserDetailPage() {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium mb-1">Role</label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Admin users can access the admin dashboard. Regular users can only access the client portal.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Password</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                  placeholder="Leave blank to keep current password"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Leave blank to keep the current password unchanged.
+                </p>
+              </div>
+
               <button
                 type="submit"
                 disabled={submitting}
@@ -295,10 +364,24 @@ export default function UserDetailPage() {
                 <p className="mt-1">{user.name || '-'}</p>
               </div>
               <div>
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Role:</span>
+                <p className="mt-1">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      user.role === 'admin'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {user.role}
+                  </span>
+                </p>
+              </div>
+              <div>
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                   Email Verified:
                 </span>
-                <p className="mt-1">
+                <div className="mt-1 flex flex-wrap items-center gap-3">
                   {user.emailVerified ? (
                     <span className="text-green-700 dark:text-green-400">
                       {formatDateTime(parseUTC(user.emailVerified))}
@@ -306,7 +389,19 @@ export default function UserDetailPage() {
                   ) : (
                     <span className="text-yellow-600 dark:text-yellow-400">Not verified</span>
                   )}
-                </p>
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={resendingVerification}
+                    className="rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                  >
+                    {resendingVerification ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                </div>
+                {resendMessage && (
+                  <p className={`mt-1 text-xs ${resendMessage.toLowerCase().includes('fail') || resendMessage.toLowerCase().includes('error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {resendMessage}
+                  </p>
+                )}
               </div>
               <div>
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">

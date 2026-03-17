@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   // Public routes that don't require authentication
   const publicRoutes = ["/auth/signin", "/auth/error", "/auth/verify-request"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
@@ -13,24 +13,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for bearer token in Authorization header (for API routes)
+  // Allow bearer token through for API routes
   const authHeader = request.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
-    // Let the API route handle token validation
     return NextResponse.next();
   }
 
-  // Check for session cookie
-  const sessionToken = request.cookies.get("authjs.session-token")?.value;
-  
-  // Redirect to signin if no session cookie
+  // Check for NextAuth session token (JWT-based)
+  const sessionToken =
+    request.cookies.get("authjs.session-token")?.value ||
+    request.cookies.get("__Secure-authjs.session-token")?.value;
+
   if (!sessionToken) {
     const signInUrl = new URL("/auth/signin", request.url);
     signInUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(signInUrl);
   }
 
-  // Allow authenticated users to access protected routes
   return NextResponse.next();
 }
 

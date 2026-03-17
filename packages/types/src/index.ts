@@ -382,3 +382,25 @@ export interface ApiKeyListItem {
   expiresAt: string | null;
   createdAt: string;
 }
+
+// User types
+export type UserRole = "admin" | "user";
+
+export interface User {
+  id: string;
+  name: string | null;
+  email: string;
+  role: UserRole;
+  clientId: number | null;
+  createdAt?: Date;
+}
+
+// Auth provider configuration
+export interface AuthProviderConfig {
+  id: string;
+  provider: string;
+  enabled: boolean;
+  config?: Record<string, unknown> | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+}

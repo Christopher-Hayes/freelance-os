@@ -187,6 +187,8 @@ model User {
   email         String    @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
+  role          String    @default("user") // "admin" or "user"
+  passwordHash  String?   @map("password_hash") // For credentials provider
   clientId      Int?      @map("client_id") // Link to Client table for portal access
 
   accounts Account[]
@@ -222,6 +224,18 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+// Auth provider configuration (which providers are enabled + their settings)
+model AuthProviderConfig {
+  id        String   @id @default(cuid())
+  provider  String   @unique // "credentials", "email", "github", etc.
+  enabled   Boolean  @default(false)
+  config    Json?    // Provider-specific configuration
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("auth_provider_configs")
 }
 
 // Enum for AI provider selection

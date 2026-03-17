@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
+import bcrypt from 'bcryptjs';
 
 // GET /api/users - List all users
 export async function GET(request: NextRequest) {
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role,
       emailVerified: user.emailVerified,
       clientId: user.clientId,
       lastLogin: user.sessions[0]?.expires
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, name, clientId } = body;
+    const { email, name, clientId, role, password } = body;
 
     // Validate required fields
     if (!email) {
@@ -63,6 +65,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Validate role
+    const userRole = role === 'admin' ? 'admin' : 'user';
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -90,11 +95,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Hash password if provided
+    const passwordHash = password ? await bcrypt.hash(password, 12) : null;
+
     // Create the user
     const user = await prisma.user.create({
       data: {
         email,
         name: name || null,
+        role: userRole,
+        passwordHash,
         clientId: clientId ? parseInt(clientId) : null,
       },
     });

@@ -11,6 +11,7 @@ interface User {
   id: string;
   email: string;
   name: string | null;
+  role: string;
   emailVerified: string | null;
   clientId: number | null;
   lastLogin: string | null;
@@ -35,6 +36,8 @@ export default function UsersPage() {
     email: '',
     name: '',
     clientId: '',
+    role: 'user',
+    password: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,6 +84,8 @@ export default function UsersPage() {
           email: formData.email,
           name: formData.name || null,
           clientId: formData.clientId || null,
+          role: formData.role,
+          password: formData.password || undefined,
         }),
       });
 
@@ -91,7 +96,7 @@ export default function UsersPage() {
       }
 
       alert(data.message || 'User created successfully!');
-      setFormData({ email: '', name: '', clientId: '' });
+      setFormData({ email: '', name: '', clientId: '', role: 'user', password: '' });
       setShowNewUserForm(false);
       fetchUsers();
     } catch (err) {
@@ -207,6 +212,35 @@ export default function UsersPage() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium mb-1">Role</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Admin users can access the admin dashboard. Regular users can only access the client portal.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Password</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                placeholder="Leave blank to use email-only login"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Optional. If set, the user can sign in with email + password.
+              </p>
+            </div>
+
             <div className="flex gap-2">
               <button
                 type="submit"
@@ -219,7 +253,7 @@ export default function UsersPage() {
                 type="button"
                 onClick={() => {
                   setShowNewUserForm(false);
-                  setFormData({ email: '', name: '', clientId: '' });
+                  setFormData({ email: '', name: '', clientId: '', role: 'user', password: '' });
                 }}
                 className="rounded-lg border border-gray-300 px-4 py-2 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700"
               >
@@ -236,6 +270,7 @@ export default function UsersPage() {
             <tr>
               <th className="px-6 py-3 text-left text-sm font-semibold">Email</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Name</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold">Role</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Linked Client</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Verified</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Last Login</th>
@@ -246,7 +281,7 @@ export default function UsersPage() {
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   No users found. Create your first user to get started.
                 </td>
               </tr>
@@ -255,6 +290,17 @@ export default function UsersPage() {
                 <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                   <td className="px-6 py-4 text-sm">{user.email}</td>
                   <td className="px-6 py-4 text-sm">{user.name || '-'}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        user.role === 'admin'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {user.role}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-sm">
                     <span
                       className={
