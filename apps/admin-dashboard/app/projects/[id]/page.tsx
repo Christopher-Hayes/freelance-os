@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { APIFooter } from '@repo/ui';
+import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { APIFooter, OptionsMenu, OptionsMenuItem } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
 import { WeeklySummaries } from './WeeklySummaries';
 import { authFetch } from '@/lib/util';
@@ -30,6 +31,7 @@ type Project = {
   privateNotes: string | null;
   status: string;
   color: string;
+  billable: boolean;
   startDate: string | null;
   endDate: string | null;
   client: Client;
@@ -40,98 +42,84 @@ type Project = {
   };
 };
 
-const statusColors = {
-  active: 'bg-green-100 text-green-800',
-  completed: 'bg-blue-100 text-blue-800',
-  'on-hold': 'bg-yellow-100 text-yellow-800',
-};
+const COLOR_PRESETS = [
+  { name: 'Green', value: '#22C55E' },
+  { name: 'Blue', value: '#3B82F6' },
+  { name: 'Purple', value: '#A855F7' },
+  { name: 'Red', value: '#EF4444' },
+  { name: 'Orange', value: '#F97316' },
+  { name: 'Yellow', value: '#EAB308' },
+  { name: 'Pink', value: '#EC4899' },
+  { name: 'Teal', value: '#14B8A6' },
+  { name: 'Indigo', value: '#6366F1' },
+  { name: 'Cyan', value: '#06B6D4' },
+];
 
-const statusLabels = {
-  active: 'Active',
-  completed: 'Completed',
-  'on-hold': 'On Hold',
-};
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active', classes: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  { value: 'on-hold', label: 'On Hold', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
+  { value: 'completed', label: 'Completed', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+];
 
-export default function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+function statusClasses(status: string) {
+  return STATUS_OPTIONS.find((s) => s.value === status)?.classes ?? 'bg-gray-100 text-gray-800';
+}
+function statusLabel(status: string) {
+  return STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
+}
+
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const [project, setProject] = useState<Project | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    clientDescription: '',
-    privateNotes: '',
-    clientId: '',
-    status: 'active',
-    color: '#22C55E', // Default green
-    billable: true, // Default billable
-    startDate: '',
-    endDate: '',
-  });
 
-  // Preset color options
-  const colorPresets = [
-    { name: 'Green', value: '#22C55E' },
-    { name: 'Blue', value: '#3B82F6' },
-    { name: 'Purple', value: '#A855F7' },
-    { name: 'Red', value: '#EF4444' },
-    { name: 'Orange', value: '#F97316' },
-    { name: 'Yellow', value: '#EAB308' },
-    { name: 'Pink', value: '#EC4899' },
-    { name: 'Teal', value: '#14B8A6' },
-    { name: 'Indigo', value: '#6366F1' },
-    { name: 'Cyan', value: '#06B6D4' },
-  ];
+  // Inline editing
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null>(null);
+
+  // Confirmations
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
       setProjectId(id);
       fetchProject(id);
       fetchClients();
-      
-      // Check if we should start in edit mode
-      const shouldEdit = searchParams.get('edit') === 'true';
-      if (shouldEdit) {
-        setEditing(true);
+      if (searchParams.get('edit') === 'true') {
+        // No longer auto-opening a full edit form; ignore this param
       }
     });
   }, [params, searchParams]);
 
-  const fetchProject = async (id: string) => {
+  useEffect(() => {
+    if (editingField && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [editingField]);
+
+  async function fetchProject(id: string) {
     try {
       setLoading(true);
       const res = await authFetch(`/api/projects/${id}`);
       if (!res.ok) throw new Error('Failed to fetch project');
       const data = await res.json();
       setProject(data);
-      setFormData({
-        name: data.name,
-        clientDescription: data.clientDescription || '',
-        privateNotes: data.privateNotes || '',
-        clientId: data.client.id.toString(),
-        status: data.status,
-        color: data.color || '#22C55E',
-        billable: data.billable ?? true,
-        startDate: data.startDate ? data.startDate.split('T')[0] : '',
-        endDate: data.endDate ? data.endDate.split('T')[0] : '',
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const fetchClients = async () => {
+  async function fetchClients() {
     try {
       const res = await authFetch('/api/clients');
       if (!res.ok) throw new Error('Failed to fetch clients');
@@ -140,100 +128,132 @@ export default function ProjectDetailPage({
     } catch (err) {
       console.error('Error fetching clients:', err);
     }
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!projectId) return;
+  function startEditing(field: string, value: string) {
+    setEditingField(field);
+    setEditValue(value);
+    setFieldError(null);
+  }
 
+  function cancelEditing() {
+    setEditingField(null);
+    setEditValue('');
+    setFieldError(null);
+  }
+
+  async function saveField(field: string, value: string) {
+    if (!project || !projectId) return;
     setSaving(true);
-    setError(null);
+    setFieldError(null);
+
+    const payload: Record<string, unknown> = {
+      name: project.name,
+      clientDescription: project.clientDescription || '',
+      privateNotes: project.privateNotes || '',
+      clientId: project.client.id.toString(),
+      status: project.status,
+      color: project.color,
+      billable: project.billable,
+      startDate: project.startDate ? project.startDate.split('T')[0] : null,
+      endDate: project.endDate ? project.endDate.split('T')[0] : null,
+      [field]: value || null,
+    };
+
+    // Coerce certain fields
+    if (field === 'billable') payload.billable = value === 'true';
+    if (field === 'name') payload.name = value;
+    if (field === 'startDate' || field === 'endDate') payload[field] = value || null;
 
     try {
       const res = await authFetch(`/api/projects/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          startDate: formData.startDate || null,
-          endDate: formData.endDate || null,
-        }),
+        body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to update project');
-      }
-
-      const updatedProject = await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
       setProject({
-        ...updatedProject,
-        timeEntries: project?.timeEntries || [],
-        totalHours: project?.totalHours || 0,
-        _count: project?._count || { timeEntries: 0 },
+        ...data,
+        timeEntries: project.timeEntries,
+        totalHours: project.totalHours,
+        _count: project._count,
       });
-      setEditing(false);
+      setEditingField(null);
+      setEditValue('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setFieldError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleDelete = async () => {
-    if (!projectId || !project) return;
-    
-    if (!confirm('Are you sure you want to delete this project? This will also delete all associated time entries.')) {
-      return;
-    }
-
+  async function toggleBillable() {
+    if (!project || !projectId) return;
+    const newValue = !project.billable;
+    setSaving(true);
     try {
       const res = await authFetch(`/api/projects/${projectId}`, {
-        method: 'DELETE',
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: project.name,
+          clientDescription: project.clientDescription || '',
+          privateNotes: project.privateNotes || '',
+          clientId: project.client.id.toString(),
+          status: project.status,
+          color: project.color,
+          billable: newValue,
+          startDate: project.startDate ? project.startDate.split('T')[0] : null,
+          endDate: project.endDate ? project.endDate.split('T')[0] : null,
+        }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      setProject({ ...project, billable: newValue });
+    } catch (err) {
+      setFieldError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
 
+  function handleKeyDown(e: React.KeyboardEvent, field: string, isTextarea = false) {
+    if (e.key === 'Enter' && !isTextarea) { e.preventDefault(); saveField(field, editValue); }
+    if (e.key === 'Escape') cancelEditing();
+  }
+
+  async function handleDelete() {
+    if (!projectId || !project) return;
+    try {
+      const res = await authFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete project');
-      
-      const result = await res.json();
-      alert(`Project deleted successfully. ${result.deletedTimeEntries} time entries were also deleted.`);
       router.push('/projects');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete project');
+      setShowDeleteConfirm(false);
+      setError(err instanceof Error ? err.message : 'Failed to delete project');
     }
-  };
+  }
 
   const handleGenerateCode = async (endpoint: any, language: string) => {
-    // Replace {id} placeholder with actual project ID in the path
     const endpointWithActualId = {
       ...endpoint,
       path: endpoint.path.replace('{id}', projectId || '1'),
     };
-    
     return await generateCode(endpointWithActualId, language);
   };
 
   if (loading) {
-    return (
-      <div className="p-8">
-        <div className="animate-pulse dark:text-white">Loading project...</div>
-      </div>
-    );
+    return <div className="p-8 animate-pulse dark:text-white">Loading project...</div>;
   }
 
   if (error && !project) {
     return (
       <div className="p-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded">
+        <div className="rounded border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           Error: {error}
         </div>
-        <Link href="/projects" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-4 inline-block">
+        <Link href="/projects" className="mt-4 inline-block text-blue-600 hover:underline dark:text-blue-400">
           ← Back to Projects
         </Link>
       </div>
@@ -242,427 +262,458 @@ export default function ProjectDetailPage({
 
   if (!project) return null;
 
+  // ── Inline-edit helpers ──
+
+  function FieldPencil({ field, value }: { field: string; value: string }) {
+    return (
+      <button
+        onClick={() => startEditing(field, value)}
+        title={`Edit ${field}`}
+        className="ml-1.5 rounded p-1 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    );
+  }
+
+  function FieldActions({ field, isTextarea = false }: { field: string; isTextarea?: boolean }) {
+    return (
+      <div className={`flex items-center gap-1 ${isTextarea ? 'mt-2' : 'ml-2'}`}>
+        <button
+          onClick={() => saveField(field, editValue)}
+          disabled={saving}
+          title="Save"
+          className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/20"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={cancelEditing}
+          disabled={saving}
+          title="Cancel"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="max-w-4xl p-8">
       <div className="mb-6">
-        <Link href="/projects" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm">
+        <Link href="/projects" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
           ← Back to Projects
         </Link>
       </div>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-4 rounded mb-6">
+        <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
       )}
+      {fieldError && (
+        <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          {fieldError}
+        </div>
+      )}
 
-      {editing ? (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <h1 className="text-3xl font-bold dark:text-white mb-6">Edit Project</h1>
-
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Project Name *
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              required
-              value={formData.name}
-              onChange={handleChange}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="clientId" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Client *
-            </label>
-            <select
-              id="clientId"
-              name="clientId"
-              required
-              value={formData.clientId}
-              onChange={handleChange}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            >
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name} {client.company ? `(${client.company})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="clientDescription" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Client-Viewable Description
-            </label>
-            <textarea
-              id="clientDescription"
-              name="clientDescription"
-              value={formData.clientDescription}
-              onChange={handleChange}
-              rows={3}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              This description will be visible to the client in their portal
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="privateNotes" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Private Notes
-            </label>
-            <textarea
-              id="privateNotes"
-              name="privateNotes"
-              value={formData.privateNotes}
-              onChange={handleChange}
-              rows={3}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              These notes are only visible to you and can include AI activity matching rules
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Status
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            >
-              <option value="active">Active</option>
-              <option value="on-hold">On Hold</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                name="billable"
-                checked={formData.billable}
-                onChange={(e) => setFormData((prev) => ({ ...prev, billable: e.target.checked }))}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                Billable Project
-              </span>
-            </label>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              When enabled, time entries will default to billable and show billable tracking options
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium dark:text-gray-300 mb-2">
-              Project Color
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {colorPresets.map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, color: preset.value }))}
-                  className={`w-10 h-10 rounded-full border-2 transition-all ${
-                    formData.color === preset.value
-                      ? 'border-gray-900 dark:border-white scale-110'
-                      : 'border-gray-300 dark:border-gray-600 hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: preset.value }}
-                  title={preset.name}
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                id="color"
-                name="color"
-                value={formData.color}
-                onChange={handleChange}
-                className="h-10 w-20 border border-gray-300 dark:border-gray-600 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={formData.color}
-                onChange={(e) => setFormData((prev) => ({ ...prev, color: e.target.value }))}
-                placeholder="#22C55E"
-                className="flex-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                pattern="^#[0-9A-Fa-f]{6}$"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="startDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
-                Start Date
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                name="startDate"
-                value={formData.startDate}
-                onChange={handleChange}
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-medium dark:text-gray-300 mb-2">
-                End Date
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                name="endDate"
-                value={formData.endDate}
-                onChange={handleChange}
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-blue-300 dark:disabled:bg-blue-700 disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                setError(null);
-                if (project) {
-                  setFormData({
-                    name: project.name,
-                    clientDescription: project.clientDescription || '',
-                    privateNotes: project.privateNotes || '',
-                    clientId: project.client.id.toString(),
-                    status: project.status,
-                    color: project.color || '#22C55E',
-                    billable: (project as any).billable ?? true,
-                    startDate: project.startDate ? (project.startDate.split('T')[0] ?? '') : '',
-                    endDate: project.endDate ? (project.endDate.split('T')[0] ?? '') : '',
-                  });
-                }
-              }}
-              className="border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-6 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-600"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
+      {/* ── Header ── */}
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                {/* Color dot indicator */}
-                <div 
-                  className="w-4 h-4 rounded-full shrink-0" 
-                  style={{ backgroundColor: project.color || '#22C55E' }}
-                />
-                <h1 className="text-3xl font-bold dark:text-white">{project.name}</h1>
-                <span
-                  className={`px-3 py-1 text-sm font-medium rounded ${
-                    statusColors[project.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'
-                  }`}
+          <div className="mb-2 flex items-center gap-3">
+            <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: project.color || '#22C55E' }} />
+            <div className="group flex items-center">
+              {editingField === 'name' ? (
+                <>
+                  <input
+                    ref={inputRef as React.RefObject<HTMLInputElement>}
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, 'name')}
+                    className="rounded border border-blue-400 bg-white px-2 py-1 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <FieldActions field="name" />
+                </>
+              ) : (
+                <>
+                  <h1 className="text-3xl font-bold dark:text-white">{project.name}</h1>
+                  <FieldPencil field="name" value={project.name} />
+                </>
+              )}
+            </div>
+
+            {/* Status badge — click to cycle or inline-select */}
+            {editingField === 'status' ? (
+              <div className="flex items-center gap-1">
+                <select
+                  ref={inputRef as React.RefObject<HTMLSelectElement>}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'status')}
+                  className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >
-                  {statusLabels[project.status as keyof typeof statusLabels] || project.status}
-                </span>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+                <FieldActions field="status" />
               </div>
-              <div className="text-gray-600 dark:text-gray-400">
-                Client:{' '}
-                <Link
-                  href={`/clients/${project.client.id}`}
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+            ) : (
+              <button
+                onClick={() => startEditing('status', project.status)}
+                className={`rounded px-3 py-1 text-sm font-medium transition hover:opacity-80 ${statusClasses(project.status)}`}
+                title="Click to change status"
+              >
+                {statusLabel(project.status)}
+              </button>
+            )}
+          </div>
+
+          <div className="text-gray-600 dark:text-gray-400">
+            Client:{' '}
+            {editingField === 'clientId' ? (
+              <span className="inline-flex items-center gap-1">
+                <select
+                  ref={inputRef as React.RefObject<HTMLSelectElement>}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'clientId')}
+                  className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
                 >
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.company ? ` (${c.company})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <FieldActions field="clientId" />
+              </span>
+            ) : (
+              <span className="group inline-flex items-center">
+                <Link href={`/clients/${project.client.id}`} className="text-blue-600 hover:underline dark:text-blue-400">
                   {project.client.name}
                 </Link>
                 {project.client.company && ` (${project.client.company})`}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setEditing(true)}
-                className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600"
-              >
-                Edit
-              </button>
-              <button
-                onClick={handleDelete}
-                className="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700 dark:hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-
-          {(project.clientDescription || project.privateNotes) && (
-            <div className="mb-6 space-y-4">
-              {project.clientDescription && (
-                <div>
-                  <h2 className="text-lg font-semibold dark:text-white mb-2">Client-Viewable Description</h2>
-                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{project.clientDescription}</p>
-                </div>
-              )}
-              {project.privateNotes && (
-                <div>
-                  <h2 className="text-lg font-semibold dark:text-white mb-2">Private Notes</h2>
-                  <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap italic border-l-2 border-gray-300 dark:border-gray-600 pl-3">
-                    {project.privateNotes}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div 
-              className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800" 
-            >
-              <div className="text-sm text-gray-600 dark:text-gray-400">Total Hours</div>
-              <div className="text-2xl font-bold dark:text-white">{project.totalHours}</div>
-            </div>
-            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
-              <div className="text-sm text-gray-600 dark:text-gray-400">Time Entries</div>
-              <div className="text-2xl font-bold dark:text-white">{project._count.timeEntries}</div>
-            </div>
-            {project.startDate && (
-              <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
-                <div className="text-lg font-semibold dark:text-white">
-                  {new Date(project.startDate).toLocaleDateString()}
-                </div>
-              </div>
-            )}
-            {project.endDate && (
-              <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
-                <div className="text-lg font-semibold dark:text-white">
-                  {new Date(project.endDate).toLocaleDateString()}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mb-8">
-            <WeeklySummaries projectId={project.id} projectName={project.name} timeEntries={project.timeEntries} />
-          </div>
-
-          <div>
-            <h2 className="text-xl font-semibold dark:text-white mb-4">Recent Time Entries</h2>
-            {project.timeEntries.length === 0 ? (
-              <p className="text-gray-600 dark:text-gray-400">No time entries yet</p>
-            ) : (
-              <div className="space-y-2">
-                {project.timeEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded p-4 flex justify-between items-start"
-                  >
-                    <div>
-                      <div className="font-medium dark:text-white">
-                        {entry.description || 'No description'}
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(entry.startTime).toLocaleDateString()} at{' '}
-                        {new Date(entry.startTime).toLocaleTimeString()}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold dark:text-white">
-                        {(entry.durationMinutes / 60).toFixed(2)} hrs
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {entry.billable ? 'Billable' : 'Non-billable'}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                <FieldPencil field="clientId" value={project.client.id.toString()} />
+              </span>
             )}
           </div>
         </div>
-      )}
+
+        <OptionsMenu label="Project options">
+          <OptionsMenuItem
+            onClick={() => setShowDeleteConfirm(true)}
+            tone="danger"
+            icon={<Trash2 className="h-4 w-4" />}
+          >
+            Delete project
+          </OptionsMenuItem>
+        </OptionsMenu>
+      </div>
+
+      {/* ── Stats grid ── */}
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Total Hours</div>
+          <div className="text-2xl font-bold dark:text-white">{project.totalHours}</div>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+          <div className="text-sm text-gray-600 dark:text-gray-400">Time Entries</div>
+          <div className="text-2xl font-bold dark:text-white">{project._count.timeEntries}</div>
+        </div>
+        {project.startDate && (
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <div className="text-sm text-gray-600 dark:text-gray-400">Start Date</div>
+            <div className="text-lg font-semibold dark:text-white">
+              {new Date(project.startDate).toLocaleDateString()}
+            </div>
+          </div>
+        )}
+        {project.endDate && (
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+            <div className="text-sm text-gray-600 dark:text-gray-400">End Date</div>
+            <div className="text-lg font-semibold dark:text-white">
+              {new Date(project.endDate).toLocaleDateString()}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Project Details card ── */}
+      <div className="mb-8 rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <h2 className="mb-4 text-xl font-semibold dark:text-white">Project Details</h2>
+        <dl className="space-y-5">
+
+          {/* Client Description */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Client-Viewable Description
+            </dt>
+            <dd className="mt-1">
+              {editingField === 'clientDescription' ? (
+                <div>
+                  <textarea
+                    ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, 'clientDescription', true)}
+                    rows={3}
+                    className="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <FieldActions field="clientDescription" isTextarea />
+                </div>
+              ) : (
+                <div className="group flex items-start">
+                  <span className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {project.clientDescription || <span className="italic text-gray-400">None</span>}
+                  </span>
+                  <FieldPencil field="clientDescription" value={project.clientDescription || ''} />
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Visible to the client in their portal</p>
+            </dd>
+          </div>
+
+          {/* Private Notes */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Private Notes</dt>
+            <dd className="mt-1">
+              {editingField === 'privateNotes' ? (
+                <div>
+                  <textarea
+                    ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, 'privateNotes', true)}
+                    rows={3}
+                    className="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <FieldActions field="privateNotes" isTextarea />
+                </div>
+              ) : (
+                <div className="group flex items-start">
+                  <span className="italic text-gray-600 dark:text-gray-400 whitespace-pre-wrap border-l-2 border-gray-300 pl-3 dark:border-gray-600">
+                    {project.privateNotes || <span className="not-italic text-gray-400">None</span>}
+                  </span>
+                  <FieldPencil field="privateNotes" value={project.privateNotes || ''} />
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Only visible to you</p>
+            </dd>
+          </div>
+
+          {/* Billable toggle */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Billable</dt>
+            <dd className="mt-1">
+              <button
+                onClick={toggleBillable}
+                disabled={saving}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${project.billable ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+                role="switch"
+                aria-checked={project.billable}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${project.billable ? 'translate-x-4' : 'translate-x-0'}`}
+                />
+              </button>
+              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                {project.billable ? 'Yes — time entries default to billable' : 'No'}
+              </span>
+            </dd>
+          </div>
+
+          {/* Color */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</dt>
+            <dd className="mt-1">
+              {editingField === 'color' ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_PRESETS.map((p) => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setEditValue(p.value)}
+                        className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${editValue === p.value ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'}`}
+                        style={{ backgroundColor: p.value }}
+                        title={p.name}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      className="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                    />
+                    <input
+                      ref={inputRef as React.RefObject<HTMLInputElement>}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, 'color')}
+                      className="w-28 rounded border border-blue-400 bg-white px-2 py-1 font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      maxLength={7}
+                      placeholder="#22C55E"
+                    />
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => saveField('color', editValue)} disabled={saving} title="Save" className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/20">
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={cancelEditing} disabled={saving} title="Cancel" className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="group flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full border border-black/10 dark:border-white/20" style={{ backgroundColor: project.color || '#22C55E' }} aria-hidden="true" />
+                  <span className="font-mono text-sm uppercase text-gray-900 dark:text-white">{project.color || '#22C55E'}</span>
+                  <FieldPencil field="color" value={project.color || '#22C55E'} />
+                </div>
+              )}
+            </dd>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Start Date</dt>
+            <dd className="group mt-1 flex items-center">
+              {editingField === 'startDate' ? (
+                <>
+                  <input
+                    ref={inputRef as React.RefObject<HTMLInputElement>}
+                    type="date"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, 'startDate')}
+                    className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <FieldActions field="startDate" />
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-900 dark:text-white">
+                    {project.startDate ? new Date(project.startDate).toLocaleDateString() : <span className="italic text-gray-400">Not set</span>}
+                  </span>
+                  <FieldPencil field="startDate" value={project.startDate ? project.startDate.split('T')[0] : ''} />
+                </>
+              )}
+            </dd>
+          </div>
+
+          {/* End Date */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">End Date</dt>
+            <dd className="group mt-1 flex items-center">
+              {editingField === 'endDate' ? (
+                <>
+                  <input
+                    ref={inputRef as React.RefObject<HTMLInputElement>}
+                    type="date"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, 'endDate')}
+                    className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                  <FieldActions field="endDate" />
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-900 dark:text-white">
+                    {project.endDate ? new Date(project.endDate).toLocaleDateString() : <span className="italic text-gray-400">Not set</span>}
+                  </span>
+                  <FieldPencil field="endDate" value={project.endDate ? project.endDate.split('T')[0] : ''} />
+                </>
+              )}
+            </dd>
+          </div>
+
+        </dl>
+      </div>
+
+      {/* ── Weekly Summaries ── */}
+      <div className="mb-8">
+        <WeeklySummaries projectId={project.id} projectName={project.name} timeEntries={project.timeEntries} />
+      </div>
+
+      {/* ── Time Entries ── */}
+      <div className="mb-8">
+        <h2 className="mb-4 text-xl font-semibold dark:text-white">Recent Time Entries</h2>
+        {project.timeEntries.length === 0 ? (
+          <p className="text-gray-600 dark:text-gray-400">No time entries yet</p>
+        ) : (
+          <div className="space-y-2">
+            {project.timeEntries.map((entry) => (
+              <div key={entry.id} className="flex items-start justify-between rounded border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                <div>
+                  <div className="font-medium dark:text-white">{entry.description || 'No description'}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    {new Date(entry.startTime).toLocaleDateString()} at {new Date(entry.startTime).toLocaleTimeString()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-semibold dark:text-white">{(entry.durationMinutes / 60).toFixed(2)} hrs</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{entry.billable ? 'Billable' : 'Non-billable'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <APIFooter
         enableApiKeys
         enableCodeGen
-        onGenerateApiKey={() => window.location.href = '/api-demo'}
+        onGenerateApiKey={() => { window.location.href = '/api-demo'; }}
         onGenerateCode={handleGenerateCode}
         endpoints={[
-          {
-            method: "GET",
-            path: "/projects/{id}",
-            description: "Get a specific project with time entries and summary",
-            queryParams: [
-              {
-                name: "id",
-                type: "number",
-                required: true,
-                description: "Project ID (in URL path)",
-              },
-            ],
-          },
-          {
-            method: "PUT",
-            path: "/projects/{id}",
-            description: "Update a project",
-            queryParams: [
-              {
-                name: "id",
-                type: "number",
-                required: true,
-                description: "Project ID (in URL path)",
-              },
-            ],
-            body: JSON.stringify(
-              {
-                name: "Updated Project Name",
-                clientId: 1,
-                clientDescription: "Updated description",
-                privateNotes: "Updated notes",
-                status: "completed",
-                color: "#3B82F6",
-                billable: true,
-                startDate: "2025-01-01",
-                endDate: "2025-12-31",
-              },
-              null,
-              2
-            ),
-          },
-          {
-            method: "DELETE",
-            path: "/projects/{id}",
-            description: "Delete a project (cascades to time entries)",
-            queryParams: [
-              {
-                name: "id",
-                type: "number",
-                required: true,
-                description: "Project ID (in URL path)",
-              },
-            ],
-          },
+          { method: 'GET', path: '/projects/{id}', description: 'Get a specific project with time entries and summary', queryParams: [{ name: 'id', type: 'number', required: true, description: 'Project ID (in URL path)' }] },
+          { method: 'PUT', path: '/projects/{id}', description: 'Update a project', queryParams: [{ name: 'id', type: 'number', required: true, description: 'Project ID (in URL path)' }], body: JSON.stringify({ name: 'Updated Project Name', clientId: 1, clientDescription: 'Updated description', privateNotes: 'Updated notes', status: 'completed', color: '#3B82F6', billable: true, startDate: '2025-01-01', endDate: '2025-12-31' }, null, 2) },
+          { method: 'DELETE', path: '/projects/{id}', description: 'Delete a project (cascades to time entries)', queryParams: [{ name: 'id', type: 'number', required: true, description: 'Project ID (in URL path)' }] },
         ]}
       />
+
+      {/* ── Delete confirmation ── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowDeleteConfirm(false)} />
+          <div
+            className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/40">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Delete project?</h3>
+            </div>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              <span className="font-medium text-gray-700 dark:text-gray-300">{project.name}</span> and all
+              associated time entries will be permanently deleted.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+              >
+                Yes, delete it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

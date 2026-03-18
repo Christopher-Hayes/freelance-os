@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Check, Mail, Pencil, Trash2, X } from 'lucide-react';
+import { OptionsMenu, OptionsMenuItem, OptionsMenuSeparator } from '@repo/ui';
 import { authFetch } from '@/lib/util';
 
 interface Client {
@@ -45,485 +47,579 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    company: '',
-    color: '#06B6D4',
-  });
+  const [error, setError] = useState<string | null>(null);
   const [clientId, setClientId] = useState<string>('');
 
+  // Inline editing
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Confirmations / actions
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEmailConfirm, setShowEmailConfirm] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
-    params.then(p => setClientId(p.id));
+    params.then((p) => setClientId(p.id));
   }, [params]);
 
   useEffect(() => {
     if (!clientId) return;
-    
-    const fetchClient = async () => {
-      try {
-        const response = await authFetch(`/api/clients/${clientId}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch client');
-        }
-        const data = await response.json();
-        setClient(data);
-        setFormData({
-          name: data.name,
-          email: data.email,
-          company: data.company || '',
-          color: data.color || '#06B6D4',
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load client');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchClient();
   }, [clientId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  useEffect(() => {
+    if (editingField && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [editingField]);
 
+  async function fetchClient() {
     try {
-      const response = await authFetch(`/api/clients/${clientId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update client');
-      }
-
-      const updatedClient = await response.json();
-      setClient(updatedClient);
-      setEditing(false);
-      router.refresh();
+      const res = await authFetch(`/api/clients/${clientId}`);
+      if (!res.ok) throw new Error('Failed to fetch client');
+      const data = await res.json();
+      setClient(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update client');
+      setError(err instanceof Error ? err.message : 'Failed to load client');
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${client?.name}? This will also delete all associated projects, time entries, and invoices.`)) {
-      return;
-    }
+  function startEditing(field: string, value: string) {
+    setEditingField(field);
+    setEditValue(value);
+    setFieldError(null);
+  }
 
-    setDeleting(true);
-    setError('');
+  function cancelEditing() {
+    setEditingField(null);
+    setEditValue('');
+    setFieldError(null);
+  }
+
+  async function saveField(field: string, value: string) {
+    if (!client) return;
+    setSaving(true);
+    setFieldError(null);
+
+    const payload = {
+      name: client.name,
+      email: client.email,
+      company: client.company || '',
+      color: client.color,
+      [field]: value,
+    };
 
     try {
-      const response = await authFetch(`/api/clients/${clientId}`, {
-        method: 'DELETE',
+      const res = await authFetch(`/api/clients/${clientId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update');
+      setClient(data);
+      setEditingField(null);
+      setEditValue('');
+    } catch (err) {
+      setFieldError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
 
-      if (!response.ok) {
-        const data = await response.json();
+  function handleKeyDown(e: React.KeyboardEvent, field: string) {
+    if (e.key === 'Enter') { e.preventDefault(); saveField(field, editValue); }
+    if (e.key === 'Escape') cancelEditing();
+  }
+
+  async function handleDelete() {
+    try {
+      const res = await authFetch(`/api/clients/${clientId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
         throw new Error(data.error || 'Failed to delete client');
       }
-
       router.push('/clients');
-      router.refresh();
     } catch (err) {
+      setShowDeleteConfirm(false);
       setError(err instanceof Error ? err.message : 'Failed to delete client');
-      setDeleting(false);
     }
-  };
+  }
 
-  const handleSendWelcomeEmail = async () => {
-    if (!client) return;
-    
-    if (!confirm(`Send welcome email to ${client.email}?`)) {
-      return;
-    }
-
+  async function handleSendWelcomeEmail() {
     setSendingEmail(true);
-    setError('');
-    setSuccessMessage('');
-
+    setEmailMessage(null);
     try {
-      const response = await authFetch(`/api/clients/${clientId}/welcome`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.details || data.error || 'Failed to send welcome email');
-      }
-
-      const result = await response.json();
-      setSuccessMessage(result.message || 'Welcome email sent successfully!');
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(''), 5000);
+      const res = await authFetch(`/api/clients/${clientId}/welcome`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.details || data.error || 'Failed to send email');
+      setEmailMessage({ type: 'success', text: data.message || 'Welcome email sent!' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send email');
+      setEmailMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to send email' });
     } finally {
       setSendingEmail(false);
+      setShowEmailConfirm(false);
+      setTimeout(() => setEmailMessage(null), 6000);
     }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  }
 
   if (loading) {
-    return (
-      <div className="p-8">
-        <div className="text-center dark:text-white">Loading...</div>
-      </div>
-    );
+    return <div className="p-8 text-center dark:text-white">Loading...</div>;
   }
 
   if (error && !client) {
     return (
       <div className="p-8">
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
+        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
-        <Link href="/clients" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-4 inline-block">
+        <Link href="/clients" className="mt-4 inline-block text-blue-600 hover:underline dark:text-blue-400">
           ← Back to clients
         </Link>
       </div>
     );
   }
 
-  if (!client) {
+  if (!client) return null;
+
+  // ── Inline-edit helpers (defined inside render so they close over state) ──
+
+  function FieldPencil({ field, value }: { field: string; value: string }) {
     return (
-      <div className="p-8">
-        <div className="text-center dark:text-white">Client not found</div>
-        <Link href="/clients" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mt-4 inline-block">
-          ← Back to clients
-        </Link>
+      <button
+        onClick={() => startEditing(field, value)}
+        title={`Edit ${field}`}
+        className="ml-1.5 rounded p-1 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+    );
+  }
+
+  function FieldActions({ field }: { field: string }) {
+    return (
+      <div className="ml-2 flex items-center gap-1">
+        <button
+          onClick={() => saveField(field, editValue)}
+          disabled={saving}
+          title="Save"
+          className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/20"
+        >
+          <Check className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={cancelEditing}
+          disabled={saving}
+          title="Cancel"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="mx-auto max-w-4xl p-8">
+      {/* ── Header ── */}
       <div className="mb-8">
-        <Link
-          href="/clients"
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4 inline-block"
-        >
+        <Link href="/clients" className="mb-4 inline-block text-blue-600 hover:underline dark:text-blue-400">
           ← Back to clients
         </Link>
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span
-              className="h-4 w-4 rounded-full border border-black/10 dark:border-white/20"
+              className="h-4 w-4 shrink-0 rounded-full border border-black/10 dark:border-white/20"
               style={{ backgroundColor: client.color || '#06B6D4' }}
               aria-hidden="true"
             />
             <div>
-            <h1 className="text-3xl font-bold dark:text-white">{client.name}</h1>
-            {client.company && (
-              <p className="text-gray-600 dark:text-gray-400 mt-1">{client.company}</p>
-            )}
-            </div>
-          </div>
-          <div className="flex gap-3">
-            {!editing && (
-              <>
-                <button
-                  onClick={handleSendWelcomeEmail}
-                  disabled={sendingEmail}
-                  className="bg-indigo-600 dark:bg-indigo-500 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-                  title="Send welcome email to client"
-                >
-                  {sendingEmail ? (
+              <div className="group flex items-center">
+                {editingField === 'name' ? (
+                  <>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, 'name')}
+                      className="rounded border border-blue-400 bg-white px-2 py-1 text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <FieldActions field="name" />
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-bold dark:text-white">{client.name}</h1>
+                    <FieldPencil field="name" value={client.name} />
+                  </>
+                )}
+              </div>
+              {(client.company || editingField === 'company') && (
+                <div className="group mt-1 flex items-center">
+                  {editingField === 'company' ? (
                     <>
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending...
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, 'company')}
+                        placeholder="Company name"
+                        className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      />
+                      <FieldActions field="company" />
                     </>
                   ) : (
                     <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Welcome Email
+                      <span className="text-gray-600 dark:text-gray-400">{client.company}</span>
+                      <FieldPencil field="company" value={client.company || ''} />
                     </>
                   )}
-                </button>
+                </div>
+              )}
+              {!client.company && editingField !== 'company' && (
                 <button
-                  onClick={() => setEditing(true)}
-                  className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+                  onClick={() => startEditing('company', '')}
+                  className="mt-1 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  Edit
+                  + Add company
                 </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors disabled:opacity-50"
-                >
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </button>
-              </>
-            )}
+              )}
+            </div>
           </div>
+
+          <OptionsMenu label="Client options">
+            <OptionsMenuItem
+              onClick={() => setShowEmailConfirm(true)}
+              icon={<Mail className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
+            >
+              Send welcome email
+            </OptionsMenuItem>
+            <OptionsMenuSeparator />
+            <OptionsMenuItem
+              onClick={() => setShowDeleteConfirm(true)}
+              tone="danger"
+              icon={<Trash2 className="h-4 w-4" />}
+            >
+              Delete client
+            </OptionsMenuItem>
+          </OptionsMenu>
         </div>
       </div>
 
+      {/* ── Alerts ── */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
+        <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
       )}
-
-      {successMessage && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded mb-4">
-          {successMessage}
+      {fieldError && (
+        <div className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          {fieldError}
+        </div>
+      )}
+      {emailMessage && (
+        <div className={`mb-4 rounded border px-4 py-3 ${
+          emailMessage.type === 'success'
+            ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400'
+            : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400'
+        }`}>
+          {emailMessage.text}
         </div>
       )}
 
-      {editing ? (
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                required
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-            </div>
+      <div className="space-y-6">
+        {/* ── Client Information ── */}
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-4 text-xl font-semibold dark:text-white">Client Information</h2>
+          <dl className="space-y-4">
 
+            {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                required
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Company
-              </label>
-              <input
-                type="text"
-                id="company"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Client Color
-              </label>
-              <div className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  {CLIENT_COLOR_PRESETS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, color })}
-                      className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 ${formData.color === color ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'}`}
-                      style={{ backgroundColor: color }}
-                      aria-label={`Select color ${color}`}
-                      title={color}
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
+              <dd className="group mt-1 flex items-center">
+                {editingField === 'email' ? (
+                  <>
+                    <input
+                      ref={inputRef}
+                      type="email"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, 'email')}
+                      className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
                     />
-                  ))}
-                </div>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    id="color"
-                    name="color"
-                    value={formData.color}
-                    onChange={handleChange}
-                    className="h-10 w-16 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                  />
-                  <input
-                    type="text"
-                    name="color"
-                    value={formData.color}
-                    onChange={handleChange}
-                    className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 font-mono uppercase"
-                    placeholder="#06B6D4"
-                    maxLength={7}
-                  />
-                </div>
-              </div>
+                    <FieldActions field="email" />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-900 dark:text-white">{client.email}</span>
+                    <FieldPencil field="email" value={client.email} />
+                  </>
+                )}
+              </dd>
             </div>
-          </div>
 
-          <div className="flex gap-3 mt-6">
-            <button
-              type="submit"
-              className="bg-blue-600 dark:bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-            >
-              Save Changes
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false);
-                setFormData({
-                  name: client.name,
-                  email: client.email,
-                  company: client.company || '',
-                  color: client.color || '#06B6D4',
-                });
-                setError('');
-              }}
-              className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      ) : (
-        <div className="space-y-6">
-          {/* Client Info */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-            <h2 className="text-xl font-semibold mb-4 dark:text-white">Client Information</h2>
-            <dl className="space-y-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                <dd className="text-gray-900 dark:text-white">{client.email}</dd>
-              </div>
-              {client.company && (
-                <div>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Company</dt>
-                  <dd className="text-gray-900 dark:text-white">{client.company}</dd>
-                </div>
-              )}
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</dt>
-                <dd className="flex items-center gap-2 text-gray-900 dark:text-white">
-                  <span
-                    className="h-3 w-3 rounded-full border border-black/10 dark:border-white/20"
-                    style={{ backgroundColor: client.color || '#06B6D4' }}
-                    aria-hidden="true"
-                  />
-                  <span className="font-mono uppercase">{client.color || '#06B6D4'}</span>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
-                <dd className="text-gray-900 dark:text-white">
-                  {new Date(client.createdAt).toLocaleDateString()}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-              <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {client._count.projects}
-              </div>
-              <div className="text-gray-600 dark:text-gray-400 mt-1">
-                {client._count.projects === 1 ? 'Project' : 'Projects'}
-              </div>
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-              <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                {client._count.invoices}
-              </div>
-              <div className="text-gray-600 dark:text-gray-400 mt-1">
-                {client._count.invoices === 1 ? 'Invoice' : 'Invoices'}
-              </div>
-            </div>
-          </div>
-
-          {/* Projects */}
-          {client.projects && client.projects.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-              <h2 className="text-xl font-semibold mb-4 dark:text-white">Projects</h2>
-              <div className="space-y-2">
-                {client.projects.map((project) => (
-                  <div
-                    key={project.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                  >
-                    <Link
-                      href={`/projects/${project.id}`}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-                    >
-                      {project.name}
-                    </Link>
-                    <span className={`px-2 py-1 text-xs rounded ${
-                      project.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      project.status === 'completed' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
-                      'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-300'
-                    }`}>
-                      {project.status}
+            {/* Company */}
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Company</dt>
+              <dd className="group mt-1 flex items-center">
+                {editingField === 'company' ? (
+                  <>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, 'company')}
+                      placeholder="Company name"
+                      className="rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                    />
+                    <FieldActions field="company" />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-900 dark:text-white">
+                      {client.company || <span className="italic text-gray-400">None</span>}
                     </span>
-                  </div>
-                ))}
-              </div>
+                    <FieldPencil field="company" value={client.company || ''} />
+                  </>
+                )}
+              </dd>
             </div>
-          )}
 
-          {/* Invoices */}
-          {client.invoices && client.invoices.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6">
-              <h2 className="text-xl font-semibold mb-4 dark:text-white">Recent Invoices</h2>
-              <div className="space-y-2">
-                {client.invoices.slice(0, 5).map((invoice) => (
-                  <div
-                    key={invoice.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-                  >
-                    <Link
-                      href={`/invoices/${invoice.id}`}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-                    >
-                      {invoice.invoiceNumber}
-                    </Link>
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium dark:text-white">${invoice.amount}</span>
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        invoice.status === 'paid' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                        invoice.status === 'sent' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' :
-                        invoice.status === 'overdue' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
-                        'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-300'
-                      }`}>
-                        {invoice.status}
-                      </span>
+            {/* Color */}
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</dt>
+              <dd className="mt-1">
+                {editingField === 'color' ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {CLIENT_COLOR_PRESETS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setEditValue(c)}
+                          className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${editValue === c ? 'border-gray-900 dark:border-white' : 'border-gray-300 dark:border-gray-600'}`}
+                          style={{ backgroundColor: c }}
+                          aria-label={`Select color ${c}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="h-9 w-14 cursor-pointer rounded border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                      />
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(e, 'color')}
+                        className="w-28 rounded border border-blue-400 bg-white px-2 py-1 font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                        maxLength={7}
+                        placeholder="#06B6D4"
+                      />
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => saveField('color', editValue)}
+                          disabled={saving}
+                          title="Save"
+                          className="rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/20"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          disabled={saving}
+                          title="Cancel"
+                          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                ) : (
+                  <div className="group flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border border-black/10 dark:border-white/20"
+                      style={{ backgroundColor: client.color || '#06B6D4' }}
+                      aria-hidden="true"
+                    />
+                    <span className="font-mono text-sm uppercase text-gray-900 dark:text-white">
+                      {client.color || '#06B6D4'}
+                    </span>
+                    <FieldPencil field="color" value={client.color || '#06B6D4'} />
+                  </div>
+                )}
+              </dd>
             </div>
-          )}
+
+            {/* Created */}
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
+              <dd className="mt-1 text-gray-900 dark:text-white">
+                {new Date(client.createdAt).toLocaleDateString()}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* ── Stats ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{client._count.projects}</div>
+            <div className="mt-1 text-gray-600 dark:text-gray-400">
+              {client._count.projects === 1 ? 'Project' : 'Projects'}
+            </div>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
+            <div className="text-3xl font-bold text-green-600 dark:text-green-400">{client._count.invoices}</div>
+            <div className="mt-1 text-gray-600 dark:text-gray-400">
+              {client._count.invoices === 1 ? 'Invoice' : 'Invoices'}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Projects ── */}
+        {client.projects && client.projects.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="mb-4 text-xl font-semibold dark:text-white">Projects</h2>
+            <div className="space-y-2">
+              {client.projects.map((project) => (
+                <div key={project.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    {project.name}
+                  </Link>
+                  <span className={`rounded px-2 py-1 text-xs ${
+                    project.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                    project.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                    'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                  }`}>
+                    {project.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Invoices ── */}
+        {client.invoices && client.invoices.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow dark:border-gray-700 dark:bg-gray-800">
+            <h2 className="mb-4 text-xl font-semibold dark:text-white">Recent Invoices</h2>
+            <div className="space-y-2">
+              {client.invoices.slice(0, 5).map((invoice) => (
+                <div key={invoice.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
+                  <Link
+                    href={`/invoices/${invoice.id}`}
+                    className="font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    {invoice.invoiceNumber}
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium dark:text-white">${invoice.amount}</span>
+                    <span className={`rounded px-2 py-1 text-xs ${
+                      invoice.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                      invoice.status === 'sent' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                      invoice.status === 'overdue' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                      'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-300'
+                    }`}>
+                      {invoice.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Delete confirmation dialog ── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowDeleteConfirm(false)} />
+          <div
+            className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-950/40">
+                <Trash2 className="h-5 w-5 text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Delete client?</h3>
+            </div>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              <span className="font-medium text-gray-700 dark:text-gray-300">{client.name}</span> and all
+              associated projects, time entries, and invoices will be permanently deleted.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+              >
+                Yes, delete it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Welcome email confirmation dialog ── */}
+      {showEmailConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowEmailConfirm(false)} />
+          <div
+            className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/40">
+                <Mail className="h-5 w-5 text-indigo-500" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">Send welcome email?</h3>
+            </div>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              A welcome email will be sent to{' '}
+              <span className="font-medium text-gray-700 dark:text-gray-300">{client.email}</span>.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowEmailConfirm(false)}
+                disabled={sendingEmail}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendWelcomeEmail}
+                disabled={sendingEmail}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {sendingEmail ? 'Sending…' : 'Send email'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

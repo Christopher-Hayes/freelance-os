@@ -59,6 +59,9 @@ export { ApiKeyModal } from "./api-key-modal";
 
 export { ApiKeyList } from "./api-key-list";
 
+export { OptionsMenu, OptionsMenuItem, OptionsMenuSeparator } from "./options-menu";
+export type { OptionsMenuProps, OptionsMenuItemProps } from "./options-menu";
+
 // Legacy components
 export { Gradient } from "./gradient";
 export { TurborepoLogo } from "./turborepo-logo";

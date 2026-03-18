@@ -4,6 +4,46 @@
 /* Scan UI package to prevent class purging */
 @source "../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
 
+@font-face {
+  font-family: "Rakkas";
+  src: url("/fonts/Rakkas-Regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Luciole";
+  src: url("/fonts/Luciole-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Luciole";
+  src: url("/fonts/Luciole-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Luciole";
+  src: url("/fonts/Luciole-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Luciole";
+  src: url("/fonts/Luciole-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -19,6 +59,7 @@
 }
 
 body {
+  font-family: "Luciole", system-ui, sans-serif;
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
       to bottom,
@@ -26,6 +67,11 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  
+  h1 {
+    font-family: "Rakkas", cursive;
+    letter-spacing: 0.02em;
+  }
 }
 
 button {

@@ -13,6 +13,11 @@ export interface BreadcrumbsProps {
 }
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, LinkComponent }) => {
+  // If there is only a single item, we can skip rendering the breadcrumb navigation
+  if (items.length <= 1) {
+    return null;
+  }
+
   return (
     <nav className="flex mb-6" aria-label="Breadcrumb">
       <ol className="inline-flex items-center space-x-1 md:space-x-3">

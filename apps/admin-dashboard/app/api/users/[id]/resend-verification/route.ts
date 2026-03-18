@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
 import { getAdminAuth } from '@/lib/auth';
 import { sendVerificationRequest } from '@/lib/auth-email';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -27,20 +27,33 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Generate a verification token and store it (NextAuth email provider format)
+    // Generate a verification token.
+    // NextAuth v5 (@auth/core) hashes tokens as sha256(token + secret) before
+    // storing them, and applies the same hash on the callback token before lookup.
+    // The secret used is provider.secret ?? options.secret (i.e. NEXTAUTH_SECRET).
+    // We must replicate this exactly so the callback can find and delete the record.
+    const secret = process.env.NEXTAUTH_SECRET ?? '';
     const token = randomBytes(32).toString('hex');
+    const hashedToken = createHash('sha256').update(`${token}${secret}`).digest('hex');
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await prisma.verificationToken.create({
       data: {
         identifier: user.email,
-        token,
+        token: hashedToken, // store the hash, send the raw token in the URL
         expires,
       },
     });
 
     const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const callbackUrl = `${baseUrl}/api/auth/callback/email?token=${token}&email=${encodeURIComponent(user.email)}`;
+    // After successful verification, redirect to the dashboard with a flag so it
+    // can show a confirmation toast.
+    const afterVerifyUrl = `${baseUrl}/?verified=1`;
+    const callbackUrl = `${baseUrl}/api/auth/callback/email?${new URLSearchParams({
+      token,
+      email: user.email,
+      callbackUrl: afterVerifyUrl,
+    })}`;
 
     await sendVerificationRequest({
       identifier: user.email,
