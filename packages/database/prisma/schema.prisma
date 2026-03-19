@@ -75,13 +75,15 @@ model Project {
   hourlyRate         Decimal?  @map("hourly_rate") @db.Decimal(10, 2) // Default hourly rate for invoicing
   startDate          DateTime? @map("start_date") @db.Timestamptz
   endDate            DateTime? @map("end_date") @db.Timestamptz
+  linkedRtProjectId  Int?      @unique @map("linked_rt_project_id") // Optional link to a RescueTime project
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   
-  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  timeEntries     TimeEntry[]
-  invoices        Invoice[]
-  weeklySummaries WeeklySummary[]
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  linkedRtProject   RescueTimeProject? @relation(fields: [linkedRtProjectId], references: [rtProjectId])
+  timeEntries       TimeEntry[]
+  invoices          Invoice[]
+  weeklySummaries   WeeklySummary[]
 
   @@index([clientId])
   @@map("projects")
@@ -386,7 +388,7 @@ model Setting {
   value           String      @db.Text
   appTitleRenames String[]    @default([]) @map("app_title_renames") // Cosmetic app-class => display-name overrides as `raw=pretty`
   hiddenAppClasses String[]   @default([]) @map("hidden_app_classes") // App classes hidden from timeline and analytics UI
-  rescuetimeKey   String?     @map("rescuetime_key") @db.Text
+  rescuetimeKey         String?     @map("rescuetime_key") @db.Text
   openaiKey       String?     @map("openai_key") @db.Text
   googleApiKey    String?     @map("google_api_key") @db.Text
   aiProvider      AiProvider? @default(openai) @map("ai_provider")
@@ -418,4 +420,46 @@ model Setting {
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("settings")
+}
+
+// RescueTime project metadata extracted from archive uploads
+model RescueTimeProject {
+  id           Int       @id @default(autoincrement())
+  rtProjectId  Int       @unique @map("rt_project_id")
+  name         String    @db.Text
+  color        String?   @db.VarChar(20)
+  notes        String[]  @default([]) // Matching keywords from RT project details
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz
+  billable     Boolean?
+  rate         Float?
+  currency     String?   @db.VarChar(10)
+  rtClientId   Int?      @map("rt_client_id")
+  rtClientName String?   @map("rt_client_name") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  projectTimes RescueTimeProjectTime[]
+  linkedProject Project?
+
+  @@map("rescuetime_projects")
+}
+
+// Individual time blocks from RescueTime project history archive
+model RescueTimeProjectTime {
+  id              Int      @id @default(autoincrement())
+  rtProjectId     Int      @map("rt_project_id")
+  date            String   @db.VarChar(10) // YYYY-MM-DD for quick date lookups
+  startTime       DateTime @map("start_time") @db.Timestamptz
+  endTime         DateTime @map("end_time") @db.Timestamptz
+  durationSeconds Int      @map("duration_seconds")
+  draft           Boolean  @default(false)
+  provenance      String?  @db.Text
+  comment         String?  @db.Text
+  importedAt      DateTime @default(now()) @map("imported_at") @db.Timestamptz
+
+  project RescueTimeProject @relation(fields: [rtProjectId], references: [rtProjectId])
+
+  @@unique([rtProjectId, startTime]) // Prevent duplicate entries on re-upload
+  @@index([date])
+  @@map("rescuetime_project_times")
 }

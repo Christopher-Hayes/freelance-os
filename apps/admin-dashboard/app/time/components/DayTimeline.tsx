@@ -5,10 +5,11 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { toast } from "@repo/ui";
+import { OptionsMenu, OptionsMenuItem, OptionsMenuSeparator } from "@repo/ui";
 import { useJobs } from "@/components/JobsProvider";
 import { hasActiveJobForDate } from "@/lib/job-utils";
-import { mergeTimeEntries } from "@/lib/time-actions";
-import { importRescueTimeData } from "@/lib/activity-actions";
+import { mergeTimeEntries, importRescueTimeProjectTimes, hasRescueTimeArchiveData, mergeRescueTimeProjectEntries } from "@/lib/time-actions";
+import { importRescueTimeData, mergeRescueTimeAppActivity, deleteActivitySessionsForDate } from "@/lib/activity-actions";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
 import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
 import CurrentTimeLine from "./timeline/CurrentTimeLine";
@@ -204,6 +205,9 @@ export default function DayTimeline({
   const [loadingAutofill, setLoadingAutofill] = useState(false);
   const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
   const [importingRescueTime, setImportingRescueTime] = useState(false);
+  const [importingRescueTimeProjects, setImportingRescueTimeProjects] = useState(false);
+  const [mergingRescueTimeActivity, setMergingRescueTimeActivity] = useState(false);
+  const [mergingRescueTimeProjects, setMergingRescueTimeProjects] = useState(false);
   const [appContextMenu, setAppContextMenu] = useState<AppSessionContextMenuState>(null);
   const [isDraggingActivityMinimapViewport, setIsDraggingActivityMinimapViewport] = useState(false);
   const [isDraggingProjectMinimapViewport, setIsDraggingProjectMinimapViewport] = useState(false);
@@ -957,6 +961,122 @@ export default function DayTimeline({
     }
   };
 
+  const handleImportProjectTimesFromRescueTime = async () => {
+    setImportingRescueTimeProjects(true);
+    try {
+      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+
+      const data = await importRescueTimeProjectTimes(dateStr);
+
+      if (data.status === "no_archive_data") {
+        toast.error(
+          "No RescueTime archive data for this date. Upload your Project History archive in Settings → RescueTime Integration.",
+          { duration: 8000 }
+        );
+        return;
+      }
+
+      if (data.entriesImported > 0) {
+        toast.success(data.message);
+        await fetchDayData();
+
+        // Show additional info about unmatched projects
+        if (data.unmatchedProjects && data.unmatchedProjects.length > 0) {
+          setTimeout(() => {
+            toast.warning(
+              `Skipped RescueTime projects with no local match: ${data.unmatchedProjects.join(", ")}`,
+              { duration: 10000 }
+            );
+          }, 500);
+        }
+      } else {
+        toast.info(data.message || "No project times imported");
+      }
+    } catch (error: any) {
+      console.error("Error importing project times from RescueTime:", error);
+      toast.error(error.message || "Failed to import project times from RescueTime");
+    } finally {
+      setImportingRescueTimeProjects(false);
+    }
+  };
+
+  const handleMergeRescueTimeActivity = async () => {
+    setMergingRescueTimeActivity(true);
+    try {
+      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+
+      const data = await mergeRescueTimeAppActivity(dateStr);
+
+      if (data.sessionsMerged > 0) {
+        toast.success(data.message);
+        await fetchDayData();
+      } else {
+        toast.info(data.message);
+      }
+    } catch (error: any) {
+      console.error("Error merging RescueTime activity:", error);
+      toast.error(error.message || "Failed to merge RescueTime activity");
+    } finally {
+      setMergingRescueTimeActivity(false);
+    }
+  };
+
+  const handleDeleteDayActivity = async () => {
+    if (sessions.length === 0) {
+      toast.info("No app activity to delete for this day");
+      return;
+    }
+
+    try {
+      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+
+      const data = await deleteActivitySessionsForDate(dateStr);
+      toast.success(data.message);
+      await fetchDayData();
+    } catch (error: any) {
+      console.error("Error deleting day activity:", error);
+      toast.error(error.message || "Failed to delete app activity");
+    }
+  };
+
+  const handleMergeRescueTimeProjects = async () => {
+    setMergingRescueTimeProjects(true);
+    try {
+      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
+
+      const data = await mergeRescueTimeProjectEntries(dateStr);
+
+      if (data.status === "no_archive_data") {
+        toast.error(
+          "No RescueTime archive data for this date. Upload your Project History archive in Settings → RescueTime Integration.",
+          { duration: 8000 }
+        );
+        return;
+      }
+
+      if (data.entriesMerged > 0) {
+        toast.success(data.message);
+        await fetchDayData();
+
+        if (data.unmatchedProjects && data.unmatchedProjects.length > 0) {
+          setTimeout(() => {
+            toast.warning(
+              `Skipped RescueTime projects with no local match: ${data.unmatchedProjects.join(", ")}`,
+              { duration: 10000 }
+            );
+          }, 500);
+        }
+      } else {
+        toast.info(data.message || "Nothing to merge");
+      }
+    } catch (error: any) {
+      console.error("Error merging RescueTime project entries:", error);
+      toast.error(error.message || "Failed to merge RescueTime project entries");
+    } finally {
+      setMergingRescueTimeProjects(false);
+    }
+  };
+
   const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const nextScrollTop = e.currentTarget.scrollTop;
     setActivityScrollMetrics({
@@ -1221,36 +1341,71 @@ export default function DayTimeline({
         <div className="grid grid-cols-5 gap-4">
           {/* Activity Sessions Column */}
           <div className="col-span-3 select-none">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                App Activity
-              </h3>
-              <button
-                onClick={handleManualRefresh}
-                disabled={loading}
-                className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
-                title="Refresh activity data"
-              >
-                <svg
-                  className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  App Activity
+                </h3>
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={loading}
+                  className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
+                  title="Refresh activity data"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
-              {timeAgo && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Updated {timeAgo}
-                </span>
-              )}
+                  <svg
+                    className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+                {timeAgo && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Updated {timeAgo}
+                  </span>
+                )}
+              </div>
+              <OptionsMenu label="App Activity options">
+                <OptionsMenuItem
+                  onClick={handleMergeRescueTimeActivity}
+                  disabled={mergingRescueTimeActivity}
+                  icon={
+                    mergingRescueTimeActivity ? (
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    )
+                  }
+                >
+                  {mergingRescueTimeActivity ? "Merging..." : "Merge RescueTime app activity"}
+                </OptionsMenuItem>
+                <OptionsMenuSeparator />
+                <OptionsMenuItem
+                  onClick={handleDeleteDayActivity}
+                  disabled={loading || sessions.length === 0}
+                  tone="danger"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  }
+                >
+                  Delete today&apos;s app activity
+                </OptionsMenuItem>
+              </OptionsMenu>
             </div>
             <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
               <div className="flex h-full items-stretch">
@@ -1297,36 +1452,71 @@ export default function DayTimeline({
               <h3 className="select-none text-sm font-semibold text-slate-700 dark:text-slate-300">
                 Project Tracking
               </h3>
-              <button
-                onClick={handleAutofill}
-                disabled={loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`)}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
-                title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
-              >
-                <svg
-                  className={`w-4 h-4 ${loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? 'animate-spin' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleAutofill}
+                  disabled={loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`)}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                  title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
                 >
-                  {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  ) : (
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  )}
-                </svg>
-                {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
-              </button>
+                  <svg
+                    className={`w-4 h-4 ${loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? 'animate-spin' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    ) : (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      />
+                    )}
+                  </svg>
+                  {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
+                </button>
+                <OptionsMenu label="Project Tracking options">
+                  <OptionsMenuItem
+                    onClick={handleMergeRescueTimeProjects}
+                    disabled={mergingRescueTimeProjects}
+                    icon={
+                      mergingRescueTimeProjects ? (
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                      )
+                    }
+                  >
+                    {mergingRescueTimeProjects ? "Merging..." : "Merge RescueTime project entries"}
+                  </OptionsMenuItem>
+                  <OptionsMenuSeparator />
+                  <OptionsMenuItem
+                    onClick={handleClearDayEntries}
+                    disabled={loading || timeEntries.length === 0}
+                    tone="danger"
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    }
+                  >
+                    Clear today&apos;s entries
+                  </OptionsMenuItem>
+                </OptionsMenu>
+              </div>
             </div>
             <div className="relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
               <div
@@ -1346,7 +1536,76 @@ export default function DayTimeline({
                       <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
                     </div>
                   ) : (
-                    <div className="relative ml-12">{renderTimeEntries()}</div>
+                    <>
+                      <div className="relative ml-12">{renderTimeEntries()}</div>
+                      {timeEntries.length === 0 && (
+                        <div className="sticky inset-0 flex items-center justify-center backdrop-blur-md p-8 max-w-[360px] top-[200px] left-20">
+                          <div className="text-center space-y-4 p-6">
+                            <div className="text-gray-400 dark:text-gray-500">
+                              <svg
+                                className="w-16 h-16 mx-auto mb-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={1.5}
+                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
+                              </svg>
+                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                                No project time entries
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                Click &amp; drag to create, use Autofill, or import from RescueTime
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleImportProjectTimesFromRescueTime();
+                              }}
+                              onMouseEnter={(e) => {
+                                // Hide the ghost entry on hover to prevent it from interfering with the button hover state
+                                if (!draggingNewEntry) {
+                                  setGhostEntry(null);
+                                }
+                              }}
+                              onMouseMove={(e) => {
+                                e.stopPropagation();
+                              }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                              }}
+                              onMouseUp={(e) => {
+                                e.stopPropagation();
+                              }}
+                              disabled={importingRescueTimeProjects}
+                              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-offset-slate-900"
+                            >
+                              {importingRescueTimeProjects ? (
+                                <>
+                                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                  Importing...
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                  Import from RescueTime
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                   <CurrentTimeLine
                     selectedDate={selectedDate}
@@ -1412,7 +1671,7 @@ export default function DayTimeline({
           />
         )}
 
-        <div className="mt-4 flex items-start justify-between gap-4">
+        <div className="mt-4">
           <div className="text-xs text-slate-500 dark:text-slate-400">
           <p>
             <strong>Apps:</strong> Hover to see details. Data from external tracking utility.
@@ -1421,15 +1680,6 @@ export default function DayTimeline({
             <strong>Project Entries:</strong> Click & drag to create new entries. Click entry to edit. Drag top/bottom edges to resize.
           </p>
           </div>
-          <button
-            type="button"
-            onClick={handleClearDayEntries}
-            disabled={loading || timeEntries.length === 0}
-            className="shrink-0 rounded-xl px-2 py-1 text-xs text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
-            title="Remove all project tracking entries for this day"
-          >
-            Clear today's entries
-          </button>
         </div>
       </div>
     </div>

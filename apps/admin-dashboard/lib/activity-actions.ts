@@ -2,6 +2,9 @@
 
 import { prisma } from "@freelance-os/database";
 import { Temporal } from "@js-temporal/polyfill";
+import { generateObject } from "ai";
+import { z } from "zod";
+import { getAiModel, isAiConfigured } from "@/lib/ai-provider";
 
 interface RescueTimeResponse {
   notes: string;
@@ -19,13 +22,9 @@ async function getHiddenAppClasses(): Promise<Set<string>> {
 }
 
 /**
- * Import activity data from RescueTime API
+ * Shared: fetch and transform RescueTime API data into session-like objects.
  */
-export async function importRescueTimeData(date: string) {
-  if (!date) {
-    throw new Error("Date parameter is required (YYYY-MM-DD)");
-  }
-
+async function fetchRescueTimeSessions(date: string) {
   // Get RescueTime API key from settings
   const settings = await prisma.setting.findUnique({
     where: { key: "main" },
@@ -42,15 +41,14 @@ export async function importRescueTimeData(date: string) {
   const rescueTimeUrl = new URL("https://www.rescuetime.com/anapi/data");
   rescueTimeUrl.searchParams.set("key", apiKey);
   rescueTimeUrl.searchParams.set("perspective", "interval");
-  rescueTimeUrl.searchParams.set("restrict_kind", "document"); // Use 'document' for file-level detail
-  rescueTimeUrl.searchParams.set("interval", "minute"); // 5-minute granularity
+  rescueTimeUrl.searchParams.set("restrict_kind", "document");
+  rescueTimeUrl.searchParams.set("interval", "minute");
   rescueTimeUrl.searchParams.set("restrict_begin", date);
   rescueTimeUrl.searchParams.set("restrict_end", date);
   rescueTimeUrl.searchParams.set("format", "json");
 
   console.log("Fetching from RescueTime:", rescueTimeUrl.toString().replace(apiKey, "***"));
 
-  // Fetch data from RescueTime
   const response = await fetch(rescueTimeUrl.toString());
 
   if (!response.ok) {
@@ -61,61 +59,62 @@ export async function importRescueTimeData(date: string) {
 
   const data: RescueTimeResponse = await response.json();
 
-  // Log the response structure for debugging
   console.log("RescueTime API response headers:", data.row_headers);
   console.log("Sample row (first):", data.rows[0]);
 
   if (!data.rows || data.rows.length === 0) {
+    return [];
+  }
+
+  return data.rows.map((row) => {
+    const dateTime = row[0] as string;
+    const durationSeconds = row[1] as number;
+    const activity = row[3] as string;
+    const document = row[4] as string;
+    const category = row[5] as string;
+    const windowTitle = document && document !== "No Details" ? document : category;
+
+    // RescueTime returns timestamps in the user's local timezone (no TZ info).
+    // Interpret them in the server's local timezone so they convert to the
+    // correct UTC instants for storage.
+    const localTz = Temporal.Now.timeZoneId();
+    const startInstant = Temporal.PlainDateTime.from(dateTime).toZonedDateTime(localTz).toInstant();
+    const endInstant = startInstant.add({ seconds: durationSeconds });
+
+    return {
+      startTime: new Date(startInstant.epochMilliseconds),
+      endTime: new Date(endInstant.epochMilliseconds),
+      appClass: activity,
+      windowTitle,
+      durationSeconds,
+    };
+  });
+}
+
+/**
+ * Import activity data from RescueTime API
+ */
+export async function importRescueTimeData(date: string) {
+  if (!date) {
+    throw new Error("Date parameter is required (YYYY-MM-DD)");
+  }
+
+  const sessions = await fetchRescueTimeSessions(date);
+
+  if (sessions.length === 0) {
     return {
       message: "No activity data found in RescueTime for this date",
       sessionsImported: 0,
     };
   }
 
-  // Transform RescueTime data to our activity sessions format
-  // RescueTime document-level rows format based on actual API response:
-  // [Date, Time Spent (seconds), Number of People, Activity, Document, Category, Productivity]
-  // Example: ["2025-10-30T18:00:00", 300, 1, "Visual Studio Code", "operatormenu.cs", "Editing & IDEs", 2]
-  // The row_headers tell us the exact order:
-  // - Index 0: Date
-  // - Index 1: Time Spent (seconds)
-  // - Index 2: Number of People
-  // - Index 3: Activity (the application name)
-  // - Index 4: Document (the specific file, page, or "No Details")
-  // - Index 5: Category
-  // - Index 6: Productivity
-  
-  const sessions = data.rows.map((row) => {
-    const dateTime = row[0] as string; // ISO timestamp
-    const durationSeconds = row[1] as number;
-    
-    // Row structure: Activity is at index 3, Document is at index 4
-    const activity = row[3] as string; // Application name (e.g., "Visual Studio Code")
-    const document = row[4] as string; // Document/file name (e.g., "operatormenu.cs" or "No Details")
-    const category = row[5] as string; // Category (e.g., "Editing & IDEs")
-
-    // Use document name as window title if it's meaningful (not "No Details"), otherwise use category
-    const windowTitle = document && document !== "No Details" ? document : category;
-
-    // Parse the start time
-    const startTime = new Date(dateTime);
-    
-    // Calculate end time
-    const endTime = new Date(startTime.getTime() + durationSeconds * 1000);
-
-    return {
-      startTime,
-      endTime,
-      appClass: activity, // The application name (e.g., "Visual Studio Code")
-      windowTitle, // The document/file name or category
-      durationSeconds,
-    };
-  });
-
   // Check if we already have data for this date to avoid duplicates
-  const [year, month, day] = date.split('-').map(Number);
-  const dayStart = new Date(Date.UTC(year!, month! - 1, day!, 0, 0, 0, 0));
-  const dayEnd = new Date(Date.UTC(year!, month! - 1, day!, 23, 59, 59, 999));
+  const plainDate = Temporal.PlainDate.from(date);
+  const localTz = Temporal.Now.timeZoneId();
+  const dayStart = new Date(plainDate.toZonedDateTime(localTz).toInstant().epochMilliseconds);
+  const dayEnd = new Date(
+    plainDate.toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
+  );
 
   const existingCount = await prisma.activitySession.count({
     where: {
@@ -277,4 +276,158 @@ export async function getHoursInRange(startDate: Temporal.PlainDate, endDate: Te
   }
 
   return parseFloat((entries._sum.durationMinutes / 60).toFixed(1));
+}
+
+/**
+ * Merge RescueTime app activity data into existing activity sessions for a date.
+ * Uses AI to intelligently deduplicate and decide which RT sessions to add.
+ */
+export async function mergeRescueTimeAppActivity(date: string) {
+  if (!date) {
+    throw new Error("Date parameter is required (YYYY-MM-DD)");
+  }
+
+  if (!(await isAiConfigured())) {
+    throw new Error(
+      "AI is not configured. Merging requires AI to intelligently deduplicate data. Please configure an AI provider in Settings."
+    );
+  }
+
+  const rtSessions = await fetchRescueTimeSessions(date);
+
+  if (rtSessions.length === 0) {
+    return {
+      message: "No activity data found in RescueTime for this date",
+      sessionsMerged: 0,
+    };
+  }
+
+  // Fetch existing activity sessions for the day
+  const plainDate = Temporal.PlainDate.from(date);
+  const localTz = Temporal.Now.timeZoneId();
+  const dayStart = new Date(plainDate.toZonedDateTime(localTz).toInstant().epochMilliseconds);
+  const dayEnd = new Date(
+    plainDate
+      .toZonedDateTime({
+        timeZone: localTz,
+        plainTime: Temporal.PlainTime.from("23:59:59.999"),
+      })
+      .toInstant().epochMilliseconds
+  );
+
+  const existingSessions = await prisma.activitySession.findMany({
+    where: {
+      startTime: { gte: dayStart, lte: dayEnd },
+    },
+    orderBy: { startTime: "asc" },
+  });
+
+  // Summarise existing sessions for the AI (compact representation)
+  const existingSummary = existingSessions.map((s) => ({
+    start: s.startTime.toISOString(),
+    end: s.endTime.toISOString(),
+    app: s.appClass,
+    title: s.windowTitle,
+    dur: s.durationSeconds,
+  }));
+
+  // Summarise incoming RT sessions
+  const rtSummary = rtSessions.map((s, i) => ({
+    idx: i,
+    start: s.startTime.toISOString(),
+    end: s.endTime.toISOString(),
+    app: s.appClass,
+    title: s.windowTitle,
+    dur: s.durationSeconds,
+  }));
+
+  const aiModel = await getAiModel();
+
+  const mergeSchema = z.object({
+    sessionsToAdd: z
+      .array(z.number())
+      .describe(
+        "Array of RescueTime session indices (idx) that should be ADDED because they represent genuinely new activity not already covered by existing sessions"
+      ),
+    reasoning: z
+      .string()
+      .describe("Brief summary of the merge decision"),
+  });
+
+  const { object: mergeDecision } = await generateObject({
+    model: aiModel,
+    schema: mergeSchema,
+    prompt: `You are merging RescueTime activity data into existing app activity sessions for ${date}.
+
+EXISTING activity sessions (${existingSessions.length} total):
+${JSON.stringify(existingSummary, null, 2)}
+
+INCOMING RescueTime sessions (${rtSessions.length} total):
+${JSON.stringify(rtSummary, null, 2)}
+
+Rules:
+- A RescueTime session is a DUPLICATE if an existing session covers roughly the same time window (within a few minutes) for the same app.
+- A RescueTime session is NEW if it covers a time period or app not represented in existing sessions.
+- When in doubt, include the session (better to have slightly redundant data than miss activity).
+- Return the "idx" values of RT sessions that should be added.
+
+Return the indices of RescueTime sessions to ADD (not duplicates of existing data).`,
+  });
+
+  const indicesToAdd = new Set(mergeDecision.sessionsToAdd);
+  const sessionsToInsert = rtSessions.filter((_, i) => indicesToAdd.has(i));
+
+  if (sessionsToInsert.length === 0) {
+    return {
+      message: `All ${rtSessions.length} RescueTime sessions already covered by existing data. Nothing to merge.`,
+      sessionsMerged: 0,
+      reasoning: mergeDecision.reasoning,
+    };
+  }
+
+  await prisma.activitySession.createMany({
+    data: sessionsToInsert,
+    skipDuplicates: true,
+  });
+
+  console.log(
+    `Merged ${sessionsToInsert.length} new activity sessions from RescueTime for ${date} (${rtSessions.length - sessionsToInsert.length} duplicates skipped)`
+  );
+
+  return {
+    message: `Merged ${sessionsToInsert.length} new session${sessionsToInsert.length === 1 ? "" : "s"} from RescueTime (${rtSessions.length - sessionsToInsert.length} duplicate${rtSessions.length - sessionsToInsert.length === 1 ? "" : "s"} skipped)`,
+    sessionsMerged: sessionsToInsert.length,
+    reasoning: mergeDecision.reasoning,
+  };
+}
+
+/**
+ * Delete all activity sessions for a given date.
+ */
+export async function deleteActivitySessionsForDate(date: string) {
+  if (!date) {
+    throw new Error("Date parameter is required (YYYY-MM-DD)");
+  }
+
+  const plainDate = Temporal.PlainDate.from(date);
+  const localTz = Temporal.Now.timeZoneId();
+  const dayStart = new Date(plainDate.toZonedDateTime(localTz).toInstant().epochMilliseconds);
+  const dayEnd = new Date(
+    plainDate
+      .toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from("23:59:59.999") })
+      .toInstant().epochMilliseconds
+  );
+
+  const result = await prisma.activitySession.deleteMany({
+    where: {
+      startTime: { gte: dayStart, lte: dayEnd },
+    },
+  });
+
+  console.log(`Deleted ${result.count} activity sessions for ${date}`);
+
+  return {
+    message: `Deleted ${result.count} activity session${result.count === 1 ? "" : "s"}`,
+    sessionsDeleted: result.count,
+  };
 }

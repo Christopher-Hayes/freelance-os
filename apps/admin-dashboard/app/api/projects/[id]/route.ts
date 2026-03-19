@@ -50,6 +50,13 @@ export async function GET(
             billable: true,
           },
         },
+        linkedRtProject: {
+          select: {
+            rtProjectId: true,
+            name: true,
+            color: true,
+          },
+        },
         _count: {
           select: {
             timeEntries: true,
@@ -106,7 +113,7 @@ export async function PUT(
     const { id } = await params;
     const projectId = parseInt(id);
     const body = await request.json();
-    const { name, clientDescription, privateNotes, clientId, status, color, billable, hourlyRate, startDate, endDate } = body;
+    const { name, clientDescription, privateNotes, clientId, status, color, billable, hourlyRate, startDate, endDate, linkedRtProjectId } = body;
 
     if (isNaN(projectId)) {
       return NextResponse.json(
@@ -163,6 +170,10 @@ export async function PUT(
       updateData.client = {
         connect: { id: parseInt(clientId) },
       };
+    }
+
+    if (linkedRtProjectId !== undefined) {
+      updateData.linkedRtProjectId = linkedRtProjectId !== null ? parseInt(linkedRtProjectId) : null;
     }
 
     const project = await prisma.project.update({

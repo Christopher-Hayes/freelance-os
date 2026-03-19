@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@freelance-os/database";
+import { Temporal } from "@js-temporal/polyfill";
 import { getAdminAuth, hasPermission } from "@/lib/auth";
 
 // GET /api/activity-sessions - List activity sessions for a specific date
@@ -24,22 +25,17 @@ export async function GET(request: Request) {
       );
     }
 
-    // Parse the date string (YYYY-MM-DD) as a local date
-    // Since we don't have timezone info from the client, we need to query a wider range
-    // The date "2025-10-31" could span from Oct 31 00:00 in UTC+14 to Oct 31 23:59 in UTC-12
-    // That's roughly Oct 30 10:00 UTC to Nov 01 11:59 UTC (a ~38 hour window)
-    // We'll be conservative and query +/- 24 hours, then filter in-memory
-    const [year, month, day] = date.split('-').map(Number);
-    
-    // Create date in UTC for the query range
-    const queryDate = new Date(Date.UTC(year!, month! - 1, day!, 0, 0, 0, 0));
-    const startOfDay = new Date(queryDate);
-    startOfDay.setUTCHours(startOfDay.getUTCHours() - 24); // 24 hours before
-    
-    const endOfDay = new Date(queryDate);
-    endOfDay.setUTCHours(endOfDay.getUTCHours() + 48); // 48 hours after (covers +24h)
+    // Parse the date as a LOCAL day using Temporal.
+    // RescueTime timestamps are stored as UTC instants derived from local time,
+    // so we query the local-day boundaries converted to UTC.
+    const plainDate = Temporal.PlainDate.from(date);
+    const localTz = Temporal.Now.timeZoneId();
+    const startOfDay = new Date(plainDate.toZonedDateTime(localTz).toInstant().epochMilliseconds);
+    const endOfDay = new Date(
+      plainDate.toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
+    );
 
-    const allSessions = await prisma.activitySession.findMany({
+    const sessions = await prisma.activitySession.findMany({
       where: {
         startTime: {
           gte: startOfDay,
@@ -49,17 +45,6 @@ export async function GET(request: Request) {
       orderBy: {
         startTime: "asc",
       },
-    });
-
-    // Filter sessions to only those whose LOCAL date matches the requested date
-    // This handles timezone conversion properly
-    const sessions = allSessions.filter((session) => {
-      const localStart = new Date(session.startTime);
-      const localYear = localStart.getFullYear();
-      const localMonth = localStart.getMonth() + 1;
-      const localDay = localStart.getDate();
-      
-      return localYear === year && localMonth === month && localDay === day;
     });
 
     return NextResponse.json({ sessions });

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Check, Pencil, Trash2, X } from 'lucide-react';
+import { Check, Link2, Link2Off, Pencil, Trash2, X } from 'lucide-react';
 import { APIFooter, OptionsMenu, OptionsMenuItem } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
 import { WeeklySummaries } from './WeeklySummaries';
@@ -35,6 +35,8 @@ type Project = {
   hourlyRate: number | null;
   startDate: string | null;
   endDate: string | null;
+  linkedRtProjectId: number | null;
+  linkedRtProject: { rtProjectId: number; name: string; color: string | null } | null;
   client: Client;
   timeEntries: TimeEntry[];
   totalHours: number;
@@ -88,6 +90,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   // Confirmations
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // RescueTime link picker
+  const [showRtLinkPicker, setShowRtLinkPicker] = useState(false);
+  const [rtProjects, setRtProjects] = useState<{ rtProjectId: number; name: string; color: string | null }[]>([]);
+  const [loadingRtProjects, setLoadingRtProjects] = useState(false);
+  const [rtLinkSaving, setRtLinkSaving] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
@@ -236,6 +244,62 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     } catch (err) {
       setShowDeleteConfirm(false);
       setError(err instanceof Error ? err.message : 'Failed to delete project');
+    }
+  }
+
+  async function openRtLinkPicker() {
+    setShowRtLinkPicker(true);
+    if (rtProjects.length > 0) return;
+    setLoadingRtProjects(true);
+    try {
+      const res = await authFetch('/api/rescuetime/projects');
+      if (!res.ok) throw new Error('Failed to fetch RescueTime projects');
+      const data = await res.json();
+      setRtProjects(data.map((p: any) => ({ rtProjectId: p.rtProjectId, name: p.name, color: p.color })));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingRtProjects(false);
+    }
+  }
+
+  async function handleLinkRtProject(rtProjectId: number) {
+    if (!project || !projectId) return;
+    setRtLinkSaving(true);
+    try {
+      const res = await authFetch(`/api/rescuetime/projects/${rtProjectId}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to link project');
+      // Refresh project to get updated linkedRtProject
+      await fetchProject(projectId);
+      setShowRtLinkPicker(false);
+    } catch (err) {
+      setFieldError(err instanceof Error ? err.message : 'Failed to link project');
+    } finally {
+      setRtLinkSaving(false);
+    }
+  }
+
+  async function handleUnlinkRtProject() {
+    if (!project || !projectId || !project.linkedRtProjectId) return;
+    setRtLinkSaving(true);
+    try {
+      const res = await authFetch(`/api/rescuetime/projects/${project.linkedRtProjectId}/link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to unlink project');
+      await fetchProject(projectId);
+    } catch (err) {
+      setFieldError(err instanceof Error ? err.message : 'Failed to unlink project');
+    } finally {
+      setRtLinkSaving(false);
     }
   }
 
@@ -407,6 +471,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         <OptionsMenu label="Project options">
+          {project.linkedRtProject ? (
+            <OptionsMenuItem
+              onClick={handleUnlinkRtProject}
+              icon={<Link2Off className="h-4 w-4" />}
+            >
+              Unlink RescueTime project
+            </OptionsMenuItem>
+          ) : (
+            <OptionsMenuItem
+              onClick={openRtLinkPicker}
+              icon={<Link2 className="h-4 w-4" />}
+            >
+              Link to RescueTime project
+            </OptionsMenuItem>
+          )}
           <OptionsMenuItem
             onClick={() => setShowDeleteConfirm(true)}
             tone="danger"
@@ -674,6 +753,34 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </dd>
           </div>
 
+          {/* RescueTime Link (only shown when linked) */}
+          {project.linkedRtProject && (
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">RescueTime Project</dt>
+              <dd className="mt-1 flex items-center gap-2">
+                {project.linkedRtProject.color && (
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                    style={{ backgroundColor: project.linkedRtProject.color }}
+                    aria-hidden="true"
+                  />
+                )}
+                <span className="text-gray-900 dark:text-white">{project.linkedRtProject.name}</span>
+                <button
+                  onClick={handleUnlinkRtProject}
+                  disabled={rtLinkSaving}
+                  className="ml-1 flex items-center gap-1 rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                >
+                  <Link2Off className="h-3 w-3" />
+                  Unlink
+                </button>
+              </dd>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                Time imports from this RT project will map directly to this project
+              </p>
+            </div>
+          )}
+
         </dl>
       </div>
 
@@ -718,6 +825,60 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           { method: 'DELETE', path: '/projects/{id}', description: 'Delete a project (cascades to time entries)', queryParams: [{ name: 'id', type: 'number', required: true, description: 'Project ID (in URL path)' }] },
         ]}
       />
+
+      {/* ── RescueTime link picker ── */}
+      {showRtLinkPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowRtLinkPicker(false)} />
+          <div
+            className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/40">
+                  <Link2 className="h-5 w-5 text-blue-500" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                  Link to RescueTime project
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowRtLinkPicker(false)}
+                className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+              When importing RescueTime time entries, this project will be used automatically instead of relying on AI matching.
+            </p>
+            {loadingRtProjects ? (
+              <div className="animate-pulse text-sm text-gray-500 dark:text-gray-400">Loading RescueTime projects…</div>
+            ) : rtProjects.length === 0 ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400">No RescueTime projects found. Import an archive first.</div>
+            ) : (
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {rtProjects.map((rtp) => (
+                  <button
+                    key={rtp.rtProjectId}
+                    onClick={() => handleLinkRtProject(rtp.rtProjectId)}
+                    disabled={rtLinkSaving}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-gray-50 disabled:opacity-50 dark:hover:bg-gray-800"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                      style={{ backgroundColor: rtp.color ?? '#888888' }}
+                      aria-hidden="true"
+                    />
+                    <span className="text-gray-900 dark:text-white">{rtp.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Delete confirmation ── */}
       {showDeleteConfirm && (

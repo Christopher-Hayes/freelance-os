@@ -11,6 +11,7 @@ import type { MailboxInfo } from '@/lib/jmap-provider';
 import type { CalendarInfo } from '@/lib/webdav-provider';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { AlertTriangle, Check, ChevronsUpDown, Eye, EyeOff, Pencil, Plus, Settings2, Sparkles, Trash2, X } from 'lucide-react';
+import { RescueTimeArchiveUpload } from '@/components/RescueTimeArchiveUpload';
 
 const MASK_VALUE = "••••••••";
 const JMAP_MAILBOXES_STORAGE_KEY = "jmapAvailableMailboxes";
@@ -580,7 +581,6 @@ export default function SettingsPage() {
     }
 
     rescueTimeTimerRef.current = setTimeout(() => {
-      // Only save if this field was actually modified by the user
       if (value !== MASK_VALUE) {
         saveSetting("rescuetimeKey", value);
       }
@@ -1414,17 +1414,17 @@ export default function SettingsPage() {
                   <Input
                     type="password"
                     id="rescuetime_api_key"
-                    label="RescueTime API Key"
+                    label="Analytics API Key"
                     value={rescueTimeApiKey}
                     onChange={(e) => handleRescueTimeChange(e.target.value)}
-                    placeholder="Enter your RescueTime API key"
+                    placeholder="Enter your RescueTime Analytics API key"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {rescueTimeApiKey === MASK_VALUE ? (
-                      <span className="text-green-600 dark:text-green-400">✓ API key is configured. Edit to update.</span>
+                      <span className="text-green-600 dark:text-green-400">✓ Analytics API key is configured. Edit to update.</span>
                     ) : (
                       <>
-                        Get your API key from{" "}
+                        Used for App Activity import. Get it from{" "}
                         <a
                           href="https://www.rescuetime.com/anapi/manage"
                           target="_blank"
@@ -1437,6 +1437,7 @@ export default function SettingsPage() {
                     )}
                   </p>
                 </div>
+                <RescueTimeArchiveUpload />
               </div>
             </Surface>
 

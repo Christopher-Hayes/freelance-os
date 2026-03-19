@@ -118,9 +118,14 @@ const TimeEntryBar = memo(function TimeEntryBar({
   const { top, height } = useMemo(() => {
     const topPos = timeToY(start);
     const bottom = timeToY(end);
+    // If end is on the next day (e.g., midnight 00:00), extend to bottom of timeline
+    const effectiveBottom =
+      Temporal.PlainDate.compare(end.toPlainDate(), start.toPlainDate()) > 0
+        ? 24 * HOUR_HEIGHT
+        : bottom;
     return {
       top: topPos,
-      height: bottom - topPos,
+      height: effectiveBottom - topPos,
     };
   }, [start, end]);
 
