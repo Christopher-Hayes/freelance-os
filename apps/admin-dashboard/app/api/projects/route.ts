@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 		}
 
     const body = await request.json();
-    const { name, clientDescription, privateNotes, clientId, status, color, billable, startDate, endDate } = body;
+    const { name, clientDescription, privateNotes, clientId, status, color, billable, hourlyRate, startDate, endDate } = body;
 
     // Validation
     if (!name || !clientId) {
@@ -119,6 +119,7 @@ export async function POST(request: NextRequest) {
         status: status || 'active',
         color: color || '#22C55E', // Default green if not provided
         billable: billable ?? true, // Default true if not provided
+        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
       },

@@ -106,7 +106,7 @@ export async function PUT(
     const { id } = await params;
     const projectId = parseInt(id);
     const body = await request.json();
-    const { name, clientDescription, privateNotes, clientId, status, color, billable, startDate, endDate } = body;
+    const { name, clientDescription, privateNotes, clientId, status, color, billable, hourlyRate, startDate, endDate } = body;
 
     if (isNaN(projectId)) {
       return NextResponse.json(
@@ -148,6 +148,9 @@ export async function PUT(
     if (status !== undefined) updateData.status = status;
     if (color !== undefined) updateData.color = color;
     if (billable !== undefined) updateData.billable = billable;
+    if (hourlyRate !== undefined) {
+      updateData.hourlyRate = hourlyRate !== null && hourlyRate !== '' ? parseFloat(hourlyRate) : null;
+    }
     if (startDate !== undefined) {
       updateData.startDate = startDate ? new Date(startDate) : null;
     }

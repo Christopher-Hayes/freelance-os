@@ -72,6 +72,7 @@ model Project {
   status             String    @default("active") // active, completed, on-hold
   color              String    @default("#22C55E") @db.VarChar(7) // Hex color for timeline display
   billable           Boolean   @default(true) // General billable setting for project (affects time entry UI, invoicing, etc.)
+  hourlyRate         Decimal?  @map("hourly_rate") @db.Decimal(10, 2) // Default hourly rate for invoicing
   startDate          DateTime? @map("start_date") @db.Timestamptz
   endDate            DateTime? @map("end_date") @db.Timestamptz
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz

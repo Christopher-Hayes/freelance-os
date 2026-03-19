@@ -35,6 +35,7 @@ export interface Project {
   status: ProjectStatus;
   color: string; // Hex color code (e.g., "#22C55E")
   billable: boolean; // General billable setting for the project
+  hourlyRate?: number; // Default hourly rate for invoicing
   startDate?: Date;
   endDate?: Date;
   createdAt: Date;
@@ -49,6 +50,7 @@ export interface CreateProjectInput {
   status?: ProjectStatus;
   color?: string;
   billable?: boolean;
+  hourlyRate?: number;
   startDate?: Date;
   endDate?: Date;
 }
@@ -60,6 +62,7 @@ export interface UpdateProjectInput {
   status?: ProjectStatus;
   color?: string;
   billable?: boolean;
+  hourlyRate?: number | null;
   startDate?: Date;
   endDate?: Date;
 }

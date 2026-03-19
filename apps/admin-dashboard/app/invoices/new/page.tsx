@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Client, Project } from '@freelance-os/types';
 import { generateInvoice } from '@/lib/invoice-actions';
 import { authFetch } from '@/lib/util';
+import MiniCalendar from '@/components/MiniCalendar';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function NewInvoicePage() {
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [status, setStatus] = useState<'draft' | 'sent'>('draft');
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0] ?? '');
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -33,6 +34,75 @@ export default function NewInvoicePage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [dueInDays, setDueInDays] = useState('30');
+
+  // Range stats for the generate form (fetched when both dates are set)
+  type RangeStats = {
+    totalMinutes: number;
+    entryCount: number;
+    billableMinutes: number;
+  };
+  const [rangeStats, setRangeStats] = useState<RangeStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  // Fetch range stats when both start and end dates are set in generate mode
+  useEffect(() => {
+    if (mode !== 'generate' || !startDate || !endDate || !clientId) {
+      setRangeStats(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingStats(true);
+
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          startDate,
+          endDate,
+          clientId: String(clientId),
+        });
+        if (projectId) params.set('projectId', String(projectId));
+
+        const res = await authFetch(`/api/time?${params}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Failed to fetch time entries');
+        const data = await res.json();
+        const entries = data.timeEntries ?? [];
+
+        let totalMinutes = 0;
+        let billableMinutes = 0;
+        for (const e of entries) {
+          totalMinutes += e.durationMinutes;
+          if (e.billable) billableMinutes += e.durationMinutes;
+        }
+
+        setRangeStats({
+          totalMinutes,
+          entryCount: entries.length,
+          billableMinutes,
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch range stats', err);
+          setRangeStats(null);
+        }
+      } finally {
+        setLoadingStats(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [mode, startDate, endDate, clientId, projectId]);
+
+  // Computed billing estimate
+  const billingEstimate = useMemo(() => {
+    if (!rangeStats || !hourlyRate) return null;
+    const rate = parseFloat(hourlyRate);
+    if (isNaN(rate) || rate <= 0) return null;
+    const billableHours = rangeStats.billableMinutes / 60;
+    return billableHours * rate;
+  }, [rangeStats, hourlyRate]);
 
   useEffect(() => {
     fetchClients();
@@ -145,6 +215,17 @@ export default function NewInvoicePage() {
   const filteredProjects = projects.filter(
     (project) => !clientId || project.clientId === Number(clientId)
   );
+
+  // When project selection changes, prefill hourly rate from project data
+  const handleProjectChange = (newProjectId: number | '') => {
+    setProjectId(newProjectId);
+    if (newProjectId) {
+      const selected = projects.find((p) => p.id === Number(newProjectId));
+      if (selected?.hourlyRate != null) {
+        setHourlyRate(String(selected.hourlyRate));
+      }
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -304,33 +385,25 @@ export default function NewInvoicePage() {
               </select>
             </div>
 
-            <div>
-              <label htmlFor="issue-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Issue Date *
-              </label>
-              <input
-                type="date"
-                id="issue-date"
-                value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-              />
-            </div>
+            <MiniCalendar
+              label="Issue Date *"
+              value={issueDate}
+              onChange={setIssueDate}
+              clientId={clientId}
+              projectId={projectId}
+              rangeStart={issueDate}
+              rangeEnd={dueDate}
+            />
 
-            <div>
-              <label htmlFor="due-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Due Date *
-              </label>
-              <input
-                type="date"
-                id="due-date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-              />
-            </div>
+            <MiniCalendar
+              label="Due Date *"
+              value={dueDate}
+              onChange={setDueDate}
+              clientId={clientId}
+              projectId={projectId}
+              rangeStart={issueDate}
+              rangeEnd={dueDate}
+            />
           </div>
 
           <div className="mt-6">
@@ -379,6 +452,7 @@ export default function NewInvoicePage() {
                 onChange={(e) => {
                   setClientId(Number(e.target.value));
                   setProjectId('');
+                  setHourlyRate('');
                 }}
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
@@ -399,14 +473,14 @@ export default function NewInvoicePage() {
               <select
                 id="gen-project"
                 value={projectId}
-                onChange={(e) => setProjectId(Number(e.target.value))}
+                onChange={(e) => handleProjectChange(e.target.value ? Number(e.target.value) : '')}
                 disabled={!clientId}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
               >
                 <option value="">All projects for client</option>
                 {filteredProjects.map((project) => (
                   <option key={project.id} value={project.id}>
-                    {project.name}
+                    {project.name}{project.hourlyRate != null ? ` ($${Number(project.hourlyRate).toFixed(2)}/hr)` : ''}
                   </option>
                 ))}
               </select>
@@ -427,6 +501,11 @@ export default function NewInvoicePage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
                 placeholder="e.g., 75.00"
               />
+              {projectId && hourlyRate && projects.find((p) => p.id === Number(projectId))?.hourlyRate != null && (
+                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                  Auto-filled from project rate
+                </p>
+              )}
             </div>
 
             <div>
@@ -445,31 +524,25 @@ export default function NewInvoicePage() {
               </select>
             </div>
 
-            <div>
-              <label htmlFor="start-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Start Date (Optional)
-              </label>
-              <input
-                type="date"
-                id="start-date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-              />
-            </div>
+            <MiniCalendar
+              label="Start Date (Optional)"
+              value={startDate}
+              onChange={setStartDate}
+              clientId={clientId}
+              projectId={projectId}
+              rangeStart={startDate}
+              rangeEnd={endDate}
+            />
 
-            <div>
-              <label htmlFor="end-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                End Date (Optional)
-              </label>
-              <input
-                type="date"
-                id="end-date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
-              />
-            </div>
+            <MiniCalendar
+              label="End Date (Optional)"
+              value={endDate}
+              onChange={setEndDate}
+              clientId={clientId}
+              projectId={projectId}
+              rangeStart={startDate}
+              rangeEnd={endDate}
+            />
 
             <div>
               <label htmlFor="due-in-days" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -485,6 +558,46 @@ export default function NewInvoicePage() {
               />
             </div>
           </div>
+
+          {/* Range stats summary */}
+          {startDate && endDate && clientId && (
+            <div className="mt-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50 p-4">
+              {loadingStats ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Calculating…</p>
+              ) : rangeStats ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Time Entries</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {rangeStats.entryCount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Total Hours</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {(rangeStats.totalMinutes / 60).toFixed(1)}h
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Billable Hours</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {(rangeStats.billableMinutes / 60).toFixed(1)}h
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Est. Amount</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {billingEstimate != null
+                        ? `$${billingEstimate.toFixed(2)}`
+                        : <span className="text-sm text-gray-400 dark:text-gray-500">Set rate</span>}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No time entries found in this range.</p>
+              )}
+            </div>
+          )}
 
           <div className="mt-6">
             <label htmlFor="gen-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

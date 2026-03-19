@@ -32,6 +32,7 @@ type Project = {
   status: string;
   color: string;
   billable: boolean;
+  hourlyRate: number | null;
   startDate: string | null;
   endDate: string | null;
   client: Client;
@@ -155,6 +156,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       status: project.status,
       color: project.color,
       billable: project.billable,
+      hourlyRate: project.hourlyRate,
       startDate: project.startDate ? project.startDate.split('T')[0] : null,
       endDate: project.endDate ? project.endDate.split('T')[0] : null,
       [field]: value || null,
@@ -163,6 +165,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     // Coerce certain fields
     if (field === 'billable') payload.billable = value === 'true';
     if (field === 'name') payload.name = value;
+    if (field === 'hourlyRate') payload.hourlyRate = value ? parseFloat(value) : null;
     if (field === 'startDate' || field === 'endDate') payload[field] = value || null;
 
     try {
@@ -204,6 +207,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           status: project.status,
           color: project.color,
           billable: newValue,
+          hourlyRate: project.hourlyRate,
           startDate: project.startDate ? project.startDate.split('T')[0] : null,
           endDate: project.endDate ? project.endDate.split('T')[0] : null,
         }),
@@ -525,6 +529,42 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </dd>
           </div>
 
+          {/* Hourly Rate */}
+          <div>
+            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Hourly Rate</dt>
+            <dd className="group mt-1 flex items-center">
+              {editingField === 'hourlyRate' ? (
+                <>
+                  <div className="flex items-center">
+                    <span className="mr-1 text-gray-500 dark:text-gray-400">$</span>
+                    <input
+                      ref={inputRef as React.RefObject<HTMLInputElement>}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, 'hourlyRate')}
+                      className="w-32 rounded border border-blue-400 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <FieldActions field="hourlyRate" />
+                </>
+              ) : (
+                <>
+                  <span className="text-gray-900 dark:text-white">
+                    {project.hourlyRate != null
+                      ? `$${Number(project.hourlyRate).toFixed(2)}/hr`
+                      : <span className="italic text-gray-400">Not set</span>}
+                  </span>
+                  <FieldPencil field="hourlyRate" value={project.hourlyRate != null ? String(project.hourlyRate) : ''} />
+                </>
+              )}
+            </dd>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Used as the default rate when generating invoices</p>
+          </div>
+
           {/* Color */}
           <div>
             <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Color</dt>
@@ -601,7 +641,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <span className="text-gray-900 dark:text-white">
                     {project.startDate ? new Date(project.startDate).toLocaleDateString() : <span className="italic text-gray-400">Not set</span>}
                   </span>
-                  <FieldPencil field="startDate" value={project.startDate ? project.startDate.split('T')[0] : ''} />
+                  <FieldPencil field="startDate" value={project.startDate ? project.startDate.split('T')[0] ?? '' : ''} />
                 </>
               )}
             </dd>
@@ -628,7 +668,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   <span className="text-gray-900 dark:text-white">
                     {project.endDate ? new Date(project.endDate).toLocaleDateString() : <span className="italic text-gray-400">Not set</span>}
                   </span>
-                  <FieldPencil field="endDate" value={project.endDate ? project.endDate.split('T')[0] : ''} />
+                  <FieldPencil field="endDate" value={project.endDate ? project.endDate.split('T')[0] ?? '' : ''} />
                 </>
               )}
             </dd>

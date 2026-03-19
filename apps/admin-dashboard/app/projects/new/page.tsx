@@ -25,6 +25,7 @@ export default function NewProjectPage() {
     status: 'active',
     color: '#22C55E', // Default green
     billable: true, // Default billable
+    hourlyRate: '',
     startDate: '',
     endDate: '',
   });
@@ -69,6 +70,7 @@ export default function NewProjectPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          hourlyRate: formData.hourlyRate || null,
           startDate: formData.startDate || null,
           endDate: formData.endDate || null,
         }),
@@ -215,6 +217,29 @@ export default function NewProjectPage() {
           </label>
           <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             When enabled, time entries will default to billable and show billable tracking options
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="hourlyRate" className="block text-sm font-medium dark:text-gray-300 mb-2">
+            Hourly Rate
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
+            <input
+              type="number"
+              id="hourlyRate"
+              name="hourlyRate"
+              step="0.01"
+              min="0"
+              value={formData.hourlyRate}
+              onChange={handleChange}
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded pl-7 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              placeholder="0.00"
+            />
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Default rate used when generating invoices for this project
           </p>
         </div>
 
