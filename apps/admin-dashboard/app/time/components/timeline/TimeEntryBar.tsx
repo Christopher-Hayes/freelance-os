@@ -7,6 +7,8 @@ import { HOUR_HEIGHT } from "./utils";
 import { ChevronsDownUp, Merge, SquaresUnite } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
+const REDACTION_MODE = false;
+
 // Move utility functions outside component to prevent recreation on every render
 const timeToY = (time: Temporal.ZonedDateTime): number => {
   const startOfDay = time.withPlainTime(Temporal.PlainTime.from("00:00"));
@@ -209,12 +211,12 @@ const TimeEntryBar = memo(function TimeEntryBar({
               />
             ) : (
               <div className="py-2 text-xs flex flex-col gap-0.5 select-none">
-                <div className="truncate flex gap-1" style={{ color: isDragging ? colorScheme.text : colorScheme.text }}>
+                <div className={`truncate flex gap-1 ${REDACTION_MODE ? 'blur-xs' : ''}`} style={{ color: isDragging ? colorScheme.text : colorScheme.text }}>
                   <span className="font-semibold">{entry.project.name}</span>
                   <span className="opacity-60">({entry.project.client.name})</span>
                 </div>
                 {height >= 40 && entry.description && (
-                  <div className="text-xs line-clamp-2" style={{ color: colorScheme.text, opacity: 0.7 }}>
+                  <div className={`text-xs line-clamp-2 ${REDACTION_MODE ? 'blur-xs' : ''}`} style={{ color: colorScheme.text, opacity: 0.7 }}>
                     {entry.description}
                   </div>
                 )}

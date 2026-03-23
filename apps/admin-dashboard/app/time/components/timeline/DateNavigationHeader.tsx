@@ -2,6 +2,7 @@
 
 import { Temporal } from "@/lib/temporal-polyfill";
 import { useRef } from "react";
+import { formatDateStr } from "./utils";
 
 interface DateNavigationHeaderProps {
   selectedDate: Temporal.PlainDate;
@@ -50,7 +51,7 @@ export default function DateNavigationHeader({
   };
 
   // Format date for input value (YYYY-MM-DD)
-  const inputValue = `${selectedDate.year}-${String(selectedDate.month).padStart(2, "0")}-${String(selectedDate.day).padStart(2, "0")}`;
+  const inputValue = formatDateStr(selectedDate);
 
   return (
     <div className="p-4 border-b border-gray-200 dark:border-gray-700">

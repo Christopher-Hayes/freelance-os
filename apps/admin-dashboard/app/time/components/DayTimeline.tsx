@@ -1,240 +1,125 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo, memo } from "react";
-import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
-import { toast } from "@repo/ui";
-import { OptionsMenu, OptionsMenuItem, OptionsMenuSeparator } from "@repo/ui";
 import { useJobs } from "@/components/JobsProvider";
-import { hasActiveJobForDate } from "@/lib/job-utils";
-import { mergeTimeEntries, importRescueTimeProjectTimes, hasRescueTimeArchiveData, mergeRescueTimeProjectEntries } from "@/lib/time-actions";
-import { importRescueTimeData, mergeRescueTimeAppActivity, deleteActivitySessionsForDate } from "@/lib/activity-actions";
+import { isAppHidden } from "@/lib/util";
 import DateNavigationHeader from "./timeline/DateNavigationHeader";
-import TimelineHourMarkers from "./timeline/TimelineHourMarkers";
-import CurrentTimeLine from "./timeline/CurrentTimeLine";
-import ActivitySession from "./timeline/ActivitySession";
-import ActivityScrollbarMinimap, { MINIMAP_HEIGHT_PX } from "./timeline/ActivityScrollbarMinimap";
-import ProjectScrollbarMinimap from "./timeline/ProjectScrollbarMinimap";
-import TimeEntryBar from "./timeline/TimeEntryBar";
-import TimeEntryCreationDialog from "./timeline/TimeEntryCreationDialog";
+import AppActivityColumn from "./timeline/AppActivityColumn";
+import ProjectTrackingColumn from "./timeline/ProjectTrackingColumn";
+import AppContextMenu from "./timeline/AppContextMenu";
 import {
   type ActivitySession as ActivitySessionType,
-  type TimeEntry,
-  type Project,
   HOUR_HEIGHT,
-  TIMELINE_PADDING_TOP,
-  TIMELINE_DRAG_OFFSET,
-  MERGE_THRESHOLD_MINUTES,
-  yToTime,
   mergeAdjacentSessions,
   buildAppColorMap,
 } from "./timeline/utils";
-import { calculateActivityOverlaps, calculateTimeEntryOverlaps } from "./timeline/overlapCalculations";
-import { throttle, isAppHidden, formatAppTitle, syncAppDataToLocalStorage } from "@/lib/util";
-import { authFetch } from '@/lib/util';
-
-function getAppAnalyticsHref(appClass: string) {
-  return `/analytics/apps/${encodeURIComponent(appClass)}`;
-}
-
-// Memoized component for activity sessions timeline - only re-renders when sessions change
-const ActivitySessionsTimeline = memo(function ActivitySessionsTimeline({
-  sessions,
-  loading,
-  onImportRescueTime,
-  importingRescueTime,
-  onSessionClick,
-  onSessionContextMenu,
-}: {
-  sessions: ActivitySessionType[];
-  loading: boolean;
-  onImportRescueTime: () => void;
-  importingRescueTime: boolean;
-  onSessionClick: (session: ActivitySessionType) => void;
-  onSessionContextMenu: (event: React.MouseEvent<HTMLDivElement>, session: ActivitySessionType) => void;
-}) {
-  // Memoize the merged sessions calculation
-  const mergedSessions = useMemo(() => mergeAdjacentSessions(sessions), [sessions]);
-
-  // Build color map based on app usage frequency
-  const appColorMap = useMemo(() => buildAppColorMap(mergedSessions), [mergedSessions]);
-
-  // Memoize the overlap calculations
-  const activityOverlapPositions = useMemo(
-    () => calculateActivityOverlaps(mergedSessions),
-    [mergedSessions]
-  );
-
-  // Show empty state if no sessions and not loading
-  if (!loading && sessions.length === 0) {
-    return (
-      <>
-        <TimelineHourMarkers />
-        <div className="sticky inset-0 flex items-center justify-center backdrop-blur-md p-8 max-w-[460px] top-[200px] left-[130px]">
-          <div className="text-center space-y-4 p-6">
-            <div className="text-gray-400 dark:text-gray-500">
-              <svg
-                className="w-16 h-16 mx-auto mb-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                No activity data yet
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                Import your activity from RescueTime
-              </p>
-            </div>
-            <button
-              onClick={onImportRescueTime}
-              disabled={importingRescueTime}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-offset-slate-900"
-            >
-              {importingRescueTime ? (
-                <>
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Importing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Import from RescueTime
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <TimelineHourMarkers />
-      {loading ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-slate-900/60">
-          <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-        </div>
-      ) : (
-        <div className="relative ml-12">
-          {mergedSessions
-            .filter((session) => activityOverlapPositions[session.id] !== undefined)
-            .map((session) => (
-              <ActivitySession
-                key={session.id}
-                session={session}
-                position={activityOverlapPositions[session.id]!}
-                colorMap={appColorMap}
-                onClick={onSessionClick}
-                onContextMenu={onSessionContextMenu}
-              />
-            ))}
-        </div>
-      )}
-    </>
-  );
-});
+import { calculateTimeEntryOverlaps } from "./timeline/overlapCalculations";
+import {
+  useDayTimelineData,
+  useDragResize,
+  useScrollSync,
+  useTimelineInteractions,
+  useAppContextMenu,
+  useColumnActions,
+} from "./timeline/hooks";
 
 interface DayTimelineProps {
   selectedDate: Temporal.PlainDate;
   onDateChange: (date: Temporal.PlainDate) => void;
 }
 
-export default function DayTimeline({
-  selectedDate,
-  onDateChange,
-}: DayTimelineProps) {
-  const router = useRouter();
-  type AppSessionContextMenuState = {
-    x: number;
-    y: number;
-    session: ActivitySessionType;
-  } | null;
+export default function DayTimeline({ selectedDate, onDateChange }: DayTimelineProps) {
+  const { jobs } = useJobs();
 
-  const { jobs, createJob, refreshJobs } = useJobs();
-
-  // State
-  const [sessions, setSessions] = useState<ActivitySessionType[]>([]);
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastRefreshTime, setLastRefreshTime] = useState<number>(Date.now());
-  const [timeAgo, setTimeAgo] = useState<string>("");
-  const [dragging, setDragging] = useState<{
-    entryId: number;
-    edge: "top" | "bottom";
-    initialY: number;
-    initialTime: Temporal.ZonedDateTime;
-  } | null>(null);
-  const [draggedTimes, setDraggedTimes] = useState<{
-    [key: number]: { startTime: Temporal.ZonedDateTime; endTime: Temporal.ZonedDateTime };
-  }>({});
-  const [justFinishedDragging, setJustFinishedDragging] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
-  const [isClient, setIsClient] = useState(false);
-  const [currentTime, setCurrentTime] = useState<Temporal.ZonedDateTime>(() =>
-    Temporal.Now.zonedDateTimeISO()
-  );
-  const [creatingEntry, setCreatingEntry] = useState<{
-    startTime: Temporal.ZonedDateTime;
-    endTime: Temporal.ZonedDateTime;
-    y: number;
-  } | null>(null);
-  const [ghostEntry, setGhostEntry] = useState<{
-    startTime: Temporal.ZonedDateTime;
-    endTime: Temporal.ZonedDateTime;
-  } | null>(null);
-  const [draggingNewEntry, setDraggingNewEntry] = useState<{
-    startY: number;
-    startTime: Temporal.ZonedDateTime;
-  } | null>(null);
-  const [loadingAutofill, setLoadingAutofill] = useState(false);
-  const [mergingEntryId, setMergingEntryId] = useState<number | null>(null);
-  const [importingRescueTime, setImportingRescueTime] = useState(false);
-  const [importingRescueTimeProjects, setImportingRescueTimeProjects] = useState(false);
-  const [mergingRescueTimeActivity, setMergingRescueTimeActivity] = useState(false);
-  const [mergingRescueTimeProjects, setMergingRescueTimeProjects] = useState(false);
-  const [appContextMenu, setAppContextMenu] = useState<AppSessionContextMenuState>(null);
-  const [isDraggingActivityMinimapViewport, setIsDraggingActivityMinimapViewport] = useState(false);
-  const [isDraggingProjectMinimapViewport, setIsDraggingProjectMinimapViewport] = useState(false);
-  const [activityScrollMetrics, setActivityScrollMetrics] = useState({
-    scrollTop: 0,
-    viewportHeight: MINIMAP_HEIGHT_PX,
-    scrollHeight: 24 * HOUR_HEIGHT + 40,
-  });
-  const [projectScrollMetrics, setProjectScrollMetrics] = useState({
-    scrollTop: 0,
-    viewportHeight: MINIMAP_HEIGHT_PX,
-    scrollHeight: 24 * HOUR_HEIGHT + 40,
-  });
-
-  // Refs
+  // ── Refs ─────────────────────────────────────────────────────────────
   const activityScrollRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const completedJobIdsRef = useRef<Set<number>>(new Set());
 
-  // Memoized calculations for time entries (these change with dragging)
+  // ── Data ─────────────────────────────────────────────────────────────
+  const {
+    sessions,
+    timeEntries,
+    projects,
+    loading,
+    timeAgo,
+    isClient,
+    currentTime,
+    fetchDayData,
+    setTimeEntries,
+  } = useDayTimelineData(selectedDate, jobs);
+
+  // ── Drag-to-resize ───────────────────────────────────────────────────
+  const {
+    dragging,
+    draggedTimes,
+    justFinishedDragging,
+    setJustFinishedDragging,
+    handleDragStart,
+  } = useDragResize(timeEntries, setTimeEntries, selectedDate, timelineRef, fetchDayData);
+
+  // ── Timeline interactions (create/edit/delete entries) ───────────────
+  const {
+    editingEntryId,
+    setEditingEntryId,
+    creatingEntry,
+    setCreatingEntry,
+    ghostEntry,
+    setGhostEntry,
+    draggingNewEntry,
+    handleTimelineMouseDown,
+    handleTimelineMouseMove,
+    handleTimelineMouseUp,
+    handleTimelineMouseLeave,
+    handleEntryClick,
+    handleCreateEntry,
+    handleSaveEdit,
+    handleDelete,
+    handleMergeEntries,
+    mergingEntryId,
+  } = useTimelineInteractions(
+    selectedDate,
+    timelineRef,
+    dragging,
+    justFinishedDragging,
+    setJustFinishedDragging,
+    fetchDayData
+  );
+
+  // ── App context menu ─────────────────────────────────────────────────
+  const {
+    appContextMenu,
+    setAppContextMenu,
+    handleSessionContextMenu,
+    handleSessionClick,
+    handleRenameApp,
+    handleHideApp,
+  } = useAppContextMenu(fetchDayData);
+
+  // ── Column-level actions (RescueTime, autofill, clear) ───────────────
+  const {
+    importingRescueTime,
+    mergingRescueTimeActivity,
+    handleImportFromRescueTime,
+    handleMergeRescueTimeActivity,
+    handleDeleteDayActivity,
+    loadingAutofill,
+    importingRescueTimeProjects,
+    mergingRescueTimeProjects,
+    handleAutofill,
+    handleImportProjectTimesFromRescueTime,
+    handleMergeRescueTimeProjects,
+    handleClearDayEntries,
+  } = useColumnActions(selectedDate, sessions, timeEntries, fetchDayData, setEditingEntryId);
+
+  // ── Derived/memoized values ──────────────────────────────────────────
   const overlapPositions = useMemo(
     () => calculateTimeEntryOverlaps(timeEntries, draggedTimes),
     [timeEntries, draggedTimes]
   );
 
   const visibleSessions = useMemo(
-    () => sessions.filter((session) => !isAppHidden(session.appClass)),
+    () => sessions.filter((session: ActivitySessionType) => !isAppHidden(session.appClass)),
     [sessions]
   );
 
@@ -248,1077 +133,56 @@ export default function DayTimeline({
     [mergedVisibleSessions]
   );
 
-  useEffect(() => {
-    if (!appContextMenu) {
-      return;
-    }
+  // ── Scroll synchronisation ───────────────────────────────────────────
+  const {
+    activityScrollMetrics,
+    projectScrollMetrics,
+    isDraggingActivityMinimapViewport,
+    setIsDraggingActivityMinimapViewport,
+    isDraggingProjectMinimapViewport,
+    setIsDraggingProjectMinimapViewport,
+    handleActivityScroll,
+    handleTimelineScroll,
+    jumpActivityMinimapToRatio,
+    dragActivityMinimapViewport,
+    jumpProjectMinimapToRatio,
+    dragProjectMinimapViewport,
+  } = useScrollSync(
+    activityScrollRef,
+    timelineRef,
+    selectedDate,
+    loading,
+    mergedVisibleSessions
+  );
 
-    const handleDismiss = () => setAppContextMenu(null);
-
-    window.addEventListener("click", handleDismiss);
-    window.addEventListener("scroll", handleDismiss, true);
-    window.addEventListener("resize", handleDismiss);
-
-    return () => {
-      window.removeEventListener("click", handleDismiss);
-      window.removeEventListener("scroll", handleDismiss, true);
-      window.removeEventListener("resize", handleDismiss);
-    };
-  }, [appContextMenu]);
-
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setAppContextMenu(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, []);
-
-  // Effects
-  useEffect(() => {
-    syncAppDataToLocalStorage();
-    fetchDayData();
-  }, [selectedDate]);
-
-  // Refresh day data when autofill jobs complete (only on status change)
-  useEffect(() => {
-    const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-    const completedJobs = jobs.filter(
-      (job) =>
-        job.type === "autofill_time_entries" &&
-        job.status === "completed" &&
-        job.parameters?.date === dateStr
-    );
-
-    // Only refresh if we have NEW completed jobs (not already tracked)
-    const newlyCompletedJobs = completedJobs.filter(job => !completedJobIdsRef.current.has(job.id));
-
-    if (newlyCompletedJobs.length > 0) {
-      // Track these jobs so we don't refresh again for them
-      newlyCompletedJobs.forEach(job => completedJobIdsRef.current.add(job.id));
-
-      // Refresh data when a job for this date completes
-      fetchDayData();
-    }
-  }, [jobs, selectedDate]);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  // Update current time every minute for the current time line
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Temporal.Now.zonedDateTimeISO());
-    }, 60000); // Update every 60 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Update "time ago" display every 30 seconds
-  useEffect(() => {
-    const updateTimeAgo = () => {
-      const secondsAgo = Math.floor((Date.now() - lastRefreshTime) / 1000);
-      if (secondsAgo < 60) {
-        setTimeAgo("just now");
-      } else if (secondsAgo < 3600) {
-        const minutes = Math.floor(secondsAgo / 60);
-        setTimeAgo(`${minutes}m ago`);
-      } else {
-        const hours = Math.floor(secondsAgo / 3600);
-        setTimeAgo(`${hours}h ago`);
-      }
-    };
-
-    updateTimeAgo();
-    const interval = setInterval(updateTimeAgo, 30000); // Update every 30 seconds
-
-    return () => clearInterval(interval);
-  }, [lastRefreshTime]);
-
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
+  // ── Scroll to current time or ~30% on date change ────────────────────
   useEffect(() => {
     const timeline = timelineRef.current;
     const today = Temporal.Now.plainDateISO();
-
     if (timeline) {
-      // If it's the current day, scroll to current time
       if (Temporal.PlainDate.compare(selectedDate, today) === 0) {
         const now = Temporal.Now.zonedDateTimeISO();
         const hours = now.hour + now.minute / 60;
-        const scrollPosition = hours * HOUR_HEIGHT - timeline.clientHeight / 2;
-
-        timeline.scrollTop = Math.max(0, scrollPosition);
+        timeline.scrollTop = Math.max(0, hours * HOUR_HEIGHT - timeline.clientHeight / 2);
       } else {
-        // Otherwise, scroll to ~30% down the timeline
         timeline.scrollTop = timeline.scrollHeight * 0.3;
       }
     }
   }, [selectedDate]);
 
-  useEffect(() => {
-    const activityContainer = activityScrollRef.current;
-    if (!activityContainer) {
-      return;
-    }
-
-    setActivityScrollMetrics({
-      scrollTop: activityContainer.scrollTop,
-      viewportHeight: activityContainer.clientHeight,
-      scrollHeight: activityContainer.scrollHeight,
-    });
-  }, [selectedDate, loading, mergedVisibleSessions]);
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && creatingEntry) {
-        setCreatingEntry(null);
-      }
-    };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [creatingEntry]);
-
-  // Auto-refresh when returning to tab (if 5+ minutes have passed)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        const isToday = Temporal.PlainDate.compare(selectedDate, Temporal.Now.plainDateISO()) === 0;
-        if (!isToday) return;
-
-        const timeSinceLastRefresh = Date.now() - lastRefreshTime;
-        const fiveMinutesInMs = 5 * 60 * 1000;
-
-        if (timeSinceLastRefresh >= fiveMinutesInMs) {
-          console.log('Auto-refreshing activity data after being away for', Math.round(timeSinceLastRefresh / 1000 / 60), 'minutes');
-          fetchDayData();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [lastRefreshTime, selectedDate]);
-
-  // Drag and drop effect
-  useEffect(() => {
-    if (!dragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = timelineRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const scrollTop = timelineRef.current?.scrollTop || 0;
-      const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
-      const newTimeRaw = yToTime(y, selectedDate);
-
-      const minutes = newTimeRaw.minute;
-      const snappedMinutes = Math.round(minutes / 15) * 15;
-      const newTime = newTimeRaw.with({ minute: snappedMinutes, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
-
-      const entry = timeEntries.find((e) => e.id === dragging.entryId);
-      if (!entry) return;
-
-      const draggedEntry = draggedTimes[dragging.entryId];
-      const tz = Temporal.Now.timeZoneId();
-      const currentStart = draggedEntry
-        ? draggedEntry.startTime
-        : Temporal.Instant.from(entry.startTime).toZonedDateTimeISO(tz);
-      const currentEnd = draggedEntry
-        ? draggedEntry.endTime
-        : Temporal.Instant.from(entry.endTime).toZonedDateTimeISO(tz);
-
-      if (dragging.edge === "top") {
-        if (Temporal.ZonedDateTime.compare(newTime, currentEnd) < 0) {
-          setDraggedTimes((prev) => ({
-            ...prev,
-            [dragging.entryId]: { startTime: newTime, endTime: currentEnd },
-          }));
-        }
-      } else {
-        if (Temporal.ZonedDateTime.compare(newTime, currentStart) > 0) {
-          setDraggedTimes((prev) => ({
-            ...prev,
-            [dragging.entryId]: { startTime: currentStart, endTime: newTime },
-          }));
-        }
-      }
-    };
-
-    const handleMouseUp = async () => {
-      if (dragging) {
-        const draggedEntry = draggedTimes[dragging.entryId];
-        if (draggedEntry) {
-          const { startTime, endTime } = draggedEntry;
-
-          setTimeEntries((prev) =>
-            prev.map((entry) =>
-              entry.id === dragging.entryId
-                ? {
-                  ...entry,
-                  startTime: startTime.toString(),
-                  endTime: endTime.toString(),
-                  durationMinutes: Math.round(
-                    Number((endTime.epochNanoseconds - startTime.epochNanoseconds) / 60_000_000_000n)
-                  ),
-                }
-                : entry
-            )
-          );
-
-          const durationMinutes = Math.round(
-            Number((endTime.epochNanoseconds - startTime.epochNanoseconds) / 60_000_000_000n)
-          );
-
-          authFetch(`/api/time/${dragging.entryId}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              startTime: startTime.toString(),
-              endTime: endTime.toString(),
-              durationMinutes,
-            }),
-          }).catch((err) => {
-            console.error("Error updating time entry:", err);
-            fetchDayData();
-          });
-        }
-
-        setJustFinishedDragging(true);
-      }
-
-      setDragging(null);
-      setDraggedTimes({});
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [dragging, timeEntries, draggedTimes, selectedDate]);
-
-  // Data fetching
-  const fetchProjects = async () => {
-    try {
-      const response = await authFetch("/api/projects");
-      const data = await response.json();
-      setProjects(data);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    }
-  };
-
-  const fetchDayData = async () => {
-    setLoading(true);
-    const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-    try {
-      const [sessionsRes, entriesRes] = await Promise.all([
-        authFetch(`/api/activity-sessions?date=${dateStr}`),
-        authFetch(`/api/time?startDate=${dateStr}&endDate=${dateStr}`),
-      ]);
-
-      const sessionsData = await sessionsRes.json();
-      const entriesData = await entriesRes.json();
-
-      setSessions(sessionsData.sessions || []);
-      setTimeEntries(entriesData.timeEntries || []);
-      setLastRefreshTime(Date.now());
-    } catch (error) {
-      console.error("Error fetching day data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const upsertApp = async (appClass: string, data: Record<string, unknown>) => {
-    const response = await authFetch(`/api/apps/${encodeURIComponent(appClass)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to update app");
-    }
-
-    return response.json();
-  };
-
-  const showUndoToast = (message: string, undo: () => Promise<void>) => {
-    toast.success(message, {
-      action: {
-        label: "Undo",
-        onClick: async () => {
-          try {
-            await undo();
-          } catch (error) {
-            console.error("Undo failed:", error);
-            toast.error("Undo failed");
-          }
-        },
-      },
-      duration: 6000,
-    });
-  };
-
-  const handleRenameApp = async (session: ActivitySessionType) => {
-    const currentFriendlyName = formatAppTitle(session.appClass);
-    const nextName = window.prompt(`Rename \"${currentFriendlyName}\"`, currentFriendlyName);
-
-    if (!nextName) {
-      return;
-    }
-
-    const trimmedName = nextName.trim();
-    if (!trimmedName) {
-      return;
-    }
-
-    try {
-      // Get the current displayName so we can undo
-      const currentRes = await authFetch(`/api/apps/${encodeURIComponent(session.appClass)}`);
-      const currentData = await currentRes.json();
-      const previousDisplayName = currentData.app?.displayName ?? null;
-
-      await upsertApp(session.appClass, { displayName: trimmedName });
-      await syncAppDataToLocalStorage();
-      setAppContextMenu(null);
-      await fetchDayData();
-
-      showUndoToast(`Renamed ${currentFriendlyName} to ${trimmedName}`, async () => {
-        await upsertApp(session.appClass, { displayName: previousDisplayName });
-        await syncAppDataToLocalStorage();
-        await fetchDayData();
-        toast.success(`Restored ${currentFriendlyName}`);
-      });
-    } catch (error) {
-      console.error("Error renaming app:", error);
-      toast.error("Failed to rename app");
-    }
-  };
-
-  const handleHideApp = async (session: ActivitySessionType) => {
-    const currentFriendlyName = formatAppTitle(session.appClass);
-
-    try {
-      await upsertApp(session.appClass, { hidden: true });
-      await syncAppDataToLocalStorage();
-      setAppContextMenu(null);
-      await fetchDayData();
-
-      showUndoToast(`Hid ${currentFriendlyName} from timeline and analytics`, async () => {
-        await upsertApp(session.appClass, { hidden: false });
-        await syncAppDataToLocalStorage();
-        await fetchDayData();
-        toast.success(`Unhid ${currentFriendlyName}`);
-      });
-    } catch (error) {
-      console.error("Error hiding app:", error);
-      toast.error("Failed to hide app");
-    }
-  };
-
-  const handleSessionContextMenu = (event: React.MouseEvent<HTMLDivElement>, session: ActivitySessionType) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setAppContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      session,
-    });
-  };
-
-  const handleSessionClick = (session: ActivitySessionType) => {
-    setAppContextMenu(null);
-    router.push(getAppAnalyticsHref(session.appClass));
-  };
-
-  // Manual refresh handler
-  const handleManualRefresh = async () => {
-    await fetchDayData();
-  };
-
-  // Navigation handlers
-  const changeDay = (delta: number) => {
-    const newDate = selectedDate.add({ days: delta });
-    onDateChange(newDate);
-  };
-
-  const goToToday = () => {
-    const today = Temporal.Now.plainDateISO();
-    onDateChange(today);
-  };
-
-  // Timeline interaction handlers
-  const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (dragging) return;
-    if (justFinishedDragging) {
-      setJustFinishedDragging(false);
-      return;
-    }
-    if ((e.target as HTMLElement).closest(".timeline-entry")) return;
-    if ((e.target as HTMLElement).closest(".timeline-session")) return;
-
-    const target = e.currentTarget;
-    const rect = target.getBoundingClientRect();
-    const clickX = e.clientX;
-    const isScrollbar = clickX > rect.right - 20;
-    if (isScrollbar) return;
-
-    setEditingEntryId(null);
-
-    const scrollTop = timelineRef.current?.scrollTop || 0;
-    const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
-    const clickTimeRaw = yToTime(y, selectedDate);
-
-    const minutes = clickTimeRaw.minute;
-    const snappedMinutes = Math.round(minutes / 15) * 15;
-    const clickTime = clickTimeRaw.with({ minute: snappedMinutes, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
-
-    setDraggingNewEntry({
-      startY: y,
-      startTime: clickTime,
-    });
-  };
-
-  const handleTimelineMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (dragging) return;
-    if ((e.target as HTMLElement).closest(".timeline-entry")) {
-      setGhostEntry(null);
-      return;
-    }
-
-    const rect = timelineRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const scrollTop = timelineRef.current?.scrollTop || 0;
-    const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
-    const hoverTimeRaw = yToTime(y, selectedDate);
-
-    const minutes = hoverTimeRaw.minute;
-    const snappedMinutes = Math.round(minutes / 15) * 15;
-    const hoverTime = hoverTimeRaw.with({ minute: snappedMinutes, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
-
-    if (draggingNewEntry) {
-      const startTime = draggingNewEntry.startTime;
-      const endTime = hoverTime;
-
-      if (Temporal.ZonedDateTime.compare(endTime, startTime) > 0) {
-        setGhostEntry({ startTime, endTime });
-      } else if (Temporal.ZonedDateTime.compare(endTime, startTime) < 0) {
-        setGhostEntry({ startTime: endTime, endTime: startTime });
-      }
-    } else {
-      const endTime = hoverTime.add({ hours: 1 });
-      setGhostEntry({ startTime: hoverTime, endTime });
-    }
-  };
-
-  const handleTimelineMouseLeave = () => {
-    if (!draggingNewEntry) {
-      setGhostEntry(null);
-    }
-  };
-
-  const handleTimelineMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!draggingNewEntry) return;
-
-    const rect = timelineRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const scrollTop = timelineRef.current?.scrollTop || 0;
-    const y = e.clientY - rect.top + scrollTop - TIMELINE_PADDING_TOP + TIMELINE_DRAG_OFFSET;
-    const endTimeRaw = yToTime(y, selectedDate);
-
-    const minutes = endTimeRaw.minute;
-    const snappedMinutes = Math.round(minutes / 15) * 15;
-    const endTimeSnapped = endTimeRaw.with({ minute: snappedMinutes, second: 0, millisecond: 0, microsecond: 0, nanosecond: 0 });
-
-    let startTime = draggingNewEntry.startTime;
-    let endTime = endTimeSnapped;
-
-    if (Temporal.ZonedDateTime.compare(endTime, startTime) < 0) {
-      [startTime, endTime] = [endTime, startTime];
-    }
-
-    const durationMs = Number((endTime.epochNanoseconds - startTime.epochNanoseconds) / 1_000_000n);
-    const minDuration = 15 * 60 * 1000;
-    if (durationMs < minDuration) {
-      endTime = startTime.add({ hours: 1 });
-    }
-
-    const viewportHeight = window.innerHeight;
-    const dialogHeight = 500;
-    const idealY = Math.max(20, Math.min(viewportHeight - dialogHeight - 20, (viewportHeight - dialogHeight) / 2));
-
-    setCreatingEntry({ startTime, endTime, y: idealY });
-    setDraggingNewEntry(null);
-    setGhostEntry(null);
-  };
-
-  // Entry handlers
-  const handleDragStart = (
-    e: React.MouseEvent,
-    entryId: number,
-    edge: "top" | "bottom",
-    initialTime: Temporal.ZonedDateTime
-  ) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setDragging({ entryId, edge, initialY: e.clientY, initialTime });
-  };
-
-  const handleEntryClick = (entryId: number) => (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).classList.contains('cursor-ns-resize')) return;
-    if ((e.target as HTMLElement).closest('form')) return;
-    if (dragging) return;
-    setEditingEntryId(editingEntryId === entryId ? null : entryId);
-  };
-
-  const handleCreateEntry = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!creatingEntry) return;
-
-    const formData = new FormData(e.currentTarget);
-    const projectId = parseInt(formData.get('projectId') as string);
-    const description = formData.get('description') as string;
-    const billable = formData.get('billable') === 'on';
-
-    try {
-      const durationMinutes = Math.round(
-        Number((creatingEntry.endTime.epochNanoseconds - creatingEntry.startTime.epochNanoseconds) / 60_000_000_000n)
-      );
-
-      const response = await authFetch("/api/time", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          description: description || null,
-          startTime: creatingEntry.startTime.toString(),
-          endTime: creatingEntry.endTime.toString(),
-          durationMinutes,
-          billable,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to create");
-
-      await fetchDayData();
-      setCreatingEntry(null);
-    } catch (error) {
-      console.error("Error creating entry:", error);
-      toast.error("Failed to create entry");
-    }
-  };
-
-  const handleSaveEdit = (entryId: number) => async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const formData = new FormData(e.currentTarget);
-    const projectId = parseInt(formData.get('projectId') as string);
-    const description = formData.get('description') as string;
-    const billable = formData.get('billable') === 'on';
-
-    try {
-      const response = await authFetch(`/api/time/${entryId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          description: description || null,
-          billable,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to update");
-
-      await fetchDayData();
-      setEditingEntryId(null);
-    } catch (error) {
-      console.error("Error updating entry:", error);
-      toast.error("Failed to update entry");
-    }
-  };
-
-  const handleDelete = (entryId: number) => async () => {
-    // if (!confirm("Delete this time entry?")) return;
-
-    try {
-      const response = await authFetch(`/api/time/${entryId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) throw new Error("Failed to delete");
-
-      await fetchDayData();
-      setEditingEntryId(null);
-    } catch (error) {
-      console.error("Error deleting entry:", error);
-      toast.error("Failed to delete entry");
-    }
-  };
-
-  const handleClearDayEntries = async () => {
-    const entriesToDelete = timeEntries.filter((entry) => entry.id !== -1);
-
-    if (entriesToDelete.length === 0) {
-      toast.info("No project entries to clear for this day");
-      return;
-    }
-
-    try {
-      const results = await Promise.allSettled(
-        entriesToDelete.map((entry) =>
-          authFetch(`/api/time/${entry.id}`, {
-            method: "DELETE",
-          }).then((response) => {
-            if (!response.ok) {
-              throw new Error(`Failed to delete entry ${entry.id}`);
-            }
-          })
-        )
-      );
-
-      const failures = results.filter((result) => result.status === "rejected");
-
-      if (failures.length > 0) {
-        throw new Error(`Failed to clear ${failures.length} entr${failures.length === 1 ? "y" : "ies"}`);
-      }
-
-      await fetchDayData();
-      setEditingEntryId(null);
-      toast.success(`Cleared ${entriesToDelete.length} project ${entriesToDelete.length === 1 ? "entry" : "entries"}`);
-    } catch (error) {
-      console.error("Error clearing day entries:", error);
-      toast.error("Failed to clear today's project entries");
-    }
-  };
-
-  const handleAutofill = async () => {
-    setLoadingAutofill(true);
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      // Create a background job instead of waiting for results
-      await createJob("autofill_time_entries", { date: dateStr });
-
-      toast.info("Autofill job started! You'll be notified when it completes.");
-    } catch (error: any) {
-      console.error("Error starting autofill:", error);
-      toast.error(error.message || "Failed to start autofill job");
-    } finally {
-      setLoadingAutofill(false);
-    }
-  };
-
-  const handleMergeEntries = (entryId: number, nextEntryId: number) => async () => {
-    setMergingEntryId(entryId);
-    try {
-      await mergeTimeEntries(entryId, nextEntryId);
-      await fetchDayData();
-      toast.success("Entries merged successfully!");
-    } catch (error: any) {
-      console.error("Error merging entries:", error);
-      toast.error(error.message || "Failed to merge entries");
-    } finally {
-      setMergingEntryId(null);
-    }
-  };
-
-  const handleImportFromRescueTime = async () => {
-    setImportingRescueTime(true);
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      const data = await importRescueTimeData(dateStr);
-
-      if (data.sessionsImported > 0) {
-        toast.success(`Imported ${data.sessionsImported} activity sessions from RescueTime!`);
-        await fetchDayData();
-      } else {
-        toast.info(data.message || "No data imported");
-      }
-    } catch (error: any) {
-      console.error("Error importing from RescueTime:", error);
-      toast.error(error.message || "Failed to import from RescueTime");
-    } finally {
-      setImportingRescueTime(false);
-    }
-  };
-
-  const handleImportProjectTimesFromRescueTime = async () => {
-    setImportingRescueTimeProjects(true);
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      const data = await importRescueTimeProjectTimes(dateStr);
-
-      if (data.status === "no_archive_data") {
-        toast.error(
-          "No RescueTime archive data for this date. Upload your Project History archive in Settings → RescueTime Integration.",
-          { duration: 8000 }
-        );
-        return;
-      }
-
-      if (data.entriesImported > 0) {
-        toast.success(data.message);
-        await fetchDayData();
-
-        // Show additional info about unmatched projects
-        if (data.unmatchedProjects && data.unmatchedProjects.length > 0) {
-          setTimeout(() => {
-            toast.warning(
-              `Skipped RescueTime projects with no local match: ${data.unmatchedProjects.join(", ")}`,
-              { duration: 10000 }
-            );
-          }, 500);
-        }
-      } else {
-        toast.info(data.message || "No project times imported");
-      }
-    } catch (error: any) {
-      console.error("Error importing project times from RescueTime:", error);
-      toast.error(error.message || "Failed to import project times from RescueTime");
-    } finally {
-      setImportingRescueTimeProjects(false);
-    }
-  };
-
-  const handleMergeRescueTimeActivity = async () => {
-    setMergingRescueTimeActivity(true);
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      const data = await mergeRescueTimeAppActivity(dateStr);
-
-      if (data.sessionsMerged > 0) {
-        toast.success(data.message);
-        await fetchDayData();
-      } else {
-        toast.info(data.message);
-      }
-    } catch (error: any) {
-      console.error("Error merging RescueTime activity:", error);
-      toast.error(error.message || "Failed to merge RescueTime activity");
-    } finally {
-      setMergingRescueTimeActivity(false);
-    }
-  };
-
-  const handleDeleteDayActivity = async () => {
-    if (sessions.length === 0) {
-      toast.info("No app activity to delete for this day");
-      return;
-    }
-
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      const data = await deleteActivitySessionsForDate(dateStr);
-      toast.success(data.message);
-      await fetchDayData();
-    } catch (error: any) {
-      console.error("Error deleting day activity:", error);
-      toast.error(error.message || "Failed to delete app activity");
-    }
-  };
-
-  const handleMergeRescueTimeProjects = async () => {
-    setMergingRescueTimeProjects(true);
-    try {
-      const dateStr = `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`;
-
-      const data = await mergeRescueTimeProjectEntries(dateStr);
-
-      if (data.status === "no_archive_data") {
-        toast.error(
-          "No RescueTime archive data for this date. Upload your Project History archive in Settings → RescueTime Integration.",
-          { duration: 8000 }
-        );
-        return;
-      }
-
-      if (data.entriesMerged > 0) {
-        toast.success(data.message);
-        await fetchDayData();
-
-        if (data.unmatchedProjects && data.unmatchedProjects.length > 0) {
-          setTimeout(() => {
-            toast.warning(
-              `Skipped RescueTime projects with no local match: ${data.unmatchedProjects.join(", ")}`,
-              { duration: 10000 }
-            );
-          }, 500);
-        }
-      } else {
-        toast.info(data.message || "Nothing to merge");
-      }
-    } catch (error: any) {
-      console.error("Error merging RescueTime project entries:", error);
-      toast.error(error.message || "Failed to merge RescueTime project entries");
-    } finally {
-      setMergingRescueTimeProjects(false);
-    }
-  };
-
-  const handleActivityScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const nextScrollTop = e.currentTarget.scrollTop;
-    setActivityScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: e.currentTarget.clientHeight,
-      scrollHeight: e.currentTarget.scrollHeight,
-    });
-
-    setProjectScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: nextScrollTop,
-      viewportHeight: timelineRef.current?.clientHeight ?? prev.viewportHeight,
-      scrollHeight: timelineRef.current?.scrollHeight ?? prev.scrollHeight,
-    }));
-
-    if (timelineRef.current) {
-      timelineRef.current.scrollTop = nextScrollTop;
-    }
-  };
-
-  const handleTimelineScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const nextScrollTop = e.currentTarget.scrollTop;
-    setProjectScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: e.currentTarget.clientHeight,
-      scrollHeight: e.currentTarget.scrollHeight,
-    });
-
-    setActivityScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: nextScrollTop,
-      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
-      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
-    }));
-
-    if (activityScrollRef.current) {
-      activityScrollRef.current.scrollTop = nextScrollTop;
-    }
-  };
-
-  const jumpActivityMinimapToRatio = (ratio: number) => {
-    const activityContainer = activityScrollRef.current;
-    if (!activityContainer) {
-      return;
-    }
-
-    const maxScrollTop = Math.max(activityContainer.scrollHeight - activityContainer.clientHeight, 0);
-    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
-
-    activityContainer.scrollTop = nextScrollTop;
-
-    if (timelineRef.current) {
-      timelineRef.current.scrollTop = nextScrollTop;
-    }
-
-    setActivityScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: activityContainer.clientHeight,
-      scrollHeight: activityContainer.scrollHeight,
-    });
-  };
-
-  const dragActivityMinimapViewport = (deltaRatio: number) => {
-    const activityContainer = activityScrollRef.current;
-    if (!activityContainer) {
-      return;
-    }
-
-    const maxScrollTop = Math.max(activityContainer.scrollHeight - activityContainer.clientHeight, 0);
-    const scrollDelta = deltaRatio * maxScrollTop;
-    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, activityContainer.scrollTop + scrollDelta));
-
-    activityContainer.scrollTop = nextScrollTop;
-
-    if (timelineRef.current) {
-      timelineRef.current.scrollTop = nextScrollTop;
-    }
-
-    setActivityScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: activityContainer.clientHeight,
-      scrollHeight: activityContainer.scrollHeight,
-    });
-
-    setProjectScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: nextScrollTop,
-      viewportHeight: timelineRef.current?.clientHeight ?? prev.viewportHeight,
-      scrollHeight: timelineRef.current?.scrollHeight ?? prev.scrollHeight,
-    }));
-  };
-
-  const jumpProjectMinimapToRatio = (ratio: number) => {
-    const projectContainer = timelineRef.current;
-    if (!projectContainer) {
-      return;
-    }
-
-    const maxScrollTop = Math.max(projectContainer.scrollHeight - projectContainer.clientHeight, 0);
-    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
-
-    projectContainer.scrollTop = nextScrollTop;
-
-    if (activityScrollRef.current) {
-      activityScrollRef.current.scrollTop = nextScrollTop;
-    }
-
-    setProjectScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: projectContainer.clientHeight,
-      scrollHeight: projectContainer.scrollHeight,
-    });
-
-    setActivityScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: nextScrollTop,
-      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
-      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
-    }));
-  };
-
-  const dragProjectMinimapViewport = (deltaRatio: number) => {
-    const projectContainer = timelineRef.current;
-    if (!projectContainer) {
-      return;
-    }
-
-    const maxScrollTop = Math.max(projectContainer.scrollHeight - projectContainer.clientHeight, 0);
-    const scrollDelta = deltaRatio * maxScrollTop;
-    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, projectContainer.scrollTop + scrollDelta));
-
-    projectContainer.scrollTop = nextScrollTop;
-
-    if (activityScrollRef.current) {
-      activityScrollRef.current.scrollTop = nextScrollTop;
-    }
-
-    setProjectScrollMetrics({
-      scrollTop: nextScrollTop,
-      viewportHeight: projectContainer.clientHeight,
-      scrollHeight: projectContainer.scrollHeight,
-    });
-
-    setActivityScrollMetrics((prev) => ({
-      ...prev,
-      scrollTop: nextScrollTop,
-      viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
-      scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
-    }));
-  };
-
-  // Render time entries with ghost entry
-  const renderTimeEntries = () => {
-    const entries = [...timeEntries];
-
-    if (ghostEntry) {
-      entries.push({
-        id: -1,
-        projectId: 0,
-        description: null,
-        startTime: ghostEntry.startTime.toString(),
-        endTime: ghostEntry.endTime.toString(),
-        durationMinutes: Math.round(
-          Number((ghostEntry.endTime.epochNanoseconds - ghostEntry.startTime.epochNanoseconds) / 60_000_000_000n)
-        ),
-        billable: true,
-        project: {
-          id: 0,
-          name: draggingNewEntry ? "Release to create" : "Click & drag to create",
-          color: "#9CA3AF",
-          client: { name: "" },
-        },
-      } as TimeEntry);
-    }
-
-    // Sort entries by start time to check for adjacent entries
-    const sortedEntries = [...entries].sort((a, b) => {
-      const aTime = Temporal.Instant.from(a.startTime);
-      const bTime = Temporal.Instant.from(b.startTime);
-      return Temporal.Instant.compare(aTime, bTime);
-    });
-
-    // Build a map of which entries can be merged
-    const canMergeMap = new Map<number, number>(); // entryId -> nextEntryId to merge with
-
-    for (let i = 0; i < sortedEntries.length - 1; i++) {
-      const currentEntry = sortedEntries[i]!;
-      const nextEntry = sortedEntries[i + 1]!;
-
-      // Skip ghost entries
-      if (currentEntry.id === -1 || nextEntry.id === -1) continue;
-
-      // Check if they're the same project
-      if (currentEntry.projectId !== nextEntry.projectId) continue;
-
-      const currentEnd = Temporal.Instant.from(currentEntry.endTime);
-      const nextStart = Temporal.Instant.from(nextEntry.startTime);
-
-      // Calculate gap in minutes
-      const gapNs = nextStart.epochNanoseconds - currentEnd.epochNanoseconds;
-      const gapMinutes = Number(gapNs / 60_000_000_000n);
-
-      // If gap is within threshold, mark as mergeable
-      if (gapMinutes >= 0 && gapMinutes <= MERGE_THRESHOLD_MINUTES) {
-        canMergeMap.set(currentEntry.id, nextEntry.id);
-      }
-    }
-
-    return entries.map((entry) => {
-      const isGhost = entry.id === -1;
-      const position = isGhost
-        ? { column: 0, totalColumns: 1 }
-        : (overlapPositions[entry.id] || { column: 0, totalColumns: 1 });
-
-      const canMerge = canMergeMap.has(entry.id);
-      const nextEntryId = canMergeMap.get(entry.id);
-
-      return (
-        <TimeEntryBar
-          key={entry.id}
-          entry={entry}
-          position={position}
-          isGhost={isGhost}
-          isDragging={dragging?.entryId === entry.id}
-          draggedTimes={draggedTimes[entry.id]}
-          isEditing={editingEntryId === entry.id}
-          projects={projects}
-          canMerge={canMerge}
-          isMerging={mergingEntryId === entry.id}
-          onDragStart={(e, edge, time) => handleDragStart(e, entry.id, edge, time)}
-          onClick={handleEntryClick(entry.id)}
-          onSaveEdit={handleSaveEdit(entry.id)}
-          onCancelEdit={() => setEditingEntryId(null)}
-          onDelete={handleDelete(entry.id)}
-          onMerge={canMerge && nextEntryId ? handleMergeEntries(entry.id, nextEntryId) : undefined}
-        />
-      );
-    });
-  };
-
+  // ── Navigation ────────────────────────────────────────────────────────
+  const changeDay = useCallback(
+    (delta: number) => onDateChange(selectedDate.add({ days: delta })),
+    [onDateChange, selectedDate]
+  );
+  const goToToday = useCallback(
+    () => onDateChange(Temporal.Now.plainDateISO()),
+    [onDateChange]
+  );
+
+  // ── Render ────────────────────────────────────────────────────────────
   return (
-  <div className="rounded-3xl border border-slate-200/80 bg-white/95 shadow-sm ring-1 ring-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/90 dark:ring-white/5">
+    <div className="rounded-3xl border border-slate-200/80 bg-white/95 shadow-sm ring-1 ring-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/90 dark:ring-white/5">
       <DateNavigationHeader
         selectedDate={selectedDate}
         onPrevDay={() => changeDay(-1)}
@@ -1327,359 +191,105 @@ export default function DayTimeline({
         onDateSelect={onDateChange}
       />
 
-      <div
-        className="p-4 relative"
-        style={dragging ? { userSelect: 'none' } : {}}
-      >
+      <div className="p-4 relative" style={dragging ? { userSelect: "none" } : {}}>
         {dragging && (
-          <div
-            className="fixed inset-0 z-50"
-            style={{ cursor: 'ns-resize' }}
-          />
+          <div className="fixed inset-0 z-50" style={{ cursor: "ns-resize" }} />
         )}
 
         <div className="grid grid-cols-5 gap-4">
-          {/* Activity Sessions Column */}
-          <div className="col-span-3 select-none">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  App Activity
-                </h3>
-                <button
-                  onClick={handleManualRefresh}
-                  disabled={loading}
-                  className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
-                  title="Refresh activity data"
-                >
-                  <svg
-                    className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                </button>
-                {timeAgo && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    Updated {timeAgo}
-                  </span>
-                )}
-              </div>
-              <OptionsMenu label="App Activity options">
-                <OptionsMenuItem
-                  onClick={handleMergeRescueTimeActivity}
-                  disabled={mergingRescueTimeActivity}
-                  icon={
-                    mergingRescueTimeActivity ? (
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                    )
-                  }
-                >
-                  {mergingRescueTimeActivity ? "Merging..." : "Merge RescueTime app activity"}
-                </OptionsMenuItem>
-                <OptionsMenuSeparator />
-                <OptionsMenuItem
-                  onClick={handleDeleteDayActivity}
-                  disabled={loading || sessions.length === 0}
-                  tone="danger"
-                  icon={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  }
-                >
-                  Delete today&apos;s app activity
-                </OptionsMenuItem>
-              </OptionsMenu>
-            </div>
-            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
-              <div className="flex h-full items-stretch">
-                <div
-                  ref={activityScrollRef}
-                  className="relative min-w-0 flex-1 overflow-y-auto overflow-x-visible pr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                  style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
-                  onScroll={handleActivityScroll}
-                >
-                  <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
-                    <ActivitySessionsTimeline
-                      sessions={visibleSessions}
-                      loading={loading}
-                      onImportRescueTime={handleImportFromRescueTime}
-                      importingRescueTime={importingRescueTime}
-                      onSessionClick={handleSessionClick}
-                      onSessionContextMenu={handleSessionContextMenu}
-                    />
-                    <CurrentTimeLine
-                      selectedDate={selectedDate}
-                      isClient={isClient}
-                      currentTime={currentTime}
-                    />
-                  </div>
-                </div>
-                <ActivityScrollbarMinimap
-                  sessions={mergedVisibleSessions}
-                  colorMap={minimapColorMap}
-                  scrollTop={activityScrollMetrics.scrollTop}
-                  viewportHeight={activityScrollMetrics.viewportHeight}
-                  scrollHeight={activityScrollMetrics.scrollHeight}
-                  onJumpToRatio={jumpActivityMinimapToRatio}
-                  onDragViewport={dragActivityMinimapViewport}
-                  isDraggingViewport={isDraggingActivityMinimapViewport}
-                  setIsDraggingViewport={setIsDraggingActivityMinimapViewport}
-                />
-              </div>
-            </div>
-          </div>
+          <AppActivityColumn
+            sessions={sessions}
+            visibleSessions={visibleSessions}
+            mergedVisibleSessions={mergedVisibleSessions}
+            minimapColorMap={minimapColorMap}
+            loading={loading}
+            timeAgo={timeAgo}
+            importingRescueTime={importingRescueTime}
+            mergingRescueTimeActivity={mergingRescueTimeActivity}
+            activityScrollMetrics={activityScrollMetrics}
+            isDraggingActivityMinimapViewport={isDraggingActivityMinimapViewport}
+            setIsDraggingActivityMinimapViewport={setIsDraggingActivityMinimapViewport}
+            isClient={isClient}
+            selectedDate={selectedDate}
+            currentTime={currentTime}
+            onRefresh={fetchDayData}
+            onMergeRescueTimeActivity={handleMergeRescueTimeActivity}
+            onDeleteDayActivity={handleDeleteDayActivity}
+            onImportFromRescueTime={handleImportFromRescueTime}
+            onSessionClick={handleSessionClick}
+            onSessionContextMenu={handleSessionContextMenu}
+            onScroll={handleActivityScroll}
+            onJumpMinimapToRatio={jumpActivityMinimapToRatio}
+            onDragMinimap={dragActivityMinimapViewport}
+            scrollRef={activityScrollRef}
+          />
 
-          {/* Time Entries Column */}
-          <div className="col-span-2">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="select-none text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Project Tracking
-              </h3>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleAutofill}
-                  disabled={loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`)}
-                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
-                  title={hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Autofill in progress..." : "Use AI to suggest time entries based on app activity"}
-                >
-                  <svg
-                    className={`w-4 h-4 ${loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? 'animate-spin' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                      />
-                    ) : (
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    )}
-                  </svg>
-                  {loadingAutofill || hasActiveJobForDate(jobs, `${selectedDate.year}-${String(selectedDate.month).padStart(2, '0')}-${String(selectedDate.day).padStart(2, '0')}`) ? "Processing..." : "Autofill"}
-                </button>
-                <OptionsMenu label="Project Tracking options">
-                  <OptionsMenuItem
-                    onClick={handleMergeRescueTimeProjects}
-                    disabled={mergingRescueTimeProjects}
-                    icon={
-                      mergingRescueTimeProjects ? (
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                      )
-                    }
-                  >
-                    {mergingRescueTimeProjects ? "Merging..." : "Merge RescueTime project entries"}
-                  </OptionsMenuItem>
-                  <OptionsMenuSeparator />
-                  <OptionsMenuItem
-                    onClick={handleClearDayEntries}
-                    disabled={loading || timeEntries.length === 0}
-                    tone="danger"
-                    icon={
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    }
-                  >
-                    Clear today&apos;s entries
-                  </OptionsMenuItem>
-                </OptionsMenu>
-              </div>
-            </div>
-            <div className="relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
-              <div
-                ref={timelineRef}
-                className="relative min-w-0 flex-1 overflow-y-auto overflow-x-visible cursor-crosshair pr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-                style={{ height: `${24 * HOUR_HEIGHT + 40}px`, maxHeight: "640px" }}
-                onMouseDown={handleTimelineMouseDown}
-                onMouseMove={throttle(handleTimelineMouseMove, 20)}
-                onMouseUp={handleTimelineMouseUp}
-                onMouseLeave={handleTimelineMouseLeave}
-                onScroll={throttle(handleTimelineScroll, 20)}
-              >
-                <div className="relative" style={{ height: `${24 * HOUR_HEIGHT + 40}px`, paddingTop: `${TIMELINE_PADDING_TOP}px`, paddingBottom: '40px' }}>
-                  <TimelineHourMarkers />
-                  {loading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-slate-900/60">
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Loading...</div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="relative ml-12">{renderTimeEntries()}</div>
-                      {timeEntries.length === 0 && (
-                        <div className="sticky inset-0 flex items-center justify-center backdrop-blur-md p-8 max-w-[360px] top-[200px] left-20">
-                          <div className="text-center space-y-4 p-6">
-                            <div className="text-gray-400 dark:text-gray-500">
-                              <svg
-                                className="w-16 h-16 mx-auto mb-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={1.5}
-                                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                                />
-                              </svg>
-                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                No project time entries
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                                Click &amp; drag to create, use Autofill, or import from RescueTime
-                              </p>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleImportProjectTimesFromRescueTime();
-                              }}
-                              onMouseEnter={(e) => {
-                                // Hide the ghost entry on hover to prevent it from interfering with the button hover state
-                                if (!draggingNewEntry) {
-                                  setGhostEntry(null);
-                                }
-                              }}
-                              onMouseMove={(e) => {
-                                e.stopPropagation();
-                              }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                              }}
-                              onMouseUp={(e) => {
-                                e.stopPropagation();
-                              }}
-                              disabled={importingRescueTimeProjects}
-                              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-offset-slate-900"
-                            >
-                              {importingRescueTimeProjects ? (
-                                <>
-                                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                  Importing...
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                  </svg>
-                                  Import from RescueTime
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  <CurrentTimeLine
-                    selectedDate={selectedDate}
-                    isClient={isClient}
-                    currentTime={currentTime}
-                  />
-                </div>
-              </div>
-              <ProjectScrollbarMinimap
-                entries={timeEntries}
-                scrollTop={projectScrollMetrics.scrollTop}
-                viewportHeight={projectScrollMetrics.viewportHeight}
-                scrollHeight={projectScrollMetrics.scrollHeight}
-                onJumpToRatio={jumpProjectMinimapToRatio}
-                onDragViewport={dragProjectMinimapViewport}
-                isDraggingViewport={isDraggingProjectMinimapViewport}
-                setIsDraggingViewport={setIsDraggingProjectMinimapViewport}
-              />
-            </div>
-          </div>
+          <ProjectTrackingColumn
+            timeEntries={timeEntries}
+            projects={projects}
+            loading={loading}
+            jobs={jobs}
+            selectedDate={selectedDate}
+            dragging={dragging}
+            draggedTimes={draggedTimes}
+            ghostEntry={ghostEntry}
+            draggingNewEntry={draggingNewEntry}
+            editingEntryId={editingEntryId}
+            overlapPositions={overlapPositions}
+            mergingEntryId={mergingEntryId}
+            loadingAutofill={loadingAutofill}
+            importingRescueTimeProjects={importingRescueTimeProjects}
+            mergingRescueTimeProjects={mergingRescueTimeProjects}
+            creatingEntry={creatingEntry}
+            isClient={isClient}
+            currentTime={currentTime}
+            projectScrollMetrics={projectScrollMetrics}
+            isDraggingProjectMinimapViewport={isDraggingProjectMinimapViewport}
+            setIsDraggingProjectMinimapViewport={setIsDraggingProjectMinimapViewport}
+            onAutofill={handleAutofill}
+            onMergeRescueTimeProjects={handleMergeRescueTimeProjects}
+            onClearDayEntries={handleClearDayEntries}
+            onImportProjectTimesFromRescueTime={handleImportProjectTimesFromRescueTime}
+            onTimelineMouseDown={handleTimelineMouseDown}
+            onTimelineMouseMove={handleTimelineMouseMove}
+            onTimelineMouseUp={handleTimelineMouseUp}
+            onTimelineMouseLeave={handleTimelineMouseLeave}
+            onTimelineScroll={handleTimelineScroll}
+            onDragStart={handleDragStart}
+            onEntryClick={handleEntryClick}
+            onSaveEdit={handleSaveEdit}
+            onDelete={handleDelete}
+            onMergeEntries={handleMergeEntries}
+            onCancelEdit={() => setEditingEntryId(null)}
+            onCreateEntry={handleCreateEntry}
+            onCancelCreate={() => setCreatingEntry(null)}
+            onJumpMinimapToRatio={jumpProjectMinimapToRatio}
+            onDragMinimap={dragProjectMinimapViewport}
+            setGhostEntry={setGhostEntry}
+            timelineRef={timelineRef}
+          />
         </div>
 
-        {appContextMenu && isClient && createPortal(
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setAppContextMenu(null)} />
-            <div
-              className="fixed z-50 min-w-48 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/95"
-              style={{ top: appContextMenu.y, left: appContextMenu.x }}
-              role="menu"
-            >
-              <div className="border-b border-slate-200 px-3 py-2 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-                {formatAppTitle(appContextMenu.session.appClass)}
-              </div>
-              <button
-                type="button"
-                className="flex w-full items-center rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5"
-                onClick={() => void handleRenameApp(appContextMenu.session)}
-                role="menuitem"
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center rounded-xl px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5"
-                onClick={() => void handleHideApp(appContextMenu.session)}
-                role="menuitem"
-              >
-                Hide
-              </button>
-            </div>
-          </>,
-          document.body
-        )}
-
-        {creatingEntry && (
-          <TimeEntryCreationDialog
-            startTime={creatingEntry.startTime}
-            endTime={creatingEntry.endTime}
-            y={creatingEntry.y}
-            projects={projects}
-            onSubmit={handleCreateEntry}
-            onCancel={() => setCreatingEntry(null)}
+        {appContextMenu && (
+          <AppContextMenu
+            contextMenu={appContextMenu}
+            isClient={isClient}
+            onClose={() => setAppContextMenu(null)}
+            onRename={(session) => void handleRenameApp(session)}
+            onHide={(session) => void handleHideApp(session)}
           />
         )}
+      </div>
 
-        <div className="mt-4">
-          <div className="text-xs text-slate-500 dark:text-slate-400">
+      <div className="px-4 pb-4">
+        <div className="text-xs text-slate-500 dark:text-slate-400">
           <p>
             <strong>Apps:</strong> Hover to see details. Data from external tracking utility.
           </p>
           <p>
-            <strong>Project Entries:</strong> Click & drag to create new entries. Click entry to edit. Drag top/bottom edges to resize.
+            <strong>Project Entries:</strong> Click &amp; drag to create new entries. Click entry
+            to edit. Drag top/bottom edges to resize.
           </p>
-          </div>
         </div>
       </div>
     </div>

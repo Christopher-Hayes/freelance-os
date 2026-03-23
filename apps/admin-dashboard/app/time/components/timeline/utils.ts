@@ -1,5 +1,27 @@
 import { Temporal } from "@/lib/temporal-polyfill";
 
+/**
+ * Format a Temporal.PlainDate as "YYYY-MM-DD" for API calls
+ */
+export function formatDateStr(date: Temporal.PlainDate): string {
+  return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
+}
+
+/**
+ * Snap a ZonedDateTime's minutes to the nearest 15-minute boundary,
+ * zeroing seconds and sub-seconds.
+ */
+export function snapTo15Min(time: Temporal.ZonedDateTime): Temporal.ZonedDateTime {
+  const snappedMinutes = Math.round(time.minute / 15) * 15;
+  return time.with({
+    minute: snappedMinutes,
+    second: 0,
+    millisecond: 0,
+    microsecond: 0,
+    nanosecond: 0,
+  });
+}
+
 export const PIXELS_PER_HOUR = 60;
 export const HOUR_HEIGHT = PIXELS_PER_HOUR;
 export const TIMELINE_PADDING_TOP = 16;
