@@ -250,6 +250,7 @@ enum AiProvider {
 // Enum for AI job types
 enum AiJobType {
   autofill_time_entries
+  merge_rescuetime_activity
   // Future: generate_invoice_description, analyze_productivity, etc.
 }
 

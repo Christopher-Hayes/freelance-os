@@ -43,6 +43,26 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
       }
       break;
     }
+    case "merge_rescuetime_activity": {
+      const params = job.parameters as { date?: string } | undefined;
+      const date = params?.date ? formatJobDate(params.date) : "Unknown date";
+      displayTitle = `Merge RescueTime Activity: ${date}`;
+
+      if (job.status === "completed" && job.result) {
+        const result = job.result as {
+          sessionsMerged?: number;
+          message?: string;
+        };
+        displayDescription = result.message || `Merged ${result.sessionsMerged ?? 0} session(s)`;
+      } else if (job.status === "processing") {
+        displayDescription = `Fetching & deduplicating activity (${job.progress}%)`;
+      } else if (job.status === "failed") {
+        displayDescription = job.error || "Failed to merge activity";
+      } else if (job.status === "pending") {
+        displayDescription = "Queued and waiting to start";
+      }
+      break;
+    }
     default:
       displayTitle = `Unknown job type: ${job.type}`;
   }

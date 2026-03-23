@@ -5,7 +5,7 @@ import { Temporal } from "@/lib/temporal-polyfill";
 import { toast } from "@repo/ui";
 import { useJobs } from "@/components/JobsProvider";
 import { authFetch } from "@/lib/util";
-import { importRescueTimeData, mergeRescueTimeAppActivity, deleteActivitySessionsForDate } from "@/lib/activity-actions";
+import { importRescueTimeData, deleteActivitySessionsForDate } from "@/lib/activity-actions";
 import { importRescueTimeProjectTimes, mergeRescueTimeProjectEntries } from "@/lib/time-actions";
 import { type TimeEntry, formatDateStr } from "../utils";
 
@@ -68,20 +68,15 @@ export function useColumnActions(
     setMergingRescueTimeActivity(true);
     try {
       const dateStr = formatDateStr(selectedDate);
-      const data = await mergeRescueTimeAppActivity(dateStr);
-      if (data.sessionsMerged > 0) {
-        toast.success(data.message);
-        await fetchDayData();
-      } else {
-        toast.info(data.message);
-      }
+      await createJob("merge_rescuetime_activity", { date: dateStr });
+      toast.info("Merge RescueTime activity job started! You'll be notified when it completes.");
     } catch (error: any) {
-      console.error("Error merging RescueTime activity:", error);
-      toast.error(error.message || "Failed to merge RescueTime activity");
+      console.error("Error starting merge RescueTime activity job:", error);
+      toast.error(error.message || "Failed to start merge job");
     } finally {
       setMergingRescueTimeActivity(false);
     }
-  }, [selectedDate, fetchDayData]);
+  }, [selectedDate, createJob]);
 
   const handleDeleteDayActivity = useCallback(async () => {
     if (sessions.length === 0) {

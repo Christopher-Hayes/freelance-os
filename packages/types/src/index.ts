@@ -270,7 +270,7 @@ export interface UpdateSettingInput {
 }
 
 // AI Job types
-export type AiJobType = 'autofill_time_entries'; // Future: 'generate_invoice_description', 'analyze_productivity', etc.
+export type AiJobType = 'autofill_time_entries' | 'merge_rescuetime_activity'; // Future: 'generate_invoice_description', 'analyze_productivity', etc.
 export type AiJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface AiJob {

@@ -109,6 +109,9 @@ async function processJobAsync(jobId: number) {
       case "autofill_time_entries":
         await processAutofillJob(job);
         break;
+      case "merge_rescuetime_activity":
+        await processMergeRescueTimeActivityJob(job);
+        break;
       default:
         throw new Error(`Unknown job type: ${job.type}`);
     }
@@ -273,3 +276,40 @@ async function processAutofillJob(job: any) {
   }
 }
 
+async function processMergeRescueTimeActivityJob(job: any) {
+  const { mergeRescueTimeAppActivity } = await import("@/lib/activity-actions");
+
+  const params = job.parameters as { date: string };
+
+  await prisma.aiJob.update({
+    where: { id: job.id },
+    data: { progress: 10 },
+  });
+
+  try {
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: { progress: 30 },
+    });
+
+    const result = await mergeRescueTimeAppActivity(params.date);
+
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: {
+        status: "completed",
+        progress: 100,
+        result: {
+          sessionsMerged: result.sessionsMerged,
+          message: result.message,
+          reasoning: "reasoning" in result ? result.reasoning : undefined,
+          date: params.date,
+        },
+        completedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Error in merge RescueTime activity job:", error);
+    throw error; // Re-throw to be caught by processJobAsync
+  }
+}
