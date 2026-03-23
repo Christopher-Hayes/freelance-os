@@ -41,7 +41,6 @@ export async function GET(
         },
         timeEntries: {
           orderBy: { startTime: 'desc' },
-          take: 30,
           select: {
             id: true,
             description: true,

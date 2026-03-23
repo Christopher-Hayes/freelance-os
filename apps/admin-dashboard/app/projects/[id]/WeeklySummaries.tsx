@@ -47,6 +47,7 @@ export function WeeklySummaries({
   const [saving, setSaving] = useState(false);
   const [autofilling, setAutofilling] = useState(false);
   const [generatingWeek, setGeneratingWeek] = useState<string | null>(null);
+  const [visibleWeeks, setVisibleWeeks] = useState(3);
 
   // Group time entries by week
   useEffect(() => {
@@ -334,7 +335,7 @@ export function WeeklySummaries({
       )}
       </header>
 
-      {weekData.map((week) => {
+      {weekData.slice(0, visibleWeeks).map((week) => {
         const weekKey = week.weekStart.toString();
         const isEditing = editingWeek === weekKey;
         const isGenerating = generatingWeek === weekKey;
@@ -474,6 +475,17 @@ export function WeeklySummaries({
           </div>
         );
       })}
+
+      {visibleWeeks < weekData.length && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={() => setVisibleWeeks((prev) => prev + 3)}
+            className="flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+          >
+            Show more weeks
+          </button>
+        </div>
+      )}
     </div>
   );
 }

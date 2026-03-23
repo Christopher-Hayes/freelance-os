@@ -91,6 +91,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   // Confirmations
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Time entries pagination
+  const [visibleEntries, setVisibleEntries] = useState(5);
+
   // RescueTime link picker
   const [showRtLinkPicker, setShowRtLinkPicker] = useState(false);
   const [rtProjects, setRtProjects] = useState<{ rtProjectId: number; name: string; color: string | null }[]>([]);
@@ -795,22 +798,34 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         {project.timeEntries.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-400">No time entries yet</p>
         ) : (
-          <div className="space-y-2">
-            {project.timeEntries.map((entry) => (
-              <div key={entry.id} className="flex items-start justify-between rounded border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
-                <div>
-                  <div className="font-medium dark:text-white">{entry.description || 'No description'}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {new Date(entry.startTime).toLocaleDateString()} at {new Date(entry.startTime).toLocaleTimeString()}
+          <>
+            <div className="space-y-2">
+              {project.timeEntries.slice(0, visibleEntries).map((entry) => (
+                <div key={entry.id} className="flex items-start justify-between rounded border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                  <div>
+                    <div className="font-medium dark:text-white">{entry.description || 'No description'}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {new Date(entry.startTime).toLocaleDateString()} at {new Date(entry.startTime).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold dark:text-white">{(entry.durationMinutes / 60).toFixed(2)} hrs</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">{entry.billable ? 'Billable' : 'Non-billable'}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="font-semibold dark:text-white">{(entry.durationMinutes / 60).toFixed(2)} hrs</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">{entry.billable ? 'Billable' : 'Non-billable'}</div>
-                </div>
+              ))}
+            </div>
+            {visibleEntries < project.timeEntries.length && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setVisibleEntries((prev) => prev + 10)}
+                  className="flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Show more entries ({project.timeEntries.length - visibleEntries} remaining)
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
