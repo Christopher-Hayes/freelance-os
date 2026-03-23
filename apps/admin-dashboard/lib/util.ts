@@ -205,6 +205,9 @@ export function formatAppTitle(appClass: string): string {
     }
   }
 
+  // If it ends in .com, .app, .exe, etc., remove that
+  appName = appName.replace(/\.(com|app|exe|sh|bin|desktop|service|daemon|client|server|appimage|snap|flatpak|deb|rpm)$/i, '');
+
   // If it's in a org.example.example type of format, then take the last part
   if (appName.includes('.') && appName.split('.').length >= 2) {
     const parts = appName.split('.');
