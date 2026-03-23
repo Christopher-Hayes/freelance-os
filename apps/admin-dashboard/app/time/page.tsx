@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Temporal } from "@/lib/temporal-polyfill";
 import DayTimeline from "./components/DayTimeline";
 import { APIFooter, Badge, Button, EmptySurfaceState, Input, Page, PageContent, PageError, PageHeader, PageLoading, Section, Select, StatCard, Surface, SurfaceHeader } from "@repo/ui";
@@ -99,6 +100,18 @@ const formatWeekLabel = (date: Temporal.PlainDate) => {
   return `${startStr} – ${endStr}`;
 };
 
+const TIME_DATE_QUERY_PARAM = "date";
+
+const parseDateParam = (dateParam: string | null): Temporal.PlainDate | null => {
+  if (!dateParam) return null;
+
+  try {
+    return Temporal.PlainDate.from(dateParam);
+  } catch {
+    return null;
+  }
+};
+
 // Memoized TimeEntryRow component
 const TimeEntryRow = memo(function TimeEntryRow({
   entry,
@@ -174,6 +187,9 @@ const TimeEntryRow = memo(function TimeEntryRow({
 });
 
 export default function TimeEntriesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -190,14 +206,38 @@ export default function TimeEntriesPage() {
 
   // Day view state - use Temporal.PlainDate
   const [selectedDate, setSelectedDate] = useState<Temporal.PlainDate>(() => {
-    return Temporal.Now.plainDateISO();
+    return parseDateParam(searchParams.get(TIME_DATE_QUERY_PARAM)) ?? Temporal.Now.plainDateISO();
   });
-
   // Filters
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  // URL → state: runs only when searchParams changes (back/forward, external link).
+  // Intentionally excludes `selectedDate` from deps — adding it would cause this effect
+  // to fire when the user picks a new date, reading a stale URL (before our replace has
+  // landed) and snapping back to today.
+  useEffect(() => {
+    const dateFromUrl = parseDateParam(searchParams.get(TIME_DATE_QUERY_PARAM));
+    const nextDate = dateFromUrl ?? Temporal.Now.plainDateISO();
+    const nextDateString = nextDate.toString();
+    if (nextDateString !== selectedDate.toString()) {
+      setSelectedDate(nextDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // State → URL: runs when the selected date changes. Does not depend on searchParams
+  // so updating the URL can never re-trigger this effect and create a cycle.
+  useEffect(() => {
+    const today = Temporal.Now.plainDateISO().toString();
+    const dateStr = selectedDate.toString();
+    const url = dateStr === today
+      ? pathname
+      : `${pathname}?${TIME_DATE_QUERY_PARAM}=${dateStr}`;
+    router.replace(url, { scroll: false });
+  }, [selectedDate, pathname, router]);
 
   // Fetch clients and projects for filters
   useEffect(() => {
