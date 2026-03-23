@@ -7,7 +7,7 @@ import DayTimeline from "./components/DayTimeline";
 import { APIFooter, Badge, Button, EmptySurfaceState, Input, Page, PageContent, PageError, PageHeader, PageLoading, Section, Select, StatCard, Surface, SurfaceHeader } from "@repo/ui";
 import { generateCode } from '@/lib/ai-actions';
 import { authFetch, formatAppTitle, syncAppDataToLocalStorage } from '@/lib/util';
-import { CalendarDays, Clock3, Filter, FolderKanban, Plus, RefreshCw, Sparkles, TimerReset } from 'lucide-react';
+import { CalendarDays, Clock3, Coins, Filter, FolderKanban, Plus, RefreshCw, Sparkles, Table2, TimerReset } from 'lucide-react';
 
 function getAppAnalyticsHref(appClass: string) {
   return `/analytics/apps/${appClass}`;
@@ -88,6 +88,14 @@ const formatPlainDateLabel = (date: Temporal.PlainDate) =>
 
 const formatPlainMonthLabel = (date: Temporal.PlainDate) =>
   date.toLocaleString("en-US", { month: 'long', year: 'numeric' });
+
+const formatWeekLabel = (date: Temporal.PlainDate) => {
+  const weekStart = date.subtract({ days: date.dayOfWeek - 1 }); // Monday
+  const weekEnd = weekStart.add({ days: 6 }); // Sunday
+  const startStr = weekStart.toLocaleString("en-US", { month: "short", day: "numeric" });
+  const endStr = weekEnd.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${startStr} – ${endStr}`;
+};
 
 // Memoized TimeEntryRow component
 const TimeEntryRow = memo(function TimeEntryRow({
@@ -174,6 +182,9 @@ export default function TimeEntriesPage() {
   // Pagination state
   const [displayCount, setDisplayCount] = useState(10);
   const [hasMore, setHasMore] = useState(false);
+
+  // Toggle for entries table
+  const [showEntriesTable, setShowEntriesTable] = useState(false);
 
   // Day view state - use Temporal.PlainDate
   const [selectedDate, setSelectedDate] = useState<Temporal.PlainDate>(() => {
@@ -295,6 +306,71 @@ export default function TimeEntriesPage() {
   const selectedClient = clients.find((client) => String(client.id) === selectedClientId);
   const selectedProject = projects.find((project) => String(project.id) === selectedProjectId);
 
+  // Compute stats for the selected day
+  const selectedDayEntries = useMemo(() => {
+    const dateStr = selectedDate.toString(); // YYYY-MM-DD
+    return timeEntries.filter((entry) => {
+      // Compare local date of startTime against selectedDate
+      const localDate = new Date(entry.startTime).toLocaleDateString("en-CA"); // yields YYYY-MM-DD
+      return localDate === dateStr;
+    });
+  }, [timeEntries, selectedDate]);
+
+  const selectedDayStats = useMemo(() => {
+    const totalMinutes = selectedDayEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
+    const billableMinutes = selectedDayEntries
+      .filter((e) => e.billable)
+      .reduce((sum, e) => sum + e.durationMinutes, 0);
+    const projectMap = new Map<string, number>();
+    for (const entry of selectedDayEntries) {
+      projectMap.set(entry.project.name, (projectMap.get(entry.project.name) ?? 0) + entry.durationMinutes);
+    }
+    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1] - a[1])[0];
+    return {
+      totalMinutes,
+      totalHours: totalMinutes / 60,
+      billableMinutes,
+      billableHours: billableMinutes / 60,
+      count: selectedDayEntries.length,
+      topProject: topProjectEntry ? { name: topProjectEntry[0], minutes: topProjectEntry[1] } : null,
+    };
+  }, [selectedDayEntries]);
+
+  // Compute stats for the week containing selectedDate (Mon–Sun)
+  const selectedWeekEntries = useMemo(() => {
+    const weekStart = selectedDate.subtract({ days: selectedDate.dayOfWeek - 1 });
+    const weekEnd = weekStart.add({ days: 6 });
+    return timeEntries.filter((entry) => {
+      const localDate = Temporal.PlainDate.from(
+        new Date(entry.startTime).toLocaleDateString("en-CA")
+      );
+      return (
+        Temporal.PlainDate.compare(localDate, weekStart) >= 0 &&
+        Temporal.PlainDate.compare(localDate, weekEnd) <= 0
+      );
+    });
+  }, [timeEntries, selectedDate]);
+
+  const selectedWeekStats = useMemo(() => {
+    const totalMinutes = selectedWeekEntries.reduce((sum, e) => sum + e.durationMinutes, 0);
+    const billableMinutes = selectedWeekEntries
+      .filter((e) => e.billable)
+      .reduce((sum, e) => sum + e.durationMinutes, 0);
+    const projectMap = new Map<string, number>();
+    for (const entry of selectedWeekEntries) {
+      projectMap.set(entry.project.name, (projectMap.get(entry.project.name) ?? 0) + entry.durationMinutes);
+    }
+    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1] - a[1])[0];
+    return {
+      totalMinutes,
+      totalHours: totalMinutes / 60,
+      billableMinutes,
+      billableHours: billableMinutes / 60,
+      count: selectedWeekEntries.length,
+      topProject: topProjectEntry ? { name: topProjectEntry[0], minutes: topProjectEntry[1] } : null,
+    };
+  }, [selectedWeekEntries]);
+
   const handleGenerateCode = async (endpoint: any, language: string) => {
     return await generateCode(endpoint, language);
   };
@@ -331,44 +407,125 @@ export default function TimeEntriesPage() {
             }
           />
 
-          {summary ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <StatCard
-                label="Hours logged this month"
-                value={summary.hoursThisMonth?.toFixed(1) ?? "0"}
-                meta={formatPlainMonthLabel(selectedDate)}
-                tone="info"
-                icon={<Clock3 className="h-4 w-4" />}
-              />
-              <StatCard
-                label="Top app this week"
-                value={summary.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : "No data"}
-                meta={summary.topAppThisWeek ? (
-                  <Link
-                    href={getAppAnalyticsHref(summary.topAppThisWeek.appClass)}
-                    className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                  >
-                    {summary.topAppThisWeek.hours} hours tracked · Open app analytics
-                  </Link>
-                ) : "No activity sessions"}
-                tone="success"
-                icon={<Sparkles className="h-4 w-4" />}
-              />
-              <StatCard
-                label="Top project this month"
-                value={summary.topProjectThisMonth?.projectName ?? "No projects"}
-                meta={summary.topProjectThisMonth ? `${summary.topProjectThisMonth.hours} hours in ${selectedDate.toLocaleString('en-US', { month: 'long' })}` : "No time entries"}
-                tone="warning"
-                icon={<FolderKanban className="h-4 w-4" />}
-              />
-            </div>
-          ) : null}
-
           <DayTimeline
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
           />
 
+          {/* Day stats */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              {formatPlainDateLabel(selectedDate)}
+            </h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Hours logged"
+                value={selectedDayStats.totalHours.toFixed(1)}
+                meta={`${selectedDayStats.count} entr${selectedDayStats.count === 1 ? "y" : "ies"} recorded`}
+                tone="info"
+                icon={<Clock3 className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Billable hours"
+                value={selectedDayStats.billableHours.toFixed(1)}
+                meta={
+                  selectedDayStats.totalMinutes > 0
+                    ? `${Math.round((selectedDayStats.billableMinutes / selectedDayStats.totalMinutes) * 100)}% of total`
+                    : "No entries"
+                }
+                tone="success"
+                icon={<Coins className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Non-billable hours"
+                value={((selectedDayStats.totalMinutes - selectedDayStats.billableMinutes) / 60).toFixed(1)}
+                meta={
+                  selectedDayStats.totalMinutes > 0
+                    ? `${Math.round(((selectedDayStats.totalMinutes - selectedDayStats.billableMinutes) / selectedDayStats.totalMinutes) * 100)}% of total`
+                    : "No entries"
+                }
+                tone="warning"
+                icon={<TimerReset className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Top project today"
+                value={selectedDayStats.topProject?.name ?? "No entries"}
+                meta={
+                  selectedDayStats.topProject
+                    ? formatDuration(selectedDayStats.topProject.minutes)
+                    : "No time logged"
+                }
+                tone="default"
+                icon={<FolderKanban className="h-4 w-4" />}
+              />
+            </div>
+          </div>
+
+          {/* Week stats */}
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+              {formatWeekLabel(selectedDate)}
+            </h2>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                label="Hours this week"
+                value={selectedWeekStats.totalHours.toFixed(1)}
+                meta={`${selectedWeekStats.count} entr${selectedWeekStats.count === 1 ? "y" : "ies"} recorded`}
+                tone="info"
+                icon={<Clock3 className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Billable this week"
+                value={selectedWeekStats.billableHours.toFixed(1)}
+                meta={
+                  selectedWeekStats.totalMinutes > 0
+                    ? `${Math.round((selectedWeekStats.billableMinutes / selectedWeekStats.totalMinutes) * 100)}% of total`
+                    : "No entries"
+                }
+                tone="success"
+                icon={<Coins className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Top project this week"
+                value={selectedWeekStats.topProject?.name ?? "No entries"}
+                meta={
+                  selectedWeekStats.topProject
+                    ? formatDuration(selectedWeekStats.topProject.minutes)
+                    : "No time logged"
+                }
+                tone="warning"
+                icon={<FolderKanban className="h-4 w-4" />}
+              />
+              <StatCard
+                label="Top app this week"
+                value={summary?.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : "No data"}
+                meta={summary?.topAppThisWeek ? (
+                  <Link
+                    href={getAppAnalyticsHref(summary.topAppThisWeek.appClass)}
+                    className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                  >
+                    {summary.topAppThisWeek.hours}h tracked · View analytics
+                  </Link>
+                ) : "No activity sessions"}
+                tone="default"
+                icon={<Sparkles className="h-4 w-4" />}
+              />
+            </div>
+          </div>
+
+          {/* Toggle for project entries table */}
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowEntriesTable((v) => !v)}
+            >
+              <Table2 className="mr-2 h-4 w-4" />
+              {showEntriesTable ? "Hide project entries table" : "Show project entries table"}
+            </Button>
+          </div>
+
+          {showEntriesTable && (
           <Surface>
             <SurfaceHeader
               title="Recent entries"
@@ -500,6 +657,7 @@ export default function TimeEntriesPage() {
               )}
             </div>
           </Surface>
+          )}
         </Section>
 
         <APIFooter
