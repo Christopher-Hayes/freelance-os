@@ -24,6 +24,7 @@ interface TimeEntry {
   project: {
     id: number;
     name: string;
+    color: string;
     client: {
       id: number;
       name: string;
@@ -57,6 +58,7 @@ interface Project {
   id: number;
   name: string;
   clientId: number;
+  color: string;
 }
 
 // Helper functions moved outside component
@@ -321,18 +323,24 @@ export default function TimeEntriesPage() {
     const billableMinutes = selectedDayEntries
       .filter((e) => e.billable)
       .reduce((sum, e) => sum + e.durationMinutes, 0);
-    const projectMap = new Map<string, number>();
+    const projectMap = new Map<string, { minutes: number; color: string }>();
     for (const entry of selectedDayEntries) {
-      projectMap.set(entry.project.name, (projectMap.get(entry.project.name) ?? 0) + entry.durationMinutes);
+      const existing = projectMap.get(entry.project.name);
+      projectMap.set(entry.project.name, {
+        minutes: (existing?.minutes ?? 0) + entry.durationMinutes,
+        color: existing?.color ?? entry.project.color ?? "#94a3b8",
+      });
     }
-    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1] - a[1])[0];
+    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1].minutes - a[1].minutes)[0];
     return {
       totalMinutes,
       totalHours: totalMinutes / 60,
       billableMinutes,
       billableHours: billableMinutes / 60,
       count: selectedDayEntries.length,
-      topProject: topProjectEntry ? { name: topProjectEntry[0], minutes: topProjectEntry[1] } : null,
+      topProject: topProjectEntry
+        ? { name: topProjectEntry[0], minutes: topProjectEntry[1].minutes, color: topProjectEntry[1].color }
+        : null,
     };
   }, [selectedDayEntries]);
 
@@ -356,18 +364,24 @@ export default function TimeEntriesPage() {
     const billableMinutes = selectedWeekEntries
       .filter((e) => e.billable)
       .reduce((sum, e) => sum + e.durationMinutes, 0);
-    const projectMap = new Map<string, number>();
+    const projectMap = new Map<string, { minutes: number; color: string }>();
     for (const entry of selectedWeekEntries) {
-      projectMap.set(entry.project.name, (projectMap.get(entry.project.name) ?? 0) + entry.durationMinutes);
+      const existing = projectMap.get(entry.project.name);
+      projectMap.set(entry.project.name, {
+        minutes: (existing?.minutes ?? 0) + entry.durationMinutes,
+        color: existing?.color ?? entry.project.color ?? "#94a3b8",
+      });
     }
-    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1] - a[1])[0];
+    const topProjectEntry = [...projectMap.entries()].sort((a, b) => b[1].minutes - a[1].minutes)[0];
     return {
       totalMinutes,
       totalHours: totalMinutes / 60,
       billableMinutes,
       billableHours: billableMinutes / 60,
       count: selectedWeekEntries.length,
-      topProject: topProjectEntry ? { name: topProjectEntry[0], minutes: topProjectEntry[1] } : null,
+      topProject: topProjectEntry
+        ? { name: topProjectEntry[0], minutes: topProjectEntry[1].minutes, color: topProjectEntry[1].color }
+        : null,
     };
   }, [selectedWeekEntries]);
 
@@ -449,7 +463,11 @@ export default function TimeEntriesPage() {
               />
               <StatCard
                 label="Top project today"
-                value={selectedDayStats.topProject?.name ?? "No entries"}
+                value={selectedDayStats.topProject ? (
+                  <span style={{ color: selectedDayStats.topProject.color }}>
+                    {selectedDayStats.topProject.name}
+                  </span>
+                ) : "No entries"}
                 meta={
                   selectedDayStats.topProject
                     ? formatDuration(selectedDayStats.topProject.minutes)
@@ -487,7 +505,11 @@ export default function TimeEntriesPage() {
               />
               <StatCard
                 label="Top project this week"
-                value={selectedWeekStats.topProject?.name ?? "No entries"}
+                value={selectedWeekStats.topProject ? (
+                  <span style={{ color: selectedWeekStats.topProject.color }}>
+                    {selectedWeekStats.topProject.name}
+                  </span>
+                ) : "No entries"}
                 meta={
                   selectedWeekStats.topProject
                     ? formatDuration(selectedWeekStats.topProject.minutes)
