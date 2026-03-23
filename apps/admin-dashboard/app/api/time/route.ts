@@ -114,19 +114,23 @@ export async function GET(request: Request) {
       };
     }
 
-    // Build date range using Temporal for consistent UTC handling
-    // Time entries are stored as UTC, so query exact UTC day boundaries
+    // Build date range using Temporal with LOCAL timezone boundaries.
+    // Dates from the client represent local calendar days (e.g. "2026-03-22" means
+    // March 22 in the user's timezone). We convert to the corresponding UTC range
+    // so that entries at e.g. 10:40 PM EDT (which is 2:40 AM UTC the next day)
+    // are correctly included in the local day they belong to.
+    const localTz = Temporal.Now.timeZoneId();
     let queryStartDate: Date | undefined;
     let queryEndDate: Date | undefined;
 
     if (startDate) {
       const sd = Temporal.PlainDate.from(startDate);
-      queryStartDate = new Date(sd.toZonedDateTime('UTC').toInstant().epochMilliseconds);
+      queryStartDate = new Date(sd.toZonedDateTime(localTz).toInstant().epochMilliseconds);
     }
     if (endDate) {
       const ed = Temporal.PlainDate.from(endDate);
       queryEndDate = new Date(
-        ed.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
+        ed.toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
       );
     }
 

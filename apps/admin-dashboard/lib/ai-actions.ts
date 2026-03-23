@@ -840,9 +840,10 @@ export async function generateWeeklySummary(params: {
   // Check if CalDAV is available for calendar event context
   const calendarEnabled = await isWebdavEnabled();
 
-  // Convert dates to Instants for tool scoping
-  const weekStartInstant = weekStart.toPlainDateTime(Temporal.PlainTime.from("00:00:00")).toZonedDateTime("UTC").toInstant();
-  const weekEndInstant = weekEnd.toPlainDateTime(Temporal.PlainTime.from("23:59:59")).toZonedDateTime("UTC").toInstant();
+  // Convert dates to Instants for tool scoping (use local timezone for correct day boundaries)
+  const localTz = Temporal.Now.timeZoneId();
+  const weekStartInstant = weekStart.toPlainDateTime(Temporal.PlainTime.from("00:00:00")).toZonedDateTime(localTz).toInstant();
+  const weekEndInstant = weekEnd.toPlainDateTime(Temporal.PlainTime.from("23:59:59")).toZonedDateTime(localTz).toInstant();
 
   if (!jmapIsEnabled && !gitForgesEnabled && !calendarEnabled) {
     // Fallback to simple generation without email context

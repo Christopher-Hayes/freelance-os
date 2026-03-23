@@ -113,9 +113,10 @@ export async function importRescueTimeProjectTimes(date: string) {
 
   // Check for existing time entries on this date to avoid duplicates
   const plainDate = Temporal.PlainDate.from(date);
-  const dayStart = new Date(plainDate.toZonedDateTime('UTC').toInstant().epochMilliseconds);
+  const localTz = Temporal.Now.timeZoneId();
+  const dayStart = new Date(plainDate.toZonedDateTime(localTz).toInstant().epochMilliseconds);
   const dayEnd = new Date(
-    plainDate.toZonedDateTime({ timeZone: 'UTC', plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
+    plainDate.toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
   );
 
   const existingCount = await prisma.timeEntry.count({
