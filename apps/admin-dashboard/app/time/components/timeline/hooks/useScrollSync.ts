@@ -13,16 +13,22 @@ interface ScrollMetrics {
 interface UseScrollSyncReturn {
   activityScrollMetrics: ScrollMetrics;
   projectScrollMetrics: ScrollMetrics;
+  calendarScrollMetrics: ScrollMetrics;
   isDraggingActivityMinimapViewport: boolean;
   setIsDraggingActivityMinimapViewport: React.Dispatch<React.SetStateAction<boolean>>;
   isDraggingProjectMinimapViewport: boolean;
   setIsDraggingProjectMinimapViewport: React.Dispatch<React.SetStateAction<boolean>>;
+  isDraggingCalendarMinimapViewport: boolean;
+  setIsDraggingCalendarMinimapViewport: React.Dispatch<React.SetStateAction<boolean>>;
   handleActivityScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   handleTimelineScroll: (e: React.UIEvent<HTMLDivElement>) => void;
+  handleCalendarScroll: (e: React.UIEvent<HTMLDivElement>) => void;
   jumpActivityMinimapToRatio: (ratio: number) => void;
   dragActivityMinimapViewport: (deltaRatio: number) => void;
   jumpProjectMinimapToRatio: (ratio: number) => void;
   dragProjectMinimapViewport: (deltaRatio: number) => void;
+  jumpCalendarMinimapToRatio: (ratio: number) => void;
+  dragCalendarMinimapViewport: (deltaRatio: number) => void;
 }
 
 const DEFAULT_SCROLL_HEIGHT = 24 * HOUR_HEIGHT + 40;
@@ -32,7 +38,8 @@ export function useScrollSync(
   timelineRef: React.RefObject<HTMLDivElement | null>,
   selectedDate: unknown, // used as dependency trigger
   loading: boolean,
-  mergedVisibleSessions: ActivitySession[]
+  mergedVisibleSessions: ActivitySession[],
+  calendarScrollRef?: React.RefObject<HTMLDivElement | null>,
 ): UseScrollSyncReturn {
   const [activityScrollMetrics, setActivityScrollMetrics] = useState<ScrollMetrics>({
     scrollTop: 0,
@@ -44,9 +51,15 @@ export function useScrollSync(
     viewportHeight: MINIMAP_HEIGHT_PX,
     scrollHeight: DEFAULT_SCROLL_HEIGHT,
   });
+  const [calendarScrollMetrics, setCalendarScrollMetrics] = useState<ScrollMetrics>({
+    scrollTop: 0,
+    viewportHeight: MINIMAP_HEIGHT_PX,
+    scrollHeight: DEFAULT_SCROLL_HEIGHT,
+  });
 
   const [isDraggingActivityMinimapViewport, setIsDraggingActivityMinimapViewport] = useState(false);
   const [isDraggingProjectMinimapViewport, setIsDraggingProjectMinimapViewport] = useState(false);
+  const [isDraggingCalendarMinimapViewport, setIsDraggingCalendarMinimapViewport] = useState(false);
 
   // Sync activity scroll metrics after data load
   useEffect(() => {
@@ -59,85 +72,76 @@ export function useScrollSync(
     });
   }, [selectedDate, loading, mergedVisibleSessions, activityScrollRef]);
 
-  // ── Scroll handlers ──────────────────────────────────────────────────
+  // ── Sync all columns helper ──────────────────────────────────────────
 
-  const handleActivityScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const nextScrollTop = e.currentTarget.scrollTop;
-      setActivityScrollMetrics({
-        scrollTop: nextScrollTop,
-        viewportHeight: e.currentTarget.clientHeight,
-        scrollHeight: e.currentTarget.scrollHeight,
-      });
-      setProjectScrollMetrics((prev) => ({
-        ...prev,
-        scrollTop: nextScrollTop,
-        viewportHeight: timelineRef.current?.clientHeight ?? prev.viewportHeight,
-        scrollHeight: timelineRef.current?.scrollHeight ?? prev.scrollHeight,
-      }));
-      if (timelineRef.current) timelineRef.current.scrollTop = nextScrollTop;
-    },
-    [timelineRef]
-  );
-
-  const handleTimelineScroll = useCallback(
-    (e: React.UIEvent<HTMLDivElement>) => {
-      const nextScrollTop = e.currentTarget.scrollTop;
-      setProjectScrollMetrics({
-        scrollTop: nextScrollTop,
-        viewportHeight: e.currentTarget.clientHeight,
-        scrollHeight: e.currentTarget.scrollHeight,
-      });
-      setActivityScrollMetrics((prev) => ({
-        ...prev,
-        scrollTop: nextScrollTop,
-        viewportHeight: activityScrollRef.current?.clientHeight ?? prev.viewportHeight,
-        scrollHeight: activityScrollRef.current?.scrollHeight ?? prev.scrollHeight,
-      }));
-      if (activityScrollRef.current) activityScrollRef.current.scrollTop = nextScrollTop;
-    },
-    [activityScrollRef]
-  );
-
-  // ── Minimap jump/drag helpers ────────────────────────────────────────
-
-  const syncBothScrolls = useCallback(
-    (nextScrollTop: number, source: "activity" | "project") => {
+  const syncAllScrolls = useCallback(
+    (nextScrollTop: number, source: "activity" | "project" | "calendar") => {
       const activityContainer = activityScrollRef.current;
       const projectContainer = timelineRef.current;
+      const calendarContainer = calendarScrollRef?.current;
 
-      if (source === "activity" && activityContainer) {
-        activityContainer.scrollTop = nextScrollTop;
-        if (projectContainer) projectContainer.scrollTop = nextScrollTop;
-        setActivityScrollMetrics({
-          scrollTop: nextScrollTop,
-          viewportHeight: activityContainer.clientHeight,
-          scrollHeight: activityContainer.scrollHeight,
-        });
-        setProjectScrollMetrics((prev) => ({
-          ...prev,
-          scrollTop: nextScrollTop,
-          viewportHeight: projectContainer?.clientHeight ?? prev.viewportHeight,
-          scrollHeight: projectContainer?.scrollHeight ?? prev.scrollHeight,
-        }));
-      } else if (source === "project" && projectContainer) {
-        projectContainer.scrollTop = nextScrollTop;
-        if (activityContainer) activityContainer.scrollTop = nextScrollTop;
+      // Set scrollTop on all containers except the source
+      if (source !== "activity" && activityContainer) activityContainer.scrollTop = nextScrollTop;
+      if (source !== "project" && projectContainer) projectContainer.scrollTop = nextScrollTop;
+      if (source !== "calendar" && calendarContainer) calendarContainer.scrollTop = nextScrollTop;
+
+      // Update all metrics
+      if (activityContainer) {
+        const metrics = source === "activity"
+          ? { scrollTop: nextScrollTop, viewportHeight: activityContainer.clientHeight, scrollHeight: activityContainer.scrollHeight }
+          : { scrollTop: nextScrollTop, viewportHeight: activityContainer.clientHeight, scrollHeight: activityContainer.scrollHeight };
+        setActivityScrollMetrics(metrics);
+      } else {
+        setActivityScrollMetrics((prev) => ({ ...prev, scrollTop: nextScrollTop }));
+      }
+
+      if (projectContainer) {
         setProjectScrollMetrics({
           scrollTop: nextScrollTop,
           viewportHeight: projectContainer.clientHeight,
           scrollHeight: projectContainer.scrollHeight,
         });
-        setActivityScrollMetrics((prev) => ({
-          ...prev,
+      } else {
+        setProjectScrollMetrics((prev) => ({ ...prev, scrollTop: nextScrollTop }));
+      }
+
+      if (calendarContainer) {
+        setCalendarScrollMetrics({
           scrollTop: nextScrollTop,
-          viewportHeight: activityContainer?.clientHeight ?? prev.viewportHeight,
-          scrollHeight: activityContainer?.scrollHeight ?? prev.scrollHeight,
-        }));
+          viewportHeight: calendarContainer.clientHeight,
+          scrollHeight: calendarContainer.scrollHeight,
+        });
+      } else {
+        setCalendarScrollMetrics((prev) => ({ ...prev, scrollTop: nextScrollTop }));
       }
     },
-    [activityScrollRef, timelineRef]
+    [activityScrollRef, timelineRef, calendarScrollRef]
   );
+
+  // ── Scroll handlers ──────────────────────────────────────────────────
+
+  const handleActivityScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      syncAllScrolls(e.currentTarget.scrollTop, "activity");
+    },
+    [syncAllScrolls]
+  );
+
+  const handleTimelineScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      syncAllScrolls(e.currentTarget.scrollTop, "project");
+    },
+    [syncAllScrolls]
+  );
+
+  const handleCalendarScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      syncAllScrolls(e.currentTarget.scrollTop, "calendar");
+    },
+    [syncAllScrolls]
+  );
+
+  // ── Minimap jump/drag helpers ────────────────────────────────────────
 
   const jumpActivityMinimapToRatio = useCallback(
     (ratio: number) => {
@@ -145,9 +149,9 @@ export function useScrollSync(
       if (!container) return;
       const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0);
       const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
-      syncBothScrolls(nextScrollTop, "activity");
+      syncAllScrolls(nextScrollTop, "activity");
     },
-    [activityScrollRef, syncBothScrolls]
+    [activityScrollRef, syncAllScrolls]
   );
 
   const dragActivityMinimapViewport = useCallback(
@@ -159,9 +163,9 @@ export function useScrollSync(
         0,
         Math.min(maxScrollTop, container.scrollTop + deltaRatio * maxScrollTop)
       );
-      syncBothScrolls(nextScrollTop, "activity");
+      syncAllScrolls(nextScrollTop, "activity");
     },
-    [activityScrollRef, syncBothScrolls]
+    [activityScrollRef, syncAllScrolls]
   );
 
   const jumpProjectMinimapToRatio = useCallback(
@@ -170,9 +174,9 @@ export function useScrollSync(
       if (!container) return;
       const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0);
       const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
-      syncBothScrolls(nextScrollTop, "project");
+      syncAllScrolls(nextScrollTop, "project");
     },
-    [timelineRef, syncBothScrolls]
+    [timelineRef, syncAllScrolls]
   );
 
   const dragProjectMinimapViewport = useCallback(
@@ -184,23 +188,54 @@ export function useScrollSync(
         0,
         Math.min(maxScrollTop, container.scrollTop + deltaRatio * maxScrollTop)
       );
-      syncBothScrolls(nextScrollTop, "project");
+      syncAllScrolls(nextScrollTop, "project");
     },
-    [timelineRef, syncBothScrolls]
+    [timelineRef, syncAllScrolls]
+  );
+
+  const jumpCalendarMinimapToRatio = useCallback(
+    (ratio: number) => {
+      const container = calendarScrollRef?.current;
+      if (!container) return;
+      const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0);
+      const nextScrollTop = Math.max(0, Math.min(maxScrollTop, ratio * maxScrollTop));
+      syncAllScrolls(nextScrollTop, "calendar");
+    },
+    [calendarScrollRef, syncAllScrolls]
+  );
+
+  const dragCalendarMinimapViewport = useCallback(
+    (deltaRatio: number) => {
+      const container = calendarScrollRef?.current;
+      if (!container) return;
+      const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0);
+      const nextScrollTop = Math.max(
+        0,
+        Math.min(maxScrollTop, container.scrollTop + deltaRatio * maxScrollTop)
+      );
+      syncAllScrolls(nextScrollTop, "calendar");
+    },
+    [calendarScrollRef, syncAllScrolls]
   );
 
   return {
     activityScrollMetrics,
     projectScrollMetrics,
+    calendarScrollMetrics,
     isDraggingActivityMinimapViewport,
     setIsDraggingActivityMinimapViewport,
     isDraggingProjectMinimapViewport,
     setIsDraggingProjectMinimapViewport,
+    isDraggingCalendarMinimapViewport,
+    setIsDraggingCalendarMinimapViewport,
     handleActivityScroll,
     handleTimelineScroll,
+    handleCalendarScroll,
     jumpActivityMinimapToRatio,
     dragActivityMinimapViewport,
     jumpProjectMinimapToRatio,
     dragProjectMinimapViewport,
+    jumpCalendarMinimapToRatio,
+    dragCalendarMinimapViewport,
   };
 }

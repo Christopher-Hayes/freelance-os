@@ -5,9 +5,51 @@ import { z } from "zod";
 import { Temporal } from "@/lib/temporal-polyfill";
 import {
   getCalendars as getCalendarsFromProvider,
+  isWebdavEnabled,
   searchEventsByDateRange,
   type CalendarInfo,
+  type CalendarEvent,
 } from "@/lib/webdav-provider";
+
+/**
+ * Server action to check if CalDAV is enabled and configured.
+ */
+export async function checkCalDavEnabled(): Promise<boolean> {
+  try {
+    return await isWebdavEnabled();
+  } catch (error) {
+    console.error("Error checking CalDAV status:", error);
+    return false;
+  }
+}
+
+/**
+ * Server action to fetch calendar events for a specific day.
+ * Returns empty array if CalDAV is not configured or no events found.
+ */
+export async function fetchCalendarEventsForDay(
+  dateStr: string
+): Promise<CalendarEvent[]> {
+  try {
+    const date = Temporal.PlainDate.from(dateStr);
+    const timeZone = Temporal.Now.timeZoneId();
+    const startOfDay = date
+      .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
+      .toZonedDateTime(timeZone);
+    const endOfDay = date
+      .add({ days: 1 })
+      .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
+      .toZonedDateTime(timeZone);
+
+    return await searchEventsByDateRange(
+      startOfDay.toInstant(),
+      endOfDay.toInstant()
+    );
+  } catch (error) {
+    console.error("Error fetching calendar events for day:", error);
+    return [];
+  }
+}
 
 /**
  * Server action to fetch available CalDAV calendars.
