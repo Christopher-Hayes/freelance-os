@@ -52,6 +52,51 @@ export async function getAiModel(): Promise<LanguageModel> {
 }
 
 /**
+ * Get the configured FAST AI model based on settings
+ * @returns The configured AI model instance
+ */
+export async function getFastAiModel(): Promise<LanguageModel> {
+  // Fetch settings from database
+  const setting = await prisma.setting.findUnique({
+    where: { key: "main" },
+  });
+
+  const aiProvider: AiProvider = setting?.aiProvider || "openai";
+  
+  switch (aiProvider) {
+    case "gemini":
+      const googleApiKey = setting?.googleApiKey;
+      if (!googleApiKey) {
+        throw new Error("Google API key not configured. Please add it in Settings.");
+      }
+      
+      // Create Google provider with API key
+      const google = createGoogleGenerativeAI({
+        apiKey: googleApiKey,
+      });
+      return google("gemini-2.5-flash");
+      
+    case "openai":
+    default:
+      const openaiKey = setting?.openaiKey;
+      if (!openaiKey) {
+        throw new Error("OpenAI API key not configured. Please add it in Settings.");
+      }
+
+      if (!OPENAI_KEY_REGEX.test(openaiKey)) {
+        throw new Error(
+          "OpenAI API key looks invalid. It should start with 'sk-' or 'rk-'. Please update it in Settings."
+        );
+      }
+      
+      // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
+      // but we'll set it in the environment for this process
+      process.env.OPENAI_API_KEY = openaiKey;
+      return openai("gpt-5.4-mini")
+  }
+}
+
+/**
  * Get the current AI provider name
  * @returns The configured AI provider name
  */

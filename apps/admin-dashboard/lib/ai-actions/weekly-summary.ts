@@ -93,19 +93,24 @@ export async function generateWeeklySummary(
         model,
         system: `You are writing a professional weekly summary for a client invoice.
 
-Your goal is to create a concise 1-2 sentence summary of the work accomplished this week.
+Your goal is to create a concise, scannable summary of the work accomplished this week using markdown.
 
-Guidelines:
-- Use client-friendly, professional language (avoid technical jargon or shorthand)
-- Focus on outcomes and deliverables, not just activities
-- Be specific about what was accomplished
-- Do not sound like you're bragging or overselling, just state the facts
-- Write in past tense, do not say "I did" or "we did", just describe the work
+Format:
+- Start with a single-sentence overview paragraph summarizing the week at a high level
+- Follow with a short bullet list of specific items worked on or delivered
+- Each bullet should be one concise line — not a full paragraph
+- Keep the total summary short (overview sentence + 1-3 bullets is ideal)
+- Use markdown formatting for readability (e.g. bold for key deliverables, links if relevant, etc.)
+
+Tone and style:
+- Professional but direct — assume the client is familiar with the project and doesn't need hand-holding
+- Focus on what was accomplished, not the process
+- Do not sound like marketing copy or a sales pitch — just state what happened
+- Write in past tense, do not say "I" or "we", just describe the work
 - Do not include the total hours (that's shown separately)
-- Do not use bullet points, write in paragraph form
-- If project timeline is provided, consider where this week falls in the overall project progress
+- Use standard technical terms where appropriate — no need to over-explain
 
-Provide ONLY the summary text, no preamble or explanation.`,
+Provide ONLY the markdown summary text, no preamble or explanation.`,
         prompt: `${projectContext}
 Week: ${weekStart.toString()} to ${weekEnd.toString()}
 Total Hours: ${totalHours.toFixed(1)} hours
@@ -195,15 +200,21 @@ Git commit strategy:
     : ""
 }
 
-Summary writing guidelines:
-- Client-friendly, professional language (avoid jargon)
-- Focus on outcomes and deliverables
-- Be specific about accomplishments
-- Write in past tense, describe work objectively
-- 1-2 sentences, no bullet points
-- Use email context to enrich with specific deliverables discussed
+Summary format (markdown):
+- Start with a single-sentence overview paragraph summarizing the week at a high level
+- Follow with a short bullet list of specific items worked on or delivered
+- Each bullet should be one concise line — not a full paragraph
+- Keep the total summary short (overview sentence + 2-5 bullets is ideal)
 
-Always end by providing your final summary as plain text.`,
+Tone and style:
+- Professional but direct — assume the client is familiar with the project
+- Focus on what was accomplished, not the process
+- No marketing copy or sales-pitch tone — just state what happened
+- Write in past tense, describe work objectively
+- Do not include total hours (shown separately)
+- Use standard technical terms where appropriate
+
+Always end by providing your final summary as markdown text.`,
   });
 
   const result = await summaryAgent.generate({

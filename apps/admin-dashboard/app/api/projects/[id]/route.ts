@@ -56,6 +56,9 @@ export async function GET(
             color: true,
           },
         },
+        highlights: {
+          orderBy: { date: 'asc' },
+        },
         _count: {
           select: {
             timeEntries: true,

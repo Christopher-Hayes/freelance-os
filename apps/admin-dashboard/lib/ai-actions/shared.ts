@@ -17,12 +17,40 @@ export type DebugTelemetryOptions = {
   operation?: string;
 };
 
+export type ProviderOptions = {
+  openai: {
+    reasoningEffort: "none" | "low" | "medium" | "high";
+  };
+  google: {
+    reasoningEffort: "none" | "low" | "medium" | "high";
+  };
+};
+
 export const PROVIDER_OPTIONS = {
   openai: {
-    reasoningEffort: "medium", // 'minimal' | 'low' | 'medium' | 'high'
+    reasoningEffort: "medium", // 'none' | 'low' | 'medium' | 'high'
   },
   google: {
-    reasoningEffort: "medium", // 'minimal' | 'low' | 'medium' | 'high'
+    reasoningEffort: "medium", // 'none' | 'low' | 'medium' | 'high'
+  },
+};
+
+export const PROVIDER_OPTIONS_SMART = {
+  openai: {
+    reasoningEffort: "high", // 'none' | 'low' | 'medium' | 'high'
+  },
+  google: {
+    reasoningEffort: "high", // 'none' | 'low' | 'medium' | 'high'
+  },
+};
+
+// Fast models only
+export const PROVIDER_OPTIONS_FAST = {
+  openai: {
+    reasoningEffort: "low", // 'none' | 'low' | 'medium' | 'high'
+  },
+  google: {
+    reasoningEffort: "low", // 'none' | 'low' | 'medium' | 'high'
   },
 };
 

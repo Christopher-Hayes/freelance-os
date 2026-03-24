@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
-import { EditButton, DownloadButton } from '@repo/ui';
-import { sendInvoiceEmail } from '@/lib/invoice-actions';
+import { EditButton, DownloadButton, PreviewButton } from '@repo/ui';
+import { sendInvoiceEmail, generateInvoiceSummary } from '@/lib/invoice-actions';
 import { authFetch } from '@/lib/util';
+import ReactMarkdown from 'react-markdown';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
   createdAt: string;
@@ -27,6 +28,7 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [generatingAi, setGeneratingAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -202,6 +204,25 @@ export default function InvoiceDetailPage() {
       setError(err instanceof Error ? err.message : 'Failed to send email');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleGenerateAiSummary = async (force = false) => {
+    if (!invoice) return;
+
+    setGeneratingAi(true);
+    setError(null);
+
+    try {
+      const result = await generateInvoiceSummary(parseInt(id), { force });
+      // Update local invoice state with the new summary
+      setInvoice({ ...invoice, aiSummary: result.summary });
+      setSuccessMessage(force ? 'AI summary regenerated!' : 'AI summary generated!');
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate AI summary');
+    } finally {
+      setGeneratingAi(false);
     }
   };
 
@@ -419,6 +440,7 @@ export default function InvoiceDetailPage() {
         <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow dark:shadow-gray-900 relative">
           {/* Overlay buttons in top-right */}
           <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <PreviewButton href={`/api/invoices/${id}/pdf?view=true`} />
             <DownloadButton href={`/api/invoices/${id}/pdf`} />
             <EditButton onClick={() => setEditing(true)} />
           </div>
@@ -470,6 +492,55 @@ export default function InvoiceDetailPage() {
               <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{invoice.notes}</p>
             </div>
           )}
+
+          {/* AI Summary Section */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">AI Summary</h3>
+              <div className="flex gap-2">
+                {invoice.aiSummary && (
+                  <button
+                    onClick={() => handleGenerateAiSummary(true)}
+                    disabled={generatingAi}
+                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:text-gray-400 dark:disabled:text-gray-600 transition"
+                    title="Regenerate AI summary"
+                  >
+                    {generatingAi ? 'Regenerating…' : '↻ Regenerate'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {invoice.aiSummary ? (
+              <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-400 rounded-r-lg py-2 px-4">
+                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap text-sm leading-relaxed">
+                  <ReactMarkdown>{invoice.aiSummary}</ReactMarkdown>
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={() => handleGenerateAiSummary(false)}
+                disabled={generatingAi}
+                className="w-full py-3 px-4 border-2 border-dashed border-purple-300 dark:border-purple-600 rounded-lg text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-400 dark:hover:border-purple-500 disabled:border-gray-300 dark:disabled:border-gray-600 disabled:text-gray-400 dark:disabled:text-gray-600 transition flex items-center justify-center gap-2"
+              >
+                {generatingAi ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating executive summary…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Generate AI Summary
+                  </>
+                )}
+              </button>
+            )}
+          </div>
 
           <div className="mb-8 pt-6 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-500 dark:text-gray-400">
             <p>Created: {formatDate(invoice.createdAt)}</p>

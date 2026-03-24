@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Temporal } from '@/lib/temporal-polyfill';
 import { getWeekStart, formatWeekRange, plainDateToUTC, authFetch } from '@/lib/util';
-import { generateWeeklySummary } from '@/lib/ai-actions';
+import { useJobs } from '@/components/JobsProvider';
 import { toast } from '@repo/ui';
 
 type TimeEntry = {
@@ -45,9 +46,35 @@ export function WeeklySummaries({
   const [editingWeek, setEditingWeek] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [autofilling, setAutofilling] = useState(false);
-  const [generatingWeek, setGeneratingWeek] = useState<string | null>(null);
   const [visibleWeeks, setVisibleWeeks] = useState(3);
+  const [autofillMode, setAutofillMode] = useState(false);
+  const { jobs, createJob } = useJobs();
+
+  // Track which weeks have active generation jobs
+  const activeWeeklySummaryJobs = jobs.filter(
+    (job) =>
+      job.type === 'generate_weekly_summary' &&
+      (job.status === 'pending' || job.status === 'processing') &&
+      (job.parameters as any)?.projectId === projectId
+  );
+
+  const isGeneratingWeek = useCallback(
+    (weekStart: string) =>
+      activeWeeklySummaryJobs.some(
+        (job) => (job.parameters as any)?.weekStart === weekStart
+      ),
+    [activeWeeklySummaryJobs]
+  );
+
+  // isAutofilling reflects the autofill button's spinner state (any active job)
+  const isAutofilling = activeWeeklySummaryJobs.length > 0;
+
+  // Clear autofill mode once all queued jobs finish
+  useEffect(() => {
+    if (autofillMode && activeWeeklySummaryJobs.length === 0) {
+      setAutofillMode(false);
+    }
+  }, [activeWeeklySummaryJobs.length, autofillMode]);
 
   // Group time entries by week
   useEffect(() => {
@@ -184,113 +211,76 @@ export function WeeklySummaries({
     }
   };
 
+  // Refresh summaries when any weekly summary job completes
+  const completedJobCount = jobs.filter(
+    (job) =>
+      job.type === 'generate_weekly_summary' &&
+      job.status === 'completed' &&
+      (job.parameters as any)?.projectId === projectId
+  ).length;
+
+  useEffect(() => {
+    if (completedJobCount > 0) {
+      fetchSummaries();
+    }
+  }, [completedJobCount]);
+
+  const prepareEntries = (week: WeekData) =>
+    week.entries.map((entry) => ({
+      date: new Date(entry.startTime).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      }),
+      description: entry.description || 'Work on project',
+      hours: entry.durationMinutes / 60,
+    }));
+
   const handleAutofill = async () => {
-    setAutofilling(true);
+    setAutofillMode(true);
     try {
-      // Find the 5 most recent weeks without summaries
       const weeksWithoutSummaries = weekData
-        .filter(week => !week.summary)
+        .filter((week) => !week.summary && !isGeneratingWeek(week.weekStart.toString()))
         .slice(0, 5);
 
       if (weeksWithoutSummaries.length === 0) {
         toast.info('All recent weeks already have summaries!');
+        setAutofillMode(false);
         return;
       }
 
-      // Generate summaries for each week
       for (const week of weeksWithoutSummaries) {
-        try {
-          // Prepare entry data for AI
-          const entries = week.entries.map(entry => ({
-            date: new Date(entry.startTime).toLocaleDateString('en-US', { 
-              weekday: 'short', 
-              month: 'short', 
-              day: 'numeric' 
-            }),
-            description: entry.description || 'Work on project',
-            hours: entry.durationMinutes / 60,
-          }));
-
-          // Generate summary using AI
-          const summary = await generateWeeklySummary({
-            projectId,
-            weekStart: week.weekStart.toString(), // Convert to string for serialization
-            weekEnd: week.weekEnd.toString(),     // Convert to string for serialization
-            entries,
-          });
-
-          // Save the summary
-          const weekStartUTC = plainDateToUTC(week.weekStart);
-          const res = await authFetch('/api/weekly-summaries', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              projectId,
-              weekStart: weekStartUTC.toISOString(),
-              summary,
-            }),
-          });
-
-          if (!res.ok) {
-            console.error(`Failed to save summary for week ${week.weekStart.toString()}`);
-          }
-        } catch (error) {
-          console.error(`Error generating summary for week ${week.weekStart.toString()}:`, error);
-        }
+        await createJob('generate_weekly_summary', {
+          projectId,
+          projectName,
+          weekStart: week.weekStart.toString(),
+          weekEnd: week.weekEnd.toString(),
+          entries: prepareEntries(week),
+        });
       }
 
-      // Refresh summaries
-      await fetchSummaries();
-      toast.success(`Generated ${weeksWithoutSummaries.length} weekly summaries!`);
+      toast.success(`Queued ${weeksWithoutSummaries.length} weekly summary jobs`);
     } catch (error) {
       console.error('Error during autofill:', error);
-      toast.error('Failed to autofill summaries');
-    } finally {
-      setAutofilling(false);
+      toast.error('Failed to queue summary jobs');
+      setAutofillMode(false);
     }
   };
 
   const handleGenerateSummary = async (week: WeekData) => {
-    const weekKey = week.weekStart.toString();
-    setGeneratingWeek(weekKey);
     try {
-      const entries = week.entries.map(entry => ({
-        date: new Date(entry.startTime).toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        }),
-        description: entry.description || 'Work on project',
-        hours: entry.durationMinutes / 60,
-      }));
-
-      const summary = await generateWeeklySummary({
+      await createJob('generate_weekly_summary', {
         projectId,
+        projectName,
         weekStart: week.weekStart.toString(),
         weekEnd: week.weekEnd.toString(),
-        entries,
+        entries: prepareEntries(week),
       });
 
-      const weekStartUTC = plainDateToUTC(week.weekStart);
-      const res = await authFetch('/api/weekly-summaries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId,
-          weekStart: weekStartUTC.toISOString(),
-          summary,
-        }),
-      });
-
-      if (!res.ok) throw new Error('Failed to save summary');
-
-      await fetchSummaries();
-      toast.success('Summary generated successfully');
+      toast.success('Summary generation started');
     } catch (error) {
-      console.error(`Error generating summary for week ${week.weekStart.toString()}:`, error);
-      toast.error('Failed to generate summary');
-    } finally {
-      setGeneratingWeek(null);
+      console.error(`Error starting summary job for week ${week.weekStart.toString()}:`, error);
+      toast.error('Failed to start summary generation');
     }
   };
 
@@ -313,11 +303,11 @@ export function WeeklySummaries({
         <div className="flex justify-end">
           <button
             onClick={handleAutofill}
-            disabled={autofilling}
+            disabled={isAutofilling}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 bg-blue-500/10 dark:bg-blue-500/10 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
 
           >
-            {autofilling ? (
+            {isAutofilling ? (
               <>
                 <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -338,7 +328,7 @@ export function WeeklySummaries({
       {weekData.slice(0, visibleWeeks).map((week) => {
         const weekKey = week.weekStart.toString();
         const isEditing = editingWeek === weekKey;
-        const isGenerating = generatingWeek === weekKey;
+        const isGenerating = isGeneratingWeek(weekKey);
         const hasSummary = week.summary !== null;
         const hours = (week.totalMinutes / 60).toFixed(1);
 
@@ -362,7 +352,7 @@ export function WeeklySummaries({
                   {!hasSummary && (
                     <button
                       onClick={() => handleGenerateSummary(week)}
-                      disabled={isGenerating || !!generatingWeek || autofilling}
+                      disabled={isGenerating || autofillMode}
                       className="flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 bg-blue-500/10 dark:bg-blue-500/10 px-2.5 py-1.5 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isGenerating ? (
@@ -467,9 +457,9 @@ export function WeeklySummaries({
                     Delete
                   </button>
                 </div>
-                <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
-                  {week.summary!.summary}
-                </p>
+                <div className="text-sm text-blue-800 dark:text-blue-300 [&_p]:my-1 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-0.5 [&_strong]:font-semibold">
+                  <ReactMarkdown>{week.summary!.summary}</ReactMarkdown>
+                </div>
               </div>
             ) : null}
           </div>

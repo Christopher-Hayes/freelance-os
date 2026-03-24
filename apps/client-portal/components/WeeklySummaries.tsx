@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 type TimeEntry = {
   id: number;
@@ -165,9 +166,9 @@ export function WeeklySummaries({
                 <div className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-2">
                   Weekly Summary
                 </div>
-                <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
-                  {week.summary!.summary}
-                </p>
+                <div className="text-sm text-blue-800 dark:text-blue-300 [&_p]:my-1 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-0.5 [&_strong]:font-semibold">
+                  <ReactMarkdown>{week.summary!.summary}</ReactMarkdown>
+                </div>
               </div>
             )}
 

@@ -16,6 +16,9 @@ export { StatCard } from "./stat-card";
 export { DownloadButton } from "./download-button";
 export type { DownloadButtonProps } from "./download-button";
 
+export { PreviewButton } from "./preview-button";
+export type { PreviewButtonProps } from "./preview-button";
+
 export { EditButton } from "./edit-button";
 export type { EditButtonProps } from "./edit-button";
 

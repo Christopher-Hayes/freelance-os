@@ -63,6 +63,24 @@ export function enrichJobWithDisplay(job: AiJob): AiJobWithDisplay {
       }
       break;
     }
+    case "generate_weekly_summary": {
+      const params = job.parameters as { projectName?: string; weekStart?: string; weekEnd?: string } | undefined;
+      const weekLabel = params?.weekStart ? formatJobDate(params.weekStart) : "Unknown week";
+      const projectLabel = params?.projectName || "Project";
+      displayTitle = `Weekly Summary: ${projectLabel} — ${weekLabel}`;
+
+      if (job.status === "completed" && job.result) {
+        const result = job.result as { message?: string };
+        displayDescription = result.message || "Summary generated and saved";
+      } else if (job.status === "processing") {
+        displayDescription = `Generating summary (${job.progress}%)`;
+      } else if (job.status === "failed") {
+        displayDescription = job.error || "Failed to generate summary";
+      } else if (job.status === "pending") {
+        displayDescription = "Queued and waiting to start";
+      }
+      break;
+    }
     default:
       displayTitle = `Unknown job type: ${job.type}`;
   }

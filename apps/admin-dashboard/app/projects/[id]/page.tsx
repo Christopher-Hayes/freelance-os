@@ -7,6 +7,7 @@ import { Check, Link2, Link2Off, Pencil, Trash2, X } from 'lucide-react';
 import { APIFooter, OptionsMenu, OptionsMenuItem } from '@repo/ui';
 import { generateCode } from '@/lib/ai-actions';
 import { WeeklySummaries } from './WeeklySummaries';
+import { ProjectHighlights } from '@/components/ProjectHighlights';
 import { authFetch } from '@/lib/util';
 
 type Client = {
@@ -24,6 +25,16 @@ type TimeEntry = {
   billable: boolean;
 };
 
+type Highlight = {
+  id: number;
+  projectId: number;
+  date: string;
+  label: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type Project = {
   id: number;
   name: string;
@@ -39,6 +50,7 @@ type Project = {
   linkedRtProject: { rtProjectId: number; name: string; color: string | null } | null;
   client: Client;
   timeEntries: TimeEntry[];
+  highlights: Highlight[];
   totalHours: number;
   _count: {
     timeEntries: number;
@@ -190,6 +202,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       setProject({
         ...data,
         timeEntries: project.timeEntries,
+        highlights: project.highlights,
         totalHours: project.totalHours,
         _count: project._count,
       });
@@ -785,6 +798,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           )}
 
         </dl>
+      </div>
+
+      {/* ── Highlights ── */}
+      <div className="mb-8">
+        <ProjectHighlights
+          projectId={project.id}
+          highlights={project.highlights ?? []}
+          onHighlightsChange={(newHighlights) =>
+            setProject({ ...project, highlights: newHighlights })
+          }
+        />
       </div>
 
       {/* ── Weekly Summaries ── */}

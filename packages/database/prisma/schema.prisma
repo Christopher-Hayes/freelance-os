@@ -84,9 +84,29 @@ model Project {
   timeEntries       TimeEntry[]
   invoices          Invoice[]
   weeklySummaries   WeeklySummary[]
+  highlights        ProjectHighlight[]
 
   @@index([clientId])
   @@map("projects")
+}
+
+// Project highlights — short labels marking significant dates during a project
+model ProjectHighlight {
+  id        Int      @id @default(autoincrement())
+  projectId Int      @map("project_id")
+  date      DateTime @db.Date // Just the date, no time component
+  label     String   @db.VarChar(100) // Short label, 2-5 words (e.g. "Launch day", "Dropped WebGL approach")
+  emoji     String?  @db.VarChar(10)  // Optional emoji icon (e.g. "🚀", "🎉", "🏁")
+  source    String   @default("manual") @db.VarChar(20) // "manual" | "ai-suggested"
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, date, label]) // Prevent duplicate highlights on the same date with the same label
+  @@index([projectId])
+  @@index([date])
+  @@map("project_highlights")
 }
 
 // Weekly summaries for projects
@@ -139,6 +159,7 @@ model Invoice {
   dueDate     DateTime @map("due_date") @db.Timestamptz
   paidDate    DateTime? @map("paid_date") @db.Timestamptz
   notes       String?  @db.Text
+  aiSummary   String?  @map("ai_summary") @db.Text // AI-generated executive summary for the invoice period
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
   
@@ -251,6 +272,7 @@ enum AiProvider {
 enum AiJobType {
   autofill_time_entries
   merge_rescuetime_activity
+  generate_weekly_summary
   // Future: generate_invoice_description, analyze_productivity, etc.
 }
 

@@ -59,6 +59,25 @@ const statusVariants = {
   'on-hold': 'warning',
 } as const;
 
+const statusSortOrder: Record<string, number> = {
+  active: 0,
+  'on-hold': 1,
+  completed: 2,
+};
+
+function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    const statusDiff = (statusSortOrder[a.status] ?? 99) - (statusSortOrder[b.status] ?? 99);
+    if (statusDiff !== 0) return statusDiff;
+
+    // Within the same status group, sort by startDate descending (most recent first)
+    if (a.startDate && b.startDate) return b.startDate.localeCompare(a.startDate);
+    if (a.startDate) return -1; // a has a date, b doesn't → a comes first
+    if (b.startDate) return 1;  // b has a date, a doesn't → b comes first
+    return 0;
+  });
+}
+
 const statusLabels = {
   active: 'Active',
   completed: 'Completed',
@@ -205,7 +224,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterClient, setFilterClient] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('active');
 
   const fetchClients = useCallback(async () => {
     try {
@@ -365,7 +384,7 @@ export default function ProjectsPage() {
             />
           ) : (
             <div className="grid gap-5">
-              {projects.map((project) => (
+              {sortProjects(projects).map((project) => (
                 <ProjectCard key={project.id} project={project} onDelete={handleDelete} />
               ))}
             </div>

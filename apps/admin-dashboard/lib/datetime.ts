@@ -150,6 +150,21 @@ export function toLocalDate(instant: Temporal.Instant | string): Temporal.PlainD
 }
 
 /**
+ * Format a plain date (YYYY-MM-DD or ISO timestamp) as a locale string.
+ * Use this for date-only fields (e.g. highlight dates, project start/end dates)
+ * to avoid timezone-shift bugs. Extracts just the date part before parsing so
+ * no UTC→local conversion happens.
+ */
+export function formatPlainDate(
+  dateOrIso: string,
+  options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+): string {
+  const datePart = dateOrIso.split('T')[0]!;
+  const plain = Temporal.PlainDate.from(datePart);
+  return plain.toLocaleString(undefined, options);
+}
+
+/**
  * Create an Instant from a PlainDate (at midnight local time)
  */
 export function fromLocalDate(date: Temporal.PlainDate): Temporal.Instant {

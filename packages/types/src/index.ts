@@ -67,6 +67,33 @@ export interface UpdateProjectInput {
   endDate?: Date;
 }
 
+// Project highlight types
+export type ProjectHighlightSource = 'manual' | 'ai-suggested';
+
+export interface ProjectHighlight {
+  id: number;
+  projectId: number;
+  date: Date;
+  label: string;
+  emoji?: string;
+  source: ProjectHighlightSource;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateProjectHighlightInput {
+  date: string; // YYYY-MM-DD
+  label: string;
+  emoji?: string;
+  source?: ProjectHighlightSource;
+}
+
+export interface UpdateProjectHighlightInput {
+  date?: string; // YYYY-MM-DD
+  label?: string;
+  emoji?: string | null;
+}
+
 // Time tracking types
 export interface TimeEntry {
   id: number;
@@ -142,6 +169,7 @@ export interface Invoice {
   dueDate: Date;
   paidDate?: Date;
   notes?: string;
+  aiSummary?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -270,7 +298,7 @@ export interface UpdateSettingInput {
 }
 
 // AI Job types
-export type AiJobType = 'autofill_time_entries' | 'merge_rescuetime_activity'; // Future: 'generate_invoice_description', 'analyze_productivity', etc.
+export type AiJobType = 'autofill_time_entries' | 'merge_rescuetime_activity' | 'generate_weekly_summary'; // Future: 'generate_invoice_description', 'analyze_productivity', etc.
 export type AiJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface AiJob {

@@ -112,6 +112,9 @@ async function processJobAsync(jobId: number) {
       case "merge_rescuetime_activity":
         await processMergeRescueTimeActivityJob(job);
         break;
+      case "generate_weekly_summary":
+        await processWeeklySummaryJob(job);
+        break;
       default:
         throw new Error(`Unknown job type: ${job.type}`);
     }
@@ -310,6 +313,99 @@ async function processMergeRescueTimeActivityJob(job: any) {
     });
   } catch (error) {
     console.error("Error in merge RescueTime activity job:", error);
+    throw error; // Re-throw to be caught by processJobAsync
+  }
+}
+
+async function processWeeklySummaryJob(job: any) {
+  const { generateWeeklySummary } = await import("@/lib/ai-actions");
+
+  const params = job.parameters as {
+    projectId: number;
+    projectName?: string;
+    weekStart: string;
+    weekEnd: string;
+    entries: Array<{ date: string; description: string | null; hours: number }>;
+  };
+
+  await prisma.aiJob.update({
+    where: { id: job.id },
+    data: { progress: 10 },
+  });
+
+  try {
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: { progress: 30 },
+    });
+
+    const summary = await generateWeeklySummary(
+      {
+        projectId: params.projectId,
+        weekStart: params.weekStart,
+        weekEnd: params.weekEnd,
+        entries: params.entries,
+      },
+      {
+        jobId: job.id,
+        functionId: "generateWeeklySummary",
+        metadata: {
+          projectId: params.projectId,
+          weekStart: params.weekStart,
+          weekEnd: params.weekEnd,
+        },
+      }
+    );
+
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: { progress: 80 },
+    });
+
+    // Save the summary to the database
+    const weekStartDate = new Date(params.weekStart + "T00:00:00Z");
+
+    // Check if a summary already exists (upsert)
+    const existing = await prisma.weeklySummary.findUnique({
+      where: {
+        projectId_weekStart: {
+          projectId: params.projectId,
+          weekStart: weekStartDate,
+        },
+      },
+    });
+
+    if (existing) {
+      await prisma.weeklySummary.update({
+        where: { id: existing.id },
+        data: { summary },
+      });
+    } else {
+      await prisma.weeklySummary.create({
+        data: {
+          projectId: params.projectId,
+          weekStart: weekStartDate,
+          summary,
+        },
+      });
+    }
+
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: {
+        status: "completed",
+        progress: 100,
+        result: {
+          summary,
+          projectId: params.projectId,
+          weekStart: params.weekStart,
+          message: `Generated summary for week of ${params.weekStart}`,
+        },
+        completedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Error in weekly summary job:", error);
     throw error; // Re-throw to be caught by processJobAsync
   }
 }
