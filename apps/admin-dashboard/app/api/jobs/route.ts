@@ -326,6 +326,7 @@ async function processWeeklySummaryJob(job: any) {
     weekStart: string;
     weekEnd: string;
     entries: Array<{ date: string; description: string | null; hours: number }>;
+    existingSummary?: string;
   };
 
   await prisma.aiJob.update({
@@ -345,6 +346,7 @@ async function processWeeklySummaryJob(job: any) {
         weekStart: params.weekStart,
         weekEnd: params.weekEnd,
         entries: params.entries,
+        existingSummary: params.existingSummary,
       },
       {
         jobId: job.id,

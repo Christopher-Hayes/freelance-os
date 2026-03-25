@@ -24,9 +24,9 @@ function parseInlineTokens(text: string): InlineToken[] {
     if (match.index > lastIndex) {
       tokens.push({ type: 'text', content: text.slice(lastIndex, match.index) });
     }
-    if (match[1] !== undefined) tokens.push({ type: 'bold',   content: match[1] });
-    else if (match[2] !== undefined) tokens.push({ type: 'bold',   content: match[2] });
-    else if (match[3] !== undefined) tokens.push({ type: 'code',   content: match[3] });
+    if (match[1] !== undefined) tokens.push({ type: 'bold', content: match[1] });
+    else if (match[2] !== undefined) tokens.push({ type: 'bold', content: match[2] });
+    else if (match[3] !== undefined) tokens.push({ type: 'code', content: match[3] });
     else if (match[4] !== undefined) tokens.push({ type: 'italic', content: match[4] });
     else if (match[5] !== undefined) tokens.push({ type: 'italic', content: match[5] });
     lastIndex = match.index + match[0].length;
@@ -45,9 +45,9 @@ const InlineText: React.FC<{ text: string; style?: any }> = ({ text, style }) =>
   return (
     <Text style={style}>
       {tokens.map((token, i) => {
-        if (token.type === 'bold')   return <Text key={i} style={{ fontFamily: 'Helvetica-Bold' }}>{token.content}</Text>;
+        if (token.type === 'bold') return <Text key={i} style={{ fontFamily: 'Helvetica-Bold' }}>{token.content}</Text>;
         if (token.type === 'italic') return <Text key={i} style={{ fontFamily: 'Helvetica-Oblique' }}>{token.content}</Text>;
-        if (token.type === 'code')   return <Text key={i} style={{ fontFamily: 'Courier' }}>{token.content}</Text>;
+        if (token.type === 'code') return <Text key={i} style={{ fontFamily: 'Courier' }}>{token.content}</Text>;
         return token.content;
       })}
     </Text>
@@ -164,6 +164,9 @@ export interface InvoicePDFData {
     phone?: string | null;
     website?: string | null;
   };
+  // Actual date range of the work being billed (first and last time entry dates)
+  workPeriodStart?: string | null;
+  workPeriodEnd?: string | null;
   // Optional time breakdown
   timeBreakdown?: {
     weekStart: string;
@@ -253,6 +256,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     backgroundColor: COLORS.white,
     padding: 30,
+    paddingBottom: 90, // Reserve space for absolute-positioned footer (prevents blank overflow page)
     fontSize: 10,
     fontFamily: 'Helvetica',
   },
@@ -337,10 +341,9 @@ const styles = StyleSheet.create({
   },
   amountSection: {
     backgroundColor: COLORS.gray50,
-    padding: 15,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    marginTop: 10,
-    marginBottom: 10,
   },
   amountLabel: {
     fontSize: 11,
@@ -381,9 +384,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: COLORS.gray500,
     lineHeight: 1.5,
-    marginTop: 8,
     padding: 12,
+    marginTop: 8,
     backgroundColor: COLORS.warningLight,
+    borderRadius: 8,
     borderLeftWidth: 3,
     borderLeftStyle: 'solid',
     borderLeftColor: COLORS.warning,
@@ -400,7 +404,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 25,
+    marginBottom: 14,
     borderBottomWidth: 2,
     borderBottomStyle: 'solid',
     borderBottomColor: COLORS.primary,
@@ -561,7 +565,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 226,
     marginTop: 4,
-    marginBottom: 10,
   },
   heatmapLegendLabel: {
     fontSize: 7,
@@ -578,7 +581,7 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: COLORS.gray100,
-    padding: 0,
+    padding: 7,
     borderRadius: 4,
     marginBottom: 4,
   },
@@ -754,6 +757,18 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
     }).format(new Date(Date.UTC(plain.year, plain.month - 1, plain.day)));
   };
 
+  const formatDueInDays = (issueDateString: string, dueDateString: string) => {
+    const issueDate = Temporal.PlainDate.from(issueDateString.slice(0, 10));
+    const dueDate = Temporal.PlainDate.from(dueDateString.slice(0, 10));
+    const daysUntilDue = issueDate.until(dueDate, { largestUnit: 'day' }).days;
+
+    if (daysUntilDue <= 0) {
+      return '0 days';
+    }
+
+    return `${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`;
+  };
+
   const getStatusStyle = (status: string) => {
     switch (status.toLowerCase()) {
       case 'paid':
@@ -773,6 +788,15 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
   // Compute totals for the summary line on page 1
   const totalTimeHours = invoice.timeBreakdown?.reduce((s, w) => s + w.totalHours, 0) ?? 0;
   const totalWeeks = invoice.timeBreakdown?.length ?? 0;
+
+  // Work period: prefer explicit fields, fall back to first/last week boundaries from timeBreakdown
+  const workPeriodStart = invoice.workPeriodStart
+    ?? invoice.timeBreakdown?.[0]?.weekStart
+    ?? null;
+  const workPeriodEnd = invoice.workPeriodEnd
+    ?? invoice.timeBreakdown?.[invoice.timeBreakdown.length - 1]?.weekEnd
+    ?? null;
+  const hasWorkPeriod = !!(workPeriodStart && workPeriodEnd);
 
   // Max hours across project comparison for bar chart scaling
   const maxProjectHours = invoice.projectComparison?.reduce((m, p) => Math.max(m, p.hours), 0) ?? 0;
@@ -830,29 +854,29 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
         <View style={styles.row}>
           <View style={styles.column}>
             <Text style={styles.label}>Bill To</Text>
-            <Text style={styles.value}>{invoice.client.name}</Text>
-            {invoice.client.company && (
-              <Text style={styles.value}>{invoice.client.company}</Text>
-            )}
+            {/* <Text style={{ ...styles.value, fontWeight: 'semibold' }}>{invoice.client.name}</Text> */}
+            {/* {invoice.client.company && invoice.client.company !== invoice.client.name && ( */}
+              <Text style={{ ...styles.value, fontWeight: 'semibold' }}>{invoice.client.company}</Text>
+            {/* )} */}
             <Text style={styles.value}>{invoice.client.email}</Text>
           </View>
 
           <View style={styles.column}>
             <Text style={styles.label}>Invoice Details</Text>
-            <View style={{ marginBottom: 8 }}>
+            <View style={{ marginBottom: 2 }}>
               <Text style={styles.value}>
                 <Text style={{ fontWeight: 'bold' }}>Issue Date: </Text>
                 {formatDate(invoice.issueDate)}
               </Text>
             </View>
-            <View style={{ marginBottom: 8 }}>
+            <View style={{ marginBottom: 2 }}>
               <Text style={styles.value}>
                 <Text style={{ fontWeight: 'bold' }}>Due Date: </Text>
                 {formatDate(invoice.dueDate)}
               </Text>
             </View>
             {invoice.paidDate && (
-              <View style={{ marginBottom: 8 }}>
+              <View style={{ marginBottom: 2 }}>
                 <Text style={styles.value}>
                   <Text style={{ fontWeight: 'bold' }}>Paid Date: </Text>
                   {formatDate(invoice.paidDate)}
@@ -862,34 +886,53 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
           </View>
         </View>
 
-        {/* Project + quick summary */}
-        {invoice.project && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Project</Text>
-            <Text style={styles.value}>
-              {invoice.project.name}
-              {totalTimeHours > 0 && ` — ${totalTimeHours.toFixed(1)} hours across ${totalWeeks} week${totalWeeks !== 1 ? 's' : ''}`}
-            </Text>
-            {invoice.project.hourlyRate && (
-              <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 2 }}>
-                Rate: {formatCurrency(invoice.project.hourlyRate, invoice.currency)}/hr
-              </Text>
+        {/* Project + Work Period row */}
+        {(invoice.project || hasWorkPeriod) && (
+          <View style={[styles.row, { marginBottom: 0 }]}>
+            {invoice.project && (
+              <View style={styles.column}>
+                <Text style={styles.label}>Project</Text>
+                <Text style={styles.value}>
+                  {invoice.project.name}
+                  {totalTimeHours > 0 && ` — ${totalTimeHours.toFixed(1)}h across ${totalWeeks} week${totalWeeks !== 1 ? 's' : ''}`}
+                </Text>
+                {invoice.project.hourlyRate && (
+                  <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 2 }}>
+                    Rate: {formatCurrency(invoice.project.hourlyRate, invoice.currency)} / hour
+                  </Text>
+                )}
+              </View>
+            )}
+            {hasWorkPeriod && (
+              <View style={styles.column}>
+                <Text style={styles.label}>Work Period</Text>
+                <Text style={styles.value}>{formatDate(workPeriodStart!)} – {formatDate(workPeriodEnd!)}</Text>
+              </View>
             )}
           </View>
         )}
 
         <View style={styles.divider} />
 
-        {/* Amount */}
-        <View style={styles.amountSection}>
-          <Text style={styles.amountLabel}>Total Amount Due</Text>
-          <Text style={styles.amountValue}>
-            {formatCurrency(invoice.amount, invoice.currency)}
-          </Text>
-          {totalTimeHours > 0 && invoice.project?.hourlyRate && (
-            <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 4 }}>
-              {totalTimeHours.toFixed(1)} hrs × {formatCurrency(invoice.project.hourlyRate, invoice.currency)}/hr
+        <View style={{ ...styles.section, marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Amount */}
+          <View style={styles.amountSection}>
+            <Text style={styles.amountLabel}>Total Amount Due</Text>
+            <Text style={styles.amountValue}>
+              {formatCurrency(invoice.amount, invoice.currency)}
             </Text>
+            {totalTimeHours > 0 && invoice.project?.hourlyRate && (
+              <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 4 }}>
+                {totalTimeHours.toFixed(1)} hours × {formatCurrency(invoice.project.hourlyRate, invoice.currency)} / hour
+              </Text>
+            )}
+          </View>
+          {/* Notes */}
+          {invoice.notes && (
+            <View style={{ width: '45%' }}>
+              <Text style={styles.label}>Notes</Text>
+              <Text style={styles.notes}>{invoice.notes}</Text>
+            </View>
           )}
         </View>
 
@@ -901,19 +944,12 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
           </View>
         )}
 
-        {/* Notes */}
-        {invoice.notes && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Notes</Text>
-            <Text style={styles.notes}>{invoice.notes}</Text>
-          </View>
-        )}
 
         {/* Payment Terms */}
         <View style={styles.paymentTerms}>
           <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>Payment Terms</Text>
           <Text>
-            Payment is due by {formatDate(invoice.dueDate)}. Please reference invoice number {invoice.invoiceNumber} when making payment.
+            Payment due date is: {formatDate(invoice.dueDate)}. (in {formatDueInDays(invoice.issueDate, invoice.dueDate)})
           </Text>
         </View>
 
@@ -937,7 +973,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
           <View style={styles.pageHeader}>
             <Text style={styles.pageTitle}>Project Insights</Text>
             <Text style={styles.pageSubtitle}>
-              {invoice.invoiceNumber} — {formatDate(invoice.issueDate)} to {formatDate(invoice.dueDate)}
+              {invoice.invoiceNumber}{hasWorkPeriod ? ` — ${formatDate(workPeriodStart!)} to ${formatDate(workPeriodEnd!)}` : ''}
             </Text>
           </View>
 
@@ -962,10 +998,12 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
           {/* Project Time Comparison */}
           {invoice.projectComparison && invoice.projectComparison.length > 1 && (
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: 10 }}>
               <Text style={styles.sectionTitle}>Time Distribution Across Projects</Text>
               <Text style={{ fontSize: 8, color: COLORS.gray400, marginBottom: 8 }}>
-                All {invoice.client.name} projects during invoice period.
+                All {invoice.client.name} projects{hasWorkPeriod
+                  ? ` between ${formatDate(workPeriodStart!)} and ${formatDate(workPeriodEnd!)}`
+                  : ' during invoice period'}.
               </Text>
               {invoice.projectComparison
                 .sort((a, b) => b.hours - a.hours)
@@ -984,124 +1022,188 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
           {/* Daily Hours Heatmap + Highlights */}
           {invoice.dailyHours && invoice.dailyHours.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 10 }}>
               <Text style={styles.sectionTitle}>Daily Work Heatmap</Text>
               <View style={{ flexDirection: 'row' }}>
                 {/* Left side: heatmap grid */}
-                <View style={{ width: '55%' }}>
+                <View style={{ width: '50%' }}>
                   {/* Day-of-week headers */}
                   <View style={{ flexDirection: 'row', marginBottom: 4 }}>
                     {/* Spacer to align with the left week labels */}
                     <View style={{ width: 31, marginRight: 3 }} />
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
                       <View key={d} style={{ width: 20, marginRight: 2, alignItems: 'center' }}>
                         <Text style={{ fontSize: 6, color: COLORS.gray400 }}>{d}</Text>
                       </View>
                     ))}
                   </View>
-                  {/* Grid — one row per week */}
+                  {/* Grid — one calendar-style block per month, clipped to invoice period */}
                   {(() => {
-                    // Group dailyHours into weeks (Mon-Sun rows)
+                    // Build a lookup: date string → hours
                     const sorted = [...invoice.dailyHours].sort((a, b) => a.date.localeCompare(b.date));
-                    const weeks: typeof sorted[] = [];
-                    let currentWeek: typeof sorted = [];
-                    for (const day of sorted) {
-                      // dayOfWeek: 1=Mon … 7=Sun (ISO 8601, no timezone involved)
-                      const mondayIdx = Temporal.PlainDate.from(day.date.slice(0, 10)).dayOfWeek - 1; // 0=Mon … 6=Sun
-                      if (mondayIdx === 0 && currentWeek.length > 0) {
-                        weeks.push(currentWeek);
+                    const hoursMap = new Map<string, number>();
+                    for (const d of sorted) hoursMap.set(d.date.slice(0, 10), d.hours);
+
+                    if (sorted.length === 0) return null;
+
+                    // Determine the date range to display
+                    const firstDataDate = Temporal.PlainDate.from(sorted[0]!.date.slice(0, 10));
+                    // Use the last date with actual hours > 0 so we don't show trailing blank days
+                    const lastWithHours = [...sorted].reverse().find(d => d.hours > 0);
+                    const effectiveLastDate = lastWithHours
+                      ? Temporal.PlainDate.from(lastWithHours.date.slice(0, 10))
+                      : Temporal.PlainDate.from(sorted[sorted.length - 1]!.date.slice(0, 10));
+                    const rangeStart = firstDataDate.subtract({ days: firstDataDate.dayOfWeek % 7 }); // Sunday
+                    // Don't pad past the effective last date — the partial week is fine
+                    const rangeEnd = effectiveLastDate;
+
+                    // Iterate day-by-day from rangeStart to rangeEnd, grouping into months then weeks
+                    type DayEntry = { date: string; hours: number };
+                    type MonthBlock = {
+                      key: string;
+                      label: string;
+                      weeks: DayEntry[][];
+                    };
+
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+
+                    const months: MonthBlock[] = [];
+                    let currentMonth: MonthBlock | null = null;
+                    let currentWeek: DayEntry[] = [];
+                    let cursor = rangeStart;
+
+                    while (Temporal.PlainDate.compare(cursor, rangeEnd) <= 0) {
+                      const monthKey = cursor.toString().slice(0, 7);
+
+                      // Start a new month block when the month changes
+                      if (!currentMonth || currentMonth.key !== monthKey) {
+                        // If the new month starts AFTER the last date with hours,
+                        // don't create it — it would only contain blank cells.
+                        if (Temporal.PlainDate.compare(cursor, effectiveLastDate) > 0) {
+                          break;
+                        }
+                        // Flush trailing week cells into the previous month
+                        if (currentWeek.length > 0 && currentMonth) {
+                          // Pad remaining cells to finish the week row
+                          while (currentWeek.length < 7) {
+                            currentWeek.push({ date: '', hours: -1 });
+                          }
+                          currentMonth.weeks.push(currentWeek);
+                          currentWeek = [];
+                        }
+                        currentMonth = {
+                          key: monthKey,
+                          label: `${monthNames[cursor.month - 1]}`,
+                          weeks: [],
+                        };
+                        months.push(currentMonth);
+
+                        // Pad leading empty cells if the month starts mid-week
+                        const dow = cursor.dayOfWeek % 7; // 0=Sun, 1=Mon, …, 6=Sat
+                        for (let p = 0; p < dow; p++) {
+                          currentWeek.push({ date: '', hours: -1 });
+                        }
+                      }
+
+                      const dateStr = cursor.toString();
+                      const hours = hoursMap.get(dateStr) ?? 0;
+                      currentWeek.push({ date: dateStr, hours });
+
+                      // End week row on Saturday
+                      if (cursor.dayOfWeek === 6) {
+                        currentMonth.weeks.push(currentWeek);
                         currentWeek = [];
                       }
-                      // Pad missing days
-                      while (currentWeek.length < mondayIdx) {
-                        currentWeek.push({ date: '', hours: -1 }); // placeholder
-                      }
-                      currentWeek.push(day);
+
+                      cursor = cursor.add({ days: 1 });
                     }
-                    if (currentWeek.length > 0) weeks.push(currentWeek);
+                    // Flush any remaining partial week
+                    if (currentWeek.length > 0 && currentMonth) {
+                      currentMonth.weeks.push(currentWeek);
+                    }
 
-                    return weeks.map((week, wi) => {
-                      // Detect month boundary: extra top gap when month changes between weeks
-                      const firstRealDate = week.find(d => d.date)?.date;
-                      const prevFirstRealDate = wi > 0 ? weeks[wi - 1]!.find(d => d.date)?.date : undefined;
-                      const isNewMonth =
-                        wi > 0 &&
-                        firstRealDate &&
-                        prevFirstRealDate &&
-                        firstRealDate.slice(0, 7) !== prevFirstRealDate.slice(0, 7);
-
-                      const weekHours = week.reduce((s, d) => s + (d.hours > 0 ? d.hours : 0), 0);
-                      const weekLabel = week.find(d => d.date)?.date;
-                      return (
-                      <View key={wi} style={{ flexDirection: 'row', marginBottom: 2, marginTop: isNewMonth ? 6 : 0, alignItems: 'center' }}>
-                        {/* Week start label on the left */}
-                        <Text style={{ fontSize: 7, color: COLORS.gray400, width: 28, marginRight: 6, textAlign: 'right' }}>
-                          {weekLabel ? formatDateShort(weekLabel) : ''}
-                        </Text>
-                        {week.map((day, di) => {
-                          const hl = day.date ? highlightMap.get(day.date.slice(0, 10)) : undefined;
+                    return months.map((mb, mi) => (
+                      <View key={mb.key} style={{ marginBottom: mi < months.length - 1 ? 10 : 0 }}>
+                        {/* Month header */}
+                        {/* <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: COLORS.gray700, marginBottom: 4 }}>
+                          {mb.label}
+                        </Text> */}
+                        {mb.weeks.map((week, wi) => {
+                          const weekHours = week.reduce((s, d) => s + (d.hours > 0 ? d.hours : 0), 0);
+                          const weekLabel = week.find(d => d.date)?.date;
                           return (
-                            <View
-                              key={di}
-                              style={[
-                                styles.heatmapCell,
-                                {
-                                  backgroundColor: day.hours < 0 ? 'transparent' : heatmapColor(day.hours, maxDailyHours),
-                                  position: 'relative' as const,
-                                },
-                              ]}
-                            >
-                              {hl?.emoji && (
-                                <View style={{
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: 0,
-                                  width: 18,
-                                  height: 18,
-                                  justifyContent: 'center',
-                                  alignItems: 'center',
-                                }}>
-                                  <Text style={{ fontSize: 8, color: COLORS.accent, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
-                                    {hl.emoji}
-                                  </Text>
-                                </View>
-                              )}
-                              {hl && (
-                                <View style={{
-                                  position: 'absolute',
-                                  top: -3,
-                                  right: -3,
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: 4,
-                                  backgroundColor: COLORS.accent,
-                                  justifyContent: 'center',
-                                  alignItems: 'center',
-                                }}>
-                                  <Text style={{ fontSize: 5, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
-                                    {hl.index}
-                                  </Text>
-                                </View>
-                              )}
-                              {day.hours >= 0 && !hl && (
-                                <Text style={[styles.heatmapCellText, day.hours > maxDailyHours * 0.5 ? { color: COLORS.white } : {}]}>
-                                  {day.hours > 0 ? Math.ceil(day.hours) : ''}
-                                </Text>
-                              )}
+                            <View key={wi} style={{ flexDirection: 'row', marginBottom: 2, alignItems: 'center' }}>
+                              {/* Week start label on the left */}
+                              <Text style={{ fontSize: 7, color: COLORS.gray400, width: 28, marginRight: 6, textAlign: 'right' }}>
+                                {weekLabel ? formatDateShort(weekLabel) : ''}
+                              </Text>
+                              {week.map((day, di) => {
+                                const hl = day.date ? highlightMap.get(day.date.slice(0, 10)) : undefined;
+                                return (
+                                  <View
+                                    key={di}
+                                    style={[
+                                      styles.heatmapCell,
+                                      {
+                                        backgroundColor: day.hours < 0 ? 'transparent' : heatmapColor(day.hours, maxDailyHours),
+                                        position: 'relative' as const,
+                                      },
+                                    ]}
+                                  >
+                                    {hl?.emoji && (
+                                      <View style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: 18,
+                                        height: 18,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                      }}>
+                                        <Text style={{ fontSize: 8, color: COLORS.accent, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                                          {hl.emoji}
+                                        </Text>
+                                      </View>
+                                    )}
+                                    {hl && (
+                                      <View style={{
+                                        position: 'absolute',
+                                        top: -3,
+                                        right: -3,
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: 4,
+                                        backgroundColor: COLORS.accent,
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                      }}>
+                                        <Text style={{ fontSize: 5, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                                          {hl.index}
+                                        </Text>
+                                      </View>
+                                    )}
+                                    {day.hours >= 0 && !hl && (
+                                      <Text style={[styles.heatmapCellText, day.hours > maxDailyHours * 0.5 ? { color: COLORS.white } : {}]}>
+                                        {day.hours > 0 ? Math.max(1, day.hours).toFixed(0) : ''}
+                                      </Text>
+                                    )}
+                                  </View>
+                                );
+                              })}
+                              {/* Pad remaining cells to 7 */}
+                              {Array.from({ length: 7 - week.length }).map((_, pi) => (
+                                <View key={`p${pi}`} style={[styles.heatmapCell, { backgroundColor: 'transparent' }]} />
+                              ))}
+                              {/* Week hour total on the right */}
+                              <Text style={{ fontSize: 7, color: COLORS.gray500, marginLeft: 6, width: 12, textAlign: 'right' }}>
+                                {weekHours > 0 ? `${Math.max(1, weekHours).toFixed(0)}h` : ''}
+                              </Text>
                             </View>
                           );
                         })}
-                        {/* Pad remaining cells to 7 */}
-                        {Array.from({ length: 7 - week.length }).map((_, pi) => (
-                          <View key={`p${pi}`} style={[styles.heatmapCell, { backgroundColor: 'transparent' }]} />
-                        ))}
-                        {/* Week hour total on the right */}
-                        <Text style={{ fontSize: 7, color: COLORS.gray500, marginLeft: 6, width: 12, textAlign: 'right' }}>
-                          {weekHours > 0 ? `${weekHours.toFixed(0)}h` : ''}
-                        </Text>
                       </View>
-                      );
-                    });
+                    ));
                   })()}
                   {/* Legend */}
                   <View style={styles.heatmapLegend}>
@@ -1115,39 +1217,39 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
                 {/* Right side: highlights list */}
                 {sortedHighlights.length > 0 && (
-                  <View style={{ width: '43%', marginLeft: '2%', paddingLeft: 10, borderLeftWidth: 1, borderLeftStyle: 'solid', borderLeftColor: COLORS.gray200 }}>
+                  <View style={{ width: '50%' }}>
                     <Text style={{ fontSize: 10, fontWeight: 'bold', color: COLORS.gray800, marginBottom: 8 }}>
                       Highlights
                     </Text>
                     {sortedHighlights.map((hl, i) => (
-                        <View key={i} style={{ flexDirection: 'row', marginBottom: 6, alignItems: 'flex-start' }}>
-                          <View style={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: 6,
-                            backgroundColor: COLORS.accent,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginRight: 4,
-                            marginTop: 1,
-                          }}>
-                            <Text style={{ fontSize: 6, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
-                              {i + 1}
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 10, marginRight: 4, lineHeight: 1.2 }}>
-                            {hl.emoji || '⭐'}
+                      <View key={i} style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'flex-start' }}>
+                        <View style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor: COLORS.accent,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 8,
+                          marginTop: 2,
+                        }}>
+                          <Text style={{ fontSize: 6, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                            {i + 1}
                           </Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 8, color: COLORS.gray800, lineHeight: 1.3 }}>
-                              {hl.label}
-                            </Text>
-                            <Text style={{ fontSize: 7, color: COLORS.gray400, marginTop: 1 }}>
-                              {formatDateShort(hl.date)}
-                            </Text>
-                          </View>
                         </View>
-                      ))}
+                        <Text style={{ fontSize: 10, marginRight: 4, lineHeight: 1.2 }}>
+                          {hl.emoji || '⭐'}
+                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 8, color: COLORS.gray800, lineHeight: 1.3 }}>
+                            {hl.label}
+                          </Text>
+                          <Text style={{ fontSize: 7, color: COLORS.gray400, marginTop: 1 }}>
+                            {formatDateShort(hl.date)}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
                   </View>
                 )}
               </View>
@@ -1171,7 +1273,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
           </View>
 
           {/* Visual weekly bar summary first */}
-          <View style={{ marginBottom: 20 }}>
+          {/* <View style={{ marginBottom: 20 }}>
             {invoice.timeBreakdown.map((week, i) => {
               const maxWeekHours = Math.max(...invoice.timeBreakdown!.map(w => w.totalHours));
               return (
@@ -1184,7 +1286,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                 />
               );
             })}
-          </View>
+          </View> */}
 
           {/* Detailed cards per week */}
           {invoice.timeBreakdown.map((week, weekIndex) => (

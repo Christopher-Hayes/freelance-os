@@ -688,10 +688,10 @@ export default async function Page() {
                     Control center
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">
-                    Keep common next steps close, while the latest operating signals stay front and center.
+                    Quick actions and live signals, all in one place.
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-blue-100/70">
-                    Jump into the work that matters most, then use the extra space for a quick read on what’s driving focus this week.
+                    Start new work, track time, or send an invoice — then check the metrics below to see where your attention has been going.
                   </p>
                 </div>
                 <Workflow className="hidden h-10 w-10 text-blue-200/80 md:block" />

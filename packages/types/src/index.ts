@@ -168,6 +168,8 @@ export interface Invoice {
   issueDate: Date;
   dueDate: Date;
   paidDate?: Date;
+  periodStart?: Date;
+  periodEnd?: Date;
   notes?: string;
   aiSummary?: string;
   createdAt: Date;

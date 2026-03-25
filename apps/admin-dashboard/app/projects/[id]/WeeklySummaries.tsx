@@ -284,6 +284,25 @@ export function WeeklySummaries({
     }
   };
 
+  const handleImproveSummary = async (week: WeekData) => {
+    if (!week.summary) return;
+    try {
+      await createJob('generate_weekly_summary', {
+        projectId,
+        projectName,
+        weekStart: week.weekStart.toString(),
+        weekEnd: week.weekEnd.toString(),
+        entries: prepareEntries(week),
+        existingSummary: week.summary.summary,
+      });
+
+      toast.success('Summary improvement started');
+    } catch (error) {
+      console.error(`Error starting improve job for week ${week.weekStart.toString()}:`, error);
+      toast.error('Failed to start summary improvement');
+    }
+  };
+
   if (!weekData.length) {
     return (
       <div className="text-gray-600 dark:text-gray-400">
@@ -446,16 +465,35 @@ export function WeeklySummaries({
               </div>
             ) : hasSummary ? (
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-4 border border-blue-200 dark:border-blue-800">
-                <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
                   <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
                     Weekly Summary
                   </div>
-                  <button
-                    onClick={() => handleDelete(week.summary!.id)}
-                    className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={() => handleImproveSummary(week)}
+                      disabled={isGenerating}
+                      className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isGenerating ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Improving...
+                        </>
+                      ) : (
+                        'Improve'
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(week.summary!.id)}
+                      className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
                 <div className="text-sm text-blue-800 dark:text-blue-300 [&_p]:my-1 [&_ul]:my-1 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-1 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-0.5 [&_strong]:font-semibold">
                   <ReactMarkdown>{week.summary!.summary}</ReactMarkdown>

@@ -3,6 +3,7 @@
 import { prisma } from "@freelance-os/database";
 import { sendEmail, generateInvoiceSentEmail } from "@freelance-os/email";
 import { generateText } from "ai";
+import { Temporal } from "@js-temporal/polyfill";
 import { getAiModel, isAiConfigured } from "@/lib/ai-provider";
 import { getJMAPConfig, getCompanyName } from "@/lib/email";
 
@@ -87,17 +88,31 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
     }
   }
 
+  // Build date range using Temporal with LOCAL timezone boundaries.
+  // Dates from the client represent local calendar days (e.g. "2026-03-15"
+  // means March 15 in the user's timezone). We convert to the corresponding
+  // UTC range so entries throughout the entire day are included.
+  const localTz = Temporal.Now.timeZoneId();
+  let queryStartDate: Date | undefined;
+  let queryEndDate: Date | undefined;
+
   if (startDate) {
+    const sd = Temporal.PlainDate.from(startDate);
+    queryStartDate = new Date(sd.toZonedDateTime(localTz).toInstant().epochMilliseconds);
     where.startTime = {
       ...where.startTime,
-      gte: new Date(startDate),
+      gte: queryStartDate,
     };
   }
 
   if (endDate) {
+    const ed = Temporal.PlainDate.from(endDate);
+    queryEndDate = new Date(
+      ed.toZonedDateTime({ timeZone: localTz, plainTime: Temporal.PlainTime.from('23:59:59.999') }).toInstant().epochMilliseconds
+    );
     where.startTime = {
       ...where.startTime,
-      lte: new Date(endDate),
+      lte: queryEndDate,
     };
   }
 
@@ -158,15 +173,6 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
     return acc;
   }, {} as Record<string, number>);
 
-  const autoNotes = Object.entries(projectSummary)
-    .map(([project, minutes]) => {
-      const hours = (minutes / 60).toFixed(2);
-      return `${project}: ${hours} hours`;
-    })
-    .join('\n');
-
-  const finalNotes = notes ? `${notes}\n\n${autoNotes}` : autoNotes;
-
   const invoice = await prisma.invoice.create({
     data: {
       invoiceNumber,
@@ -177,7 +183,9 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
       status: 'draft',
       issueDate,
       dueDate,
-      notes: finalNotes,
+      periodStart: queryStartDate ?? timeEntries[0]?.startTime ?? issueDate,
+      periodEnd: queryEndDate ?? timeEntries[timeEntries.length - 1]?.startTime ?? issueDate,
+      notes,
     },
     include: {
       client: {
@@ -336,17 +344,22 @@ export async function generateInvoiceSummary(
     throw new Error('AI is not configured. Please add an API key in Settings.');
   }
 
-  // 3. Determine invoice period (90 days before issue date)
-  const periodEnd = invoice.issueDate;
-  const periodStart = new Date(periodEnd);
-  periodStart.setDate(periodStart.getDate() - 90);
+  // 3. Determine invoice period — use stored billing period if available,
+  // fall back to 90 days before issue date for older invoices.
+  const periodEnd = invoice.periodEnd ?? invoice.issueDate;
+  const periodStart = invoice.periodStart ?? (() => {
+    const fallback = new Date(invoice.issueDate);
+    fallback.setDate(fallback.getDate() - 90);
+    return fallback;
+  })();
 
-  // 4. Fetch time entries for the project
+  // 4. Fetch billable time entries for the project
   const projectId = invoice.project?.id;
   const timeEntries = projectId
     ? await prisma.timeEntry.findMany({
         where: {
           projectId,
+          billable: true,
           startTime: { gte: periodStart, lte: periodEnd },
         },
         orderBy: { startTime: 'asc' },

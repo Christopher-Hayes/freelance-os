@@ -29,6 +29,7 @@ export async function generateWeeklySummary(
       description: string | null;
       hours: number;
     }>;
+    existingSummary?: string; // When provided, AI improves the existing summary instead of writing from scratch
   },
   telemetry?: DebugTelemetryOptions
 ): Promise<string> {
@@ -88,10 +89,42 @@ export async function generateWeeklySummary(
     .toInstant();
 
   if (!jmapIsEnabled && !gitForgesEnabled && !calendarEnabled) {
+    const improveSuffix = params.existingSummary
+      ? `\n\nExisting Summary (improve this — add more detail, make it more specific, but preserve the overall structure and any accurate information):\n${params.existingSummary}`
+      : '';
+
     const { text } = await generateTextWithTelemetry(
       {
         model,
-        system: `You are writing a professional weekly summary for a client invoice.
+        system: params.existingSummary
+          ? `You are improving an existing weekly summary for a client invoice.
+
+Your goal is to take the current summary and make it better — more specific, more detailed, and more useful — while preserving accurate information that's already there.
+
+How to improve:
+- Add more specific details from the time entries (e.g. specific features, components, or tasks)
+- Make vague bullets more concrete and outcome-focused
+- Improve clarity and readability
+- Fix any inaccuracies based on the time entry data
+- Keep the same general structure unless reorganizing improves readability
+
+Format:
+- Start with a single-sentence overview paragraph summarizing the week at a high level
+- Follow with a short bullet list of specific items worked on or delivered
+- Each bullet should be one concise line — not a full paragraph
+- Keep the total summary short (overview sentence + 1-3 bullets is ideal)
+- Use markdown formatting for readability (e.g. bold for key deliverables, links if relevant, etc.)
+
+Tone and style:
+- Professional but direct — assume the client is familiar with the project and doesn't need hand-holding
+- Focus on what was accomplished, not the process
+- Do not sound like marketing copy or a sales pitch — just state what happened
+- Write in past tense, do not say "I" or "we", just describe the work
+- Do not include the total hours (that's shown separately)
+- Use standard technical terms where appropriate — no need to over-explain
+
+Provide ONLY the improved markdown summary text, no preamble or explanation.`
+          : `You are writing a professional weekly summary for a client invoice.
 
 Your goal is to create a concise, scannable summary of the work accomplished this week using markdown.
 
@@ -117,8 +150,9 @@ Total Hours: ${totalHours.toFixed(1)} hours
 
 Time Entries:
 ${params.entries.map((e) => `- ${e.date}: ${e.description || "Work on project"} (${e.hours.toFixed(1)}h)`).join("\n")}
+${improveSuffix}
 
-Generate the weekly summary now:`,
+${params.existingSummary ? 'Improve the existing summary now:' : 'Generate the weekly summary now:'}`,
       },
       telemetry
         ? {
@@ -159,7 +193,72 @@ Generate the weekly summary now:`,
     stopWhen: stepCountIs(10),
     tools: summaryAgentTools,
     providerOptions: PROVIDER_OPTIONS,
-    instructions: `You are a professional assistant creating client-friendly weekly summaries for invoices.
+    instructions: params.existingSummary
+      ? `You are a professional assistant improving an existing weekly summary for a client invoice.
+
+Your process:
+1. Read the existing summary and the time entries to understand the current state
+2. Identify areas where the summary could be more specific, detailed, or accurate
+3. Use the available tools to gather additional context that could enrich the summary
+4. Rewrite the summary with improvements while preserving accurate information
+
+When to search for context:
+- The existing summary is vague and could benefit from specifics
+- Time entries mention features/tasks that the summary doesn't cover well
+- Additional context from emails, commits, or calendar would make it more detailed
+${
+  jmapIsEnabled
+    ? `
+Email search strategy:
+- Search for project name, client name, or specific features mentioned
+- You can search multiple times with different keywords if needed
+- Don't over-search if the summary is already detailed`
+    : ""
+}
+${
+  calendarEnabled
+    ? `
+Calendar strategy:
+- Search for meetings and events related to this project during the week
+- Meeting titles and attendees help identify client-facing work
+- Include meeting context in the summary when it adds value (e.g. "discussed X with client")`
+    : ""
+}
+${
+  gitForgesEnabled
+    ? `
+Git commit strategy:
+- When calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window
+- Search for commits to find specific code changes related to this project
+- Use repo filter to narrow results to the relevant project repository
+- Commit messages can provide specific details about what was implemented`
+    : ""
+}
+
+How to improve:
+- Add more specific details from time entries and gathered context
+- Make vague bullets more concrete and outcome-focused
+- Improve clarity and readability
+- Fix any inaccuracies based on the data
+- Keep the same general structure unless reorganizing improves readability
+
+Summary format (markdown):
+- Start with a single-sentence overview paragraph summarizing the week at a high level
+- Follow with 1-3 very short bullet points of specific items worked on or delivered.
+- Each bullet should be one concise line — 10 words or less, not a full sentence.
+- Keep the total summary short (overview sentence + 1-3 bullets is ideal)
+
+Tone and style:
+- Professional but direct — assume the client is familiar with the project
+- Focus on what was accomplished, not the process
+- No marketing copy or sales-pitch tone — just state what happened
+- Write in past tense, describe work objectively
+- Do not include total hours (shown separately)
+- Use standard technical terms where appropriate
+- Provide your summary in markdown format for skimable readability (e.g. bold for key deliverables, links if relevant, etc.)
+
+Provide ONLY the improved markdown summary text, no preamble or explanation.`
+      : `You are a professional assistant creating client-friendly weekly summaries for invoices.
 
 Your process:
 1. Analyze the time entries to understand what work was done this week
@@ -202,9 +301,9 @@ Git commit strategy:
 
 Summary format (markdown):
 - Start with a single-sentence overview paragraph summarizing the week at a high level
-- Follow with a short bullet list of specific items worked on or delivered
-- Each bullet should be one concise line — not a full paragraph
-- Keep the total summary short (overview sentence + 2-5 bullets is ideal)
+- Follow with 1-3 very short bullet points of specific items worked on or delivered.
+- Each bullet should be one concise line — 10 words or less, not a full sentence.
+- Keep the total summary short (overview sentence + 1-3 bullets is ideal)
 
 Tone and style:
 - Professional but direct — assume the client is familiar with the project
@@ -213,9 +312,12 @@ Tone and style:
 - Write in past tense, describe work objectively
 - Do not include total hours (shown separately)
 - Use standard technical terms where appropriate
-
-Always end by providing your final summary as markdown text.`,
+- Provider your summary in markdown format for skimable readability (e.g. bold for key deliverables, links if relevant, etc.)`,
   });
+
+  const agentImproveSuffix = params.existingSummary
+    ? `\n\nExisting Summary (improve this — add more detail, make it more specific, but preserve accurate information):\n${params.existingSummary}`
+    : '';
 
   const result = await summaryAgent.generate({
     prompt: `${projectContext}
@@ -224,8 +326,9 @@ Total Hours: ${totalHours.toFixed(1)} hours
 
 Time Entries:
 ${params.entries.map((e) => `- ${e.date}: ${e.description || "Work on project"} (${e.hours.toFixed(1)}h)`).join("\n")}
+${agentImproveSuffix}
 
-Please analyze these entries, search for additional context if helpful, then provide the final weekly summary.`,
+${params.existingSummary ? 'Please search for additional context, then improve the existing summary.' : 'Please analyze these entries, search for additional context if helpful, then provide the final weekly summary.'}`,
   });
 
   console.log(`Generated summary with ${result.toolCalls?.length || 0} tool calls`);

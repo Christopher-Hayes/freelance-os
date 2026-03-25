@@ -158,6 +158,8 @@ model Invoice {
   issueDate   DateTime @map("issue_date") @db.Timestamptz
   dueDate     DateTime @map("due_date") @db.Timestamptz
   paidDate    DateTime? @map("paid_date") @db.Timestamptz
+  periodStart DateTime? @map("period_start") @db.Timestamptz // Start of the billing period (actual date range used to calculate amount)
+  periodEnd   DateTime? @map("period_end") @db.Timestamptz   // End of the billing period (actual date range used to calculate amount)
   notes       String?  @db.Text
   aiSummary   String?  @map("ai_summary") @db.Text // AI-generated executive summary for the invoice period
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
