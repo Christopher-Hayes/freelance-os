@@ -121,7 +121,7 @@ export default function CalendarEventsColumn({
 
   return (
     <div className="col-span-2">
-      <div className="flex items-center justify-between mb-2">
+      <header className="min-h-10 flex items-center justify-between mb-2">
         <h3 className="select-none text-sm font-semibold text-slate-700 dark:text-slate-300">
           Calendar Events
         </h3>
@@ -152,7 +152,7 @@ export default function CalendarEventsColumn({
             </span>
           )}
         </div>
-      </div>
+      </header>
 
       <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/70 dark:border-white/10 dark:bg-slate-950/30">
         <div className="flex h-full items-stretch">

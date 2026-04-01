@@ -169,13 +169,14 @@ const TimeEntryBar = memo(function TimeEntryBar({
         top: `${top}px`,
         left: `calc(${layout.leftPercent}% + ${layout.gap}px)`,
         right: `calc(${100 - layout.leftPercent - layout.widthPercent}% + ${layout.gap}px)`,
+        pointerEvents: isGhost ? "none" : "auto",
       }}
       >
       <div
         className={`timeline-entry group flex items-center border-2 rounded backdrop-blur-sm px-2 ${isDragging ? "opacity-70" : ""
           } ${isGhost ? "justify-center opacity-50 border-dashed pointer-events-none" : ""
-          } ${isEditing ? "z-50 overflow-visible" : "z-20 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-          }`}
+          } ${isEditing ? "overflow-visible" : "overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+          } ${isEditing ? "z-50" : (isGhost ? "z-10" : "z-20")}`}
         style={{
           height: `${height}px`,
           minHeight: "20px",

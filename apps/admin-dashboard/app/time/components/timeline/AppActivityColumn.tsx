@@ -75,7 +75,7 @@ export default function AppActivityColumn({
   return (
     <div className="col-span-3 select-none">
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+        <header className="min-h-10 flex items-center gap-2">
           <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
             App Activity
           </h3>
@@ -105,7 +105,7 @@ export default function AppActivityColumn({
               Updated {timeAgo}
             </span>
           )}
-        </div>
+        </header>
         <OptionsMenu label="App Activity options">
           <OptionsMenuItem
             onClick={onMergeRescueTimeActivity}

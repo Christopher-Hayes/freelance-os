@@ -78,16 +78,52 @@ export async function generateAutofillSuggestions(params: {
     .sort((a, b) => b.durationSeconds - a.durationSeconds)
     .slice(0, 50);
 
+  // Project eligibility rules based on start/end dates and status:
+  // 1. Has both dates → include if autofill date falls within range (ignore status)
+  // 2. Has only startDate → include if status is active/on_hold and date is after start
+  // 3. Has only endDate → include if status is active/on_hold and date is on or before end
+  // 4. No dates at all → fall back to status check
+  const dayStart = new Date(startInstant.toString());
+  const dayEnd = new Date(endInstant.toString());
+
+  const projectDateFilter = {
+    OR: [
+      // Both dates set: autofill date within range, status irrelevant
+      {
+        startDate: { not: null, lte: dayEnd },
+        endDate: { not: null, gte: dayStart },
+      },
+      // Only startDate: must be active/on_hold and project has started
+      {
+        startDate: { not: null, lte: dayEnd },
+        endDate: null,
+        status: { in: ["active", "on_hold"] },
+      },
+      // Only endDate: must be active/on_hold and project hasn't ended
+      {
+        startDate: null,
+        endDate: { not: null, gte: dayStart },
+        status: { in: ["active", "on_hold"] },
+      },
+      // No dates: fall back to status only
+      {
+        startDate: null,
+        endDate: null,
+        status: { in: ["active", "on_hold"] },
+      },
+    ],
+  };
+
   const projects = params.projectIds
     ? await prisma.project.findMany({
         where: {
           id: { in: params.projectIds },
-          status: { in: ["active", "on_hold"] },
+          ...projectDateFilter,
         },
         include: { client: { select: { name: true, email: true } } },
       })
     : await prisma.project.findMany({
-        where: { status: { in: ["active", "on_hold"] } },
+        where: projectDateFilter,
         include: { client: { select: { name: true, email: true } } },
       });
 
