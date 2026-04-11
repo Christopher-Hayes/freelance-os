@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -28,8 +29,11 @@ const POLL_INTERVAL = 3000; // 3 seconds
 export function JobsProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<AiJobWithDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [completedJobIds, setCompletedJobIds] = useState<Set<number>>(new Set());
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // Use refs for internal bookkeeping so they don't cause refreshJobs to
+  // get a new reference on every call (which would trigger an infinite loop
+  // via the useEffect that re-runs whenever refreshJobs changes).
+  const completedJobIdsRef = useRef<Set<number>>(new Set());
+  const isInitialLoadRef = useRef(true);
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -40,37 +44,35 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       const enrichedJobs = rawJobs.map(enrichJobWithDisplay);
       
       // Only show toasts after initial load (not on page refresh)
-      if (!isInitialLoad) {
+      if (!isInitialLoadRef.current) {
         // Check for newly completed jobs to show toasts
         enrichedJobs.forEach((job) => {
           if (
             job.status === "completed" &&
-            !completedJobIds.has(job.id)
+            !completedJobIdsRef.current.has(job.id)
           ) {
-            setCompletedJobIds((prev) => new Set(prev).add(job.id));
+            completedJobIdsRef.current.add(job.id);
             const message = job.displayDescription
               ? `${job.displayTitle}: ${job.displayDescription}`
               : `${job.displayTitle} completed`;
             toast.success(message);
           } else if (
             job.status === "failed" &&
-            !completedJobIds.has(job.id)
+            !completedJobIdsRef.current.has(job.id)
           ) {
-            setCompletedJobIds((prev) => new Set(prev).add(job.id));
+            completedJobIdsRef.current.add(job.id);
             const message = `${job.displayTitle} failed${job.error ? `: ${job.error}` : ""}`;
             toast.error(message);
           }
         });
       } else {
         // On initial load, just mark all completed/failed jobs as seen
-        const completedIds = new Set<number>();
         enrichedJobs.forEach((job) => {
           if (job.status === "completed" || job.status === "failed") {
-            completedIds.add(job.id);
+            completedJobIdsRef.current.add(job.id);
           }
         });
-        setCompletedJobIds(completedIds);
-        setIsInitialLoad(false);
+        isInitialLoadRef.current = false;
       }
       
       setJobs(enrichedJobs);
@@ -79,7 +81,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       console.error("Error fetching jobs:", error);
       setIsLoading(false);
     }
-  }, [completedJobIds, isInitialLoad]);
+  }, []);
 
   const createJob = useCallback(
     async (type: AiJob["type"], parameters?: Record<string, any>) => {

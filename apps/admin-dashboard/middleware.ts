@@ -7,8 +7,12 @@ export function middleware(request: NextRequest) {
   // Public routes that don't require authentication
   const publicRoutes = ["/login", "/api/auth"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+  
+  // Exact public paths (not prefix-matched, to avoid exposing sub-routes)
+  const exactPublicPaths = ["/api/coding-stats"];
+  const isExactPublicPath = exactPublicPaths.includes(pathname);
 
-  if (isPublicRoute) {
+  if (isPublicRoute || isExactPublicPath) {
     return NextResponse.next();
   }
 

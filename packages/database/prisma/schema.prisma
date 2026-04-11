@@ -441,6 +441,9 @@ model Setting {
   phone           String?     @db.Text
   website         String?     @db.Text
   mcpEnabled      Boolean     @default(true) @map("mcp_enabled")
+  codingStatsEnabled Boolean  @default(false) @map("coding_stats_enabled") // Enable public coding stats card image endpoint
+  codingStatsCache   String?  @map("coding_stats_cache") @db.Text // Cached AI-generated stats card data (JSON)
+  codingStatsCachedAt DateTime? @map("coding_stats_cached_at") @db.Timestamptz // When the cache was last generated
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 

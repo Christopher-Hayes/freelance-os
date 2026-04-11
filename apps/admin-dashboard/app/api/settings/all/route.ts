@@ -130,6 +130,7 @@ export async function GET() {
       phone: setting.phone || "",
       website: setting.website || "",
   mcpEnabled: setting.mcpEnabled ?? true,
+      codingStatsEnabled: (setting as any).codingStatsEnabled ?? false,
       
       // Metadata to help client know which fields are set
       hasRescuetimeKey: !!setting.rescuetimeKey,
@@ -195,6 +196,7 @@ export async function PUT(request: Request) {
       phone,
       website,
       mcpEnabled,
+      codingStatsEnabled,
     } = body;
 
     // Validate AI provider if provided
@@ -286,12 +288,13 @@ export async function PUT(request: Request) {
     if (phone !== undefined) updateData.phone = phone || null;
     if (website !== undefined) updateData.website = website || null;
     if (mcpEnabled !== undefined) updateData.mcpEnabled = mcpEnabled === "true" || mcpEnabled === true;
+    if (codingStatsEnabled !== undefined) updateData.codingStatsEnabled = codingStatsEnabled === "true" || codingStatsEnabled === true;
 
     // Upsert the settings
     const setting = await prisma.setting.upsert({
       where: { key: "main" },
       update: updateData,
-      create: {
+      create: ({
         key: "main",
         value: "",
         rescuetimeKey: rescuetimeKey && rescuetimeKey !== MASK_VALUE ? rescuetimeKey : null,
@@ -328,7 +331,8 @@ export async function PUT(request: Request) {
         phone: phone || null,
         website: website || null,
         mcpEnabled: mcpEnabled === undefined ? true : mcpEnabled === "true" || mcpEnabled === true,
-      },
+        codingStatsEnabled: codingStatsEnabled === "true" || codingStatsEnabled === true || false,
+      }) as any,
     });
 
     // Return masked values like GET does
@@ -363,6 +367,7 @@ export async function PUT(request: Request) {
       phone: setting.phone || "",
       website: setting.website || "",
   mcpEnabled: setting.mcpEnabled ?? true,
+      codingStatsEnabled: (setting as any).codingStatsEnabled ?? false,
       hasRescuetimeKey: !!setting.rescuetimeKey,
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,

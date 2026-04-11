@@ -11,11 +11,11 @@
       "outputs": ["dist/**"]
     },
     "dev": {
-      "with": ["dev:styles", "dev:components"]
+      "dependsOn": ["dev:styles"],
+      "with": ["dev:components"]
     },
     "dev:styles": {
-      "cache": false,
-      "persistent": true
+      "cache": false
     },
     "dev:components": {
       "cache": false,

@@ -33,6 +33,7 @@ const settingsSections = [
   { id: "authentication", title: "Authentication" },
   { id: "integrations", title: "Integrations" },
   { id: "mcp-server", title: "MCP Server" },
+  { id: "coding-stats-card", title: "Coding Stats Card" },
   // { id: "ai-integration", title: "AI Integration" },
   // { id: "rescuetime-integration", title: "RescueTime Integration" },
   // { id: "email-integration-jmap", title: "Email Integration (JMAP)" },
@@ -304,6 +305,8 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [website, setWebsite] = useState("");
   const [mcpEnabled, setMcpEnabled] = useState(true);
+  const [codingStatsEnabled, setCodingStatsEnabled] = useState(false);
+  const [codingStatsRegenerating, setCodingStatsRegenerating] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // API Keys state
@@ -439,6 +442,7 @@ export default function SettingsPage() {
         setPhone(data.phone || "");
         setWebsite(data.website || "");
   setMcpEnabled(data.mcpEnabled ?? true);
+  setCodingStatsEnabled(data.codingStatsEnabled ?? false);
 
         // Reset modified fields tracker on initial load
         setModifiedFields(new Set());
@@ -933,6 +937,29 @@ export default function SettingsPage() {
   const handleMcpEnabledChange = (checked: boolean) => {
     setMcpEnabled(checked);
     saveSetting("mcpEnabled", String(checked));
+  };
+
+  const handleCodingStatsEnabledChange = (checked: boolean) => {
+    setCodingStatsEnabled(checked);
+    saveSetting("codingStatsEnabled", String(checked));
+  };
+
+  const handleRegenerateCodingStats = async () => {
+    setCodingStatsRegenerating(true);
+    try {
+      const response = await authFetch("/api/coding-stats/json", { method: "POST" });
+      if (response.ok) {
+        toast.success("Coding stats card regenerated");
+      } else {
+        const data = await response.json();
+        toast.error(data.error || "Failed to regenerate");
+      }
+    } catch (error) {
+      console.error("Error regenerating coding stats:", error);
+      toast.error("Failed to regenerate coding stats");
+    } finally {
+      setCodingStatsRegenerating(false);
+    }
   };
 
   const fetchApiKeys = async () => {
@@ -1929,6 +1956,74 @@ export default function SettingsPage() {
                   </Link>
                 </div>
               </div>
+            </div>
+          </Surface>
+
+          <Surface id="coding-stats-card" className="scroll-mt-24">
+            <SettingsSectionHeader
+              title="Coding Stats Card"
+              description="Generate a public stats card image showing your coding activity across all connected forges. Embed it in your README on GitHub, GitLab, Codeberg, or anywhere else."
+            />
+
+            <div className="space-y-4">
+              <ToggleRow
+                id="coding_stats_enabled"
+                checked={codingStatsEnabled}
+                onChange={handleCodingStatsEnabledChange}
+                title="Enable coding stats card"
+                description="When enabled, a public image endpoint is available at /api/coding-stats. The card is regenerated once per week (including an AI-generated insight line)."
+              />
+
+              {codingStatsEnabled && (
+                <>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-white/10 dark:bg-slate-900/40">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Embed in your README</h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      Copy this snippet into any README to display your stats card:
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      This snippet automatically shows the dark card on dark-theme pages and the light card on light-theme pages (supported on GitHub, GitLab, and Codeberg).
+                    </p>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Embed snippet</label>
+                      <pre className="mt-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-700 dark:border-white/10 dark:bg-slate-950 dark:text-slate-300">
+                        {`<picture>\n  <source media="(prefers-color-scheme: dark)" srcset="${typeof window !== "undefined" ? window.location.origin : ""}/api/coding-stats?theme=dark" />\n  <img src="${typeof window !== "undefined" ? window.location.origin : ""}/api/coding-stats?theme=light" alt="Coding Stats" width="600" />\n</picture>`}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Button
+                      onClick={handleRegenerateCodingStats}
+                      disabled={codingStatsRegenerating}
+                    >
+                      {codingStatsRegenerating ? "Regenerating…" : "Regenerate Now"}
+                    </Button>
+                    <a
+                      href="/api/coding-stats?theme=dark"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Preview dark ↗
+                    </a>
+                    <a
+                      href="/api/coding-stats?theme=light"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Preview light ↗
+                    </a>
+                  </div>
+
+                  <PrivacyCallout>
+                    <p>
+                      The stats card is a <strong>public, unauthenticated endpoint</strong>. It will never expose client names, project names, or other private information — only aggregate coding stats, language breakdowns, and public repository contributions.
+                    </p>
+                  </PrivacyCallout>
+                </>
+              )}
             </div>
           </Surface>
 
