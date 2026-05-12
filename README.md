@@ -7,10 +7,12 @@ A unified monorepo for managing your freelance business operations - from activi
 This monorepo contains:
 
 ### Apps
+
 - **`apps/admin-dashboard`** - Admin dashboard for analytics, charts, and business management (port 3010)
 - **`apps/client-portal`** - Client-facing portal for viewing time tracking, invoices, and project status (port 3011)
 
 ### Packages
+
 - **`packages/database`** - Shared PostgreSQL database schema and Prisma client
 - **`packages/types`** - Shared TypeScript types
 - **`packages/ui`** - Shared React UI components
@@ -21,21 +23,25 @@ This monorepo contains:
 ## 🎯 Features
 
 ### Activity Tracking
+
 - Integrates with your existing activity tracking utility
 - Stores `activity_sessions` and `activity_summaries` in PostgreSQL
 - View detailed analytics and charts in the admin dashboard
 
 ### Client Management
+
 - Create and manage client profiles
 - Track projects per client
 - View client-specific analytics
 
 ### Time Tracking
+
 - Log time entries per project
 - Billable vs non-billable tracking
 - Weekly/monthly breakdowns visible to clients
 
 ### Invoice Management
+
 - Create and send invoices
 - Track payment status (draft, sent, paid, overdue, cancelled)
 - Clients can view their invoices in the portal
@@ -43,6 +49,7 @@ This monorepo contains:
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - Node.js >= 20
 - pnpm 10.19.0 (included via packageManager field)
 - PostgreSQL 15+
@@ -112,8 +119,9 @@ pnpm dev
 ```
 
 This will start:
-- Admin Dashboard: http://localhost:3000
-- Client Portal: http://localhost:3001
+
+- Admin Dashboard: <http://localhost:3000>
+- Client Portal: <http://localhost:3001>
 
 ## 📁 Project Structure
 
@@ -137,10 +145,12 @@ freelance-os/
 ## 🗄️ Database Schema
 
 ### Activity Tracking (from existing utility)
+
 - `activity_sessions` - Individual app usage sessions
 - `activity_summaries` - Aggregated activity data
 
 ### Business Management
+
 - `clients` - Client information and contact details
 - `projects` - Projects associated with clients
 - `time_entries` - Time tracking entries per project

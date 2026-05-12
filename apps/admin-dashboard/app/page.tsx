@@ -22,7 +22,7 @@ import { formatAppTitle } from "@/lib/util";
 import { getAppRenameMap } from "@/lib/app-analytics";
 
 function getAppAnalyticsHref(appClass: string) {
-  return `/analytics/apps/${appClass}`;
+  return `/analytics/apps/${encodeURIComponent(appClass).replace(/\(/g, "%28").replace(/\)/g, "%29")}`;
 }
 
 type TopApp = {

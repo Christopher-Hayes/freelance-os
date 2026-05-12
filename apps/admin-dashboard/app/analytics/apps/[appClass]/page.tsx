@@ -1,13 +1,13 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Activity, ArrowLeft, BarChart3, BriefcaseBusiness, Clock3, Lightbulb, Radar, Users } from "lucide-react";
 import { Breadcrumbs, Page, PageContent, PageHeader, Section, StatCard, Surface } from "@repo/ui";
 import { ClientDateTime } from "@/components/ClientDateTime";
 import DailyActivityChart from "@/app/analytics/components/DailyActivityChart";
-import { getAppAnalytics, getAppRenameMap, getOrCreateApp } from "@/lib/app-analytics";
-import { suggestAppName } from "@/lib/ai-actions";
+import { getAppAnalytics, getAppRenameMap, getAppSessionBounds, getOrCreateApp } from "@/lib/app-analytics";
 import { formatAppTitle } from "@/lib/util";
-import AppNameSuggestionBanner from "./AppNameSuggestionBanner";
+import AppNameSuggestionStream from "./AppNameSuggestionStream";
 import AppOptionsMenu from "./AppOptionsMenu";
 import { DashboardApiFooter } from "@/components/DashboardApiFooter";
 
@@ -101,8 +101,19 @@ function ProgressBar({ label, detail, value, color }: { label: string; detail: s
 }
 
 export default async function AppAnalyticsDetailPage({ params, searchParams }: PageProps) {
-  const [{ appClass }, query] = await Promise.all([params, searchParams]);
-  const analytics = await getAppAnalytics(appClass, query);
+  const [{ appClass: rawAppClass }, query] = await Promise.all([params, searchParams]);
+  const appClass = decodeURIComponent(rawAppClass);
+
+  let analytics = await getAppAnalytics(appClass, query);
+
+  // If no sessions in the requested window and the user didn't specify a range,
+  // fall back to the app's all-time bounds (covers older RescueTime imports, etc.)
+  if (!analytics && !query.startDate && !query.endDate) {
+    const bounds = await getAppSessionBounds(appClass);
+    if (bounds) {
+      analytics = await getAppAnalytics(appClass, bounds);
+    }
+  }
 
   if (!analytics) {
     notFound();
@@ -111,18 +122,7 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
   // Ensure the app row exists and fetch current state
   const appRecord = await getOrCreateApp(appClass);
 
-  // Trigger AI name suggestion (fire-and-forget, non-blocking on first visit)
-  // This is safe to call every time — it returns immediately if already handled.
   const windowTitles = analytics.topWindowTitles.map((w) => w.title);
-  let nameSuggestion: string | null = appRecord.suggestedName;
-  if (!appRecord.displayName && !appRecord.suggestedName && !appRecord.suggestNameDismissed && windowTitles.length > 0) {
-    try {
-      const result = await suggestAppName(appClass, windowTitles);
-      nameSuggestion = result.suggestedName;
-    } catch {
-      // AI unavailable — don't block the page
-    }
-  }
 
   const renameMap = await getAppRenameMap();
   const displayName = appRecord.displayName ?? renameMap.get(appClass.toLowerCase()) ?? formatAppTitle(appClass);
@@ -160,13 +160,13 @@ export default async function AppAnalyticsDetailPage({ params, searchParams }: P
             }
           />
 
-          {nameSuggestion && !appRecord.suggestNameDismissed && (
-            <AppNameSuggestionBanner
+          <Suspense fallback={null}>
+            <AppNameSuggestionStream
               appClass={appClass}
-              suggestedName={nameSuggestion}
-              currentDisplayName={displayName}
+              displayName={displayName}
+              windowTitles={windowTitles}
             />
-          )}
+          </Suspense>
 
           <Surface className="space-y-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

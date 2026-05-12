@@ -13,7 +13,7 @@ type AppSessionContextMenuState = {
 } | null;
 
 function getAppAnalyticsHref(appClass: string) {
-  return `/analytics/apps/${encodeURIComponent(appClass)}`;
+  return `/analytics/apps/${encodeURIComponent(appClass).replace(/\(/g, "%28").replace(/\)/g, "%29")}`;
 }
 
 interface UseAppContextMenuReturn {

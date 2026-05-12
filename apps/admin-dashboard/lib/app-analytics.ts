@@ -116,6 +116,28 @@ export async function getAppRecord(appClass: string) {
 }
 
 /**
+ * Returns the earliest and latest session dates for an appClass, ignoring the
+ * default date window. Used to fall back to an all-time range when no sessions
+ * exist within the requested window (e.g. older RescueTime imports).
+ */
+export async function getAppSessionBounds(appClass: string, timeZone: string = Temporal.Now.timeZoneId()): Promise<{ startDate: string; endDate: string } | null> {
+  const bounds = await prisma.activitySession.aggregate({
+    where: { appClass, ignored: false },
+    _min: { startTime: true },
+    _max: { startTime: true },
+  });
+  if (!bounds._min.startTime || !bounds._max.startTime) return null;
+  // Convert to local dates so getAppAnalytics query boundaries align correctly.
+  // Using UTC dates here causes timezone-edge sessions to fall outside the query range.
+  const toLocalDate = (d: Date) =>
+    Temporal.Instant.fromEpochMilliseconds(d.getTime()).toZonedDateTimeISO(timeZone).toPlainDate().toString();
+  return {
+    startDate: toLocalDate(bounds._min.startTime),
+    endDate: toLocalDate(bounds._max.startTime),
+  };
+}
+
+/**
  * Get or create an App record for a given appClass.
  * The record is lazily created the first time the app detail page is visited.
  */

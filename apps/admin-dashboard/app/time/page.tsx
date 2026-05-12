@@ -11,7 +11,7 @@ import { authFetch, formatAppTitle, syncAppDataToLocalStorage } from '@/lib/util
 import { CalendarDays, Clock3, Coins, Filter, FolderKanban, Plus, RefreshCw, Sparkles, Table2, TimerReset } from 'lucide-react';
 
 function getAppAnalyticsHref(appClass: string) {
-  return `/analytics/apps/${appClass}`;
+  return `/analytics/apps/${encodeURIComponent(appClass).replace(/\(/g, "%28").replace(/\)/g, "%29")}`;
 }
 
 interface TimeEntry {
