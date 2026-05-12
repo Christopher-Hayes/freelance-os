@@ -276,6 +276,8 @@ export default function SettingsPage() {
   const [newRenameDisplayName, setNewRenameDisplayName] = useState("");
   const [editingRename, setEditingRename] = useState<string | null>(null);
   const [editingRenameValue, setEditingRenameValue] = useState("");
+  const [visibleRenameCount, setVisibleRenameCount] = useState(6);
+  const [visibleHiddenCount, setVisibleHiddenCount] = useState(6);
   const [newHiddenAppClass, setNewHiddenAppClass] = useState("");
   const [jmapToken, setJmapToken] = useState("");
   const [jmapUsername, setJmapUsername] = useState("");
@@ -1140,75 +1142,88 @@ export default function SettingsPage() {
               />
 
               <div className="space-y-4">
-                {appRecords.filter((app) => app.displayName).length > 0 ? (
-                  <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-white/10 dark:border-white/10">
-                    {appRecords
-                      .filter((app) => app.displayName)
-                      .map((app) => (
-                        <div key={app.appClass} className="flex items-center gap-3 px-4 py-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-mono text-slate-500 dark:text-slate-400">{app.appClass}</div>
-                            {editingRename === app.appClass ? (
-                              <div className="mt-1 flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={editingRenameValue}
-                                  onChange={(e) => setEditingRenameValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveEditRename(app.appClass);
-                                    if (e.key === "Escape") setEditingRename(null);
-                                  }}
-                                  className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:focus:border-blue-400"
-                                  autoFocus
-                                />
+                {(() => {
+                  const renamedApps = appRecords.filter((app) => app.displayName);
+                  const visibleApps = renamedApps.slice(0, visibleRenameCount);
+                  const hasMore = renamedApps.length > visibleRenameCount;
+                  return renamedApps.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 gap-px rounded-xl border border-slate-200 bg-slate-200 overflow-hidden dark:border-white/10 dark:bg-white/10 sm:grid-cols-2">
+                        {visibleApps.map((app) => (
+                          <div key={app.appClass} className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-slate-900">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{app.appClass}</div>
+                              {editingRename === app.appClass ? (
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingRenameValue}
+                                    onChange={(e) => setEditingRenameValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleSaveEditRename(app.appClass);
+                                      if (e.key === "Escape") setEditingRename(null);
+                                    }}
+                                    className="flex-1 min-w-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-slate-800 dark:text-white dark:focus:border-blue-400"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => handleSaveEditRename(app.appClass)}
+                                    className="rounded-lg p-1 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
+                                    title="Save"
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingRename(null)}
+                                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
+                                    title="Cancel"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-sm font-medium text-slate-900 dark:text-white truncate">{app.displayName}</div>
+                              )}
+                            </div>
+                            {editingRename !== app.appClass && (
+                              <div className="flex items-center gap-0.5 shrink-0">
                                 <button
-                                  onClick={() => handleSaveEditRename(app.appClass)}
-                                  className="rounded-lg p-1.5 text-green-600 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20"
-                                  title="Save"
+                                  onClick={() => {
+                                    setEditingRename(app.appClass);
+                                    setEditingRenameValue(app.displayName ?? "");
+                                  }}
+                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300"
+                                  title="Edit"
                                 >
-                                  <Check className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => setEditingRename(null)}
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5"
-                                  title="Cancel"
+                                  onClick={() => handleRemoveRename(app.appClass)}
+                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                                  title="Remove rename"
                                 >
-                                  <X className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               </div>
-                            ) : (
-                              <div className="text-sm font-medium text-slate-900 dark:text-white">{app.displayName}</div>
                             )}
                           </div>
-                          {editingRename !== app.appClass && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingRename(app.appClass);
-                                  setEditingRenameValue(app.displayName ?? "");
-                                }}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/5 dark:hover:text-slate-300"
-                                title="Edit"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveRename(app.appClass)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                                title="Remove rename"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    No custom renames yet. Add one below, or right-click an app in the timeline to rename it.
-                  </p>
-                )}
+                        ))}
+                      </div>
+                      {hasMore && (
+                        <button
+                          onClick={() => setVisibleRenameCount((c) => c + 12)}
+                          className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        >
+                          Show {Math.min(renamedApps.length - visibleRenameCount, 12)} more ({renamedApps.length - visibleRenameCount} remaining)
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No custom renames yet. Add one below, or right-click an app in the timeline to rename it.
+                    </p>
+                  );
+                })()}
 
                 <div className="flex items-end gap-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/20">
                   <div className="flex-1 space-y-1.5">
@@ -1259,34 +1274,47 @@ export default function SettingsPage() {
               />
 
               <div className="space-y-4">
-                {appRecords.filter((app) => app.hidden).length > 0 ? (
-                  <div className="divide-y divide-slate-200 rounded-xl border border-slate-200 dark:divide-white/10 dark:border-white/10">
-                    {appRecords
-                      .filter((app) => app.hidden)
-                      .map((app) => (
-                        <div key={app.appClass} className="flex items-center justify-between px-4 py-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-mono text-slate-900 dark:text-white">{app.appClass}</div>
-                            {app.displayName && (
-                              <div className="text-xs text-slate-500 dark:text-slate-400">Display name: {app.displayName}</div>
-                            )}
+                {(() => {
+                  const hiddenApps = appRecords.filter((app) => app.hidden);
+                  const visibleApps = hiddenApps.slice(0, visibleHiddenCount);
+                  const hasMore = hiddenApps.length > visibleHiddenCount;
+                  return hiddenApps.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 gap-px rounded-xl border border-slate-200 bg-slate-200 overflow-hidden dark:border-white/10 dark:bg-white/10 sm:grid-cols-2">
+                        {visibleApps.map((app) => (
+                          <div key={app.appClass} className="flex items-center gap-2 bg-white px-3 py-2.5 dark:bg-slate-900">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-mono text-slate-900 dark:text-white truncate">{app.appClass}</div>
+                              {app.displayName && (
+                                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">Display name: {app.displayName}</div>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleUnhideApp(app.appClass)}
+                              className="flex items-center gap-1 shrink-0 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-300"
+                              title="Unhide"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              Unhide
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handleUnhideApp(app.appClass)}
-                            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-300"
-                            title="Unhide"
-                          >
-                            <Eye className="h-4 w-4" />
-                            Unhide
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    No hidden apps. Right-click an app in the timeline to hide it.
-                  </p>
-                )}
+                        ))}
+                      </div>
+                      {hasMore && (
+                        <button
+                          onClick={() => setVisibleHiddenCount((c) => c + 12)}
+                          className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                        >
+                          Show {Math.min(hiddenApps.length - visibleHiddenCount, 12)} more ({hiddenApps.length - visibleHiddenCount} remaining)
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No hidden apps. Right-click an app in the timeline to hide it.
+                    </p>
+                  );
+                })()}
 
                 <div className="flex items-end gap-3 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/20">
                   <div className="flex-1 space-y-1.5">
