@@ -6,7 +6,6 @@ import { Badge, Button, Input, Page, PageContent, PageHeader, PageLoading, Secti
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
 import { authFetch, syncAppDataToLocalStorage } from '@/lib/util';
 import { fetchMailboxes } from '@/lib/jmap-actions';
-import { fetchCalendars } from '@/lib/webdav-actions';
 import type { MailboxInfo } from '@/lib/jmap-provider';
 import type { CalendarInfo } from '@/lib/webdav-provider';
 import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
@@ -15,7 +14,26 @@ import { RescueTimeArchiveUpload } from '@/components/RescueTimeArchiveUpload';
 
 const MASK_VALUE = "••••••••";
 const JMAP_MAILBOXES_STORAGE_KEY = "jmapAvailableMailboxes";
-const WEBDAV_CALENDARS_STORAGE_KEY = "webdavAvailableCalendars";
+
+type CalDavProviderState = {
+  id: number;
+  name: string;
+  url: string;
+  username: string;
+  password: string; // MASK_VALUE when set
+  enabled: boolean;
+  allowedCalendars: string[];
+  availableCalendars: CalendarInfo[]; // fetched from server, stored in localStorage
+  loadingCalendars: boolean;
+};
+
+type NewProviderDraft = {
+  name: string;
+  url: string;
+  username: string;
+  password: string;
+  enabled: boolean;
+};
 
 type AppRecord = {
   appClass: string;
@@ -286,13 +304,19 @@ export default function SettingsPage() {
   const [jmapAllowedMailboxes, setJmapAllowedMailboxes] = useState<string[]>([]);
   const [availableMailboxes, setAvailableMailboxes] = useState<MailboxInfo[]>([]);
   const [loadingMailboxes, setLoadingMailboxes] = useState(false);
-  const [webdavUrl, setWebdavUrl] = useState("");
-  const [webdavUsername, setWebdavUsername] = useState("");
-  const [webdavPassword, setWebdavPassword] = useState("");
   const [canReadCalendar, setCanReadCalendar] = useState(false);
-  const [webdavAllowedCalendars, setWebdavAllowedCalendars] = useState<string[]>([]);
-  const [availableCalendars, setAvailableCalendars] = useState<CalendarInfo[]>([]);
-  const [loadingCalendars, setLoadingCalendars] = useState(false);
+  const [calDavProviders, setCalDavProviders] = useState<CalDavProviderState[]>([]);
+  const [expandedProviderId, setExpandedProviderId] = useState<number | "new" | null>(null);
+  const [newProviderDraft, setNewProviderDraft] = useState<NewProviderDraft>({
+    name: "",
+    url: "",
+    username: "",
+    password: "",
+    enabled: true,
+  });
+  const [savingProvider, setSavingProvider] = useState<number | "new" | null>(null);
+  const [deletingProviderId, setDeletingProviderId] = useState<number | null>(null);
+  const [testingProviderId, setTestingProviderId] = useState<number | null>(null);
   const [githubToken, setGithubToken] = useState("");
   const [githubUsername, setGithubUsername] = useState("");
   const [gitlabToken, setGitlabToken] = useState("");
@@ -326,9 +350,6 @@ export default function SettingsPage() {
   const jmapTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const jmapHostnameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const webdavUrlTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const webdavUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const webdavPasswordTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const githubTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const githubUsernameTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const gitlabTokenTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -348,7 +369,7 @@ export default function SettingsPage() {
     fetchAppRecords();
     fetchApiKeys();
     hydrateStoredMailboxes();
-    hydrateStoredCalendars();
+    fetchCalDavProviders();
   }, []);
 
   const persistAvailableMailboxes = (mailboxes: MailboxInfo[]) => {
@@ -380,32 +401,33 @@ export default function SettingsPage() {
     }
   };
 
-  const persistAvailableCalendars = (calendars: CalendarInfo[]) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(WEBDAV_CALENDARS_STORAGE_KEY, JSON.stringify(calendars));
-  };
-
-  const hydrateStoredCalendars = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const stored = window.localStorage.getItem(WEBDAV_CALENDARS_STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
-
+  const fetchCalDavProviders = async () => {
     try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        setAvailableCalendars(parsed as CalendarInfo[]);
+      const response = await authFetch("/api/caldav-providers");
+      if (!response.ok) {
+        return;
       }
+      const data = await response.json();
+      const providers: Array<{ id: number; name: string; url: string; username: string; password: string; enabled: boolean; allowedCalendars: string[] }> = data.providers ?? [];
+      setCalDavProviders(providers.map((p) => {
+        const storageKey = `caldav_calendars_${p.id}`;
+        let availableCalendars: CalendarInfo[] = [];
+        try {
+          const stored = typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : null;
+          if (stored) {
+            availableCalendars = JSON.parse(stored);
+          }
+        } catch {
+          // ignore
+        }
+        return {
+          ...p,
+          availableCalendars,
+          loadingCalendars: false,
+        };
+      }));
     } catch (error) {
-      console.error("Error hydrating stored calendars:", error);
-      window.localStorage.removeItem(WEBDAV_CALENDARS_STORAGE_KEY);
+      console.error("Error fetching CalDAV providers:", error);
     }
   };
 
@@ -425,11 +447,7 @@ export default function SettingsPage() {
         // Non-sensitive fields
         setJmapUsername(data.jmapUsername || "");
         setJmapHostname(data.jmapHostname || "");
-        setWebdavUrl(data.webdavUrl || "");
-        setWebdavUsername(data.webdavUsername || "");
-        setWebdavPassword(data.webdavPassword || "");
         setCanReadCalendar(data.canReadCalendar || false);
-        setWebdavAllowedCalendars(data.webdavAllowedCalendars || []);
         setGithubToken(data.githubToken || "");
         setGithubUsername(data.githubUsername || "");
         setGitlabToken(data.gitlabToken || "");
@@ -701,71 +719,159 @@ export default function SettingsPage() {
 
   // ── WebDAV / CalDAV handlers ──
 
-  const handleWebdavUrlChange = (value: string) => {
-    setWebdavUrl(value);
-
-    if (webdavUrlTimerRef.current) {
-      clearTimeout(webdavUrlTimerRef.current);
-    }
-
-    webdavUrlTimerRef.current = setTimeout(() => {
-      saveSetting("webdavUrl", value);
-    }, 1000);
-  };
-
-  const handleWebdavUsernameChange = (value: string) => {
-    setWebdavUsername(value);
-
-    if (webdavUsernameTimerRef.current) {
-      clearTimeout(webdavUsernameTimerRef.current);
-    }
-
-    webdavUsernameTimerRef.current = setTimeout(() => {
-      saveSetting("webdavUsername", value);
-    }, 1000);
-  };
-
-  const handleWebdavPasswordChange = (value: string) => {
-    setWebdavPassword(value);
-    setModifiedFields(prev => new Set(prev).add("webdavPassword"));
-
-    if (webdavPasswordTimerRef.current) {
-      clearTimeout(webdavPasswordTimerRef.current);
-    }
-
-    webdavPasswordTimerRef.current = setTimeout(() => {
-      if (value !== MASK_VALUE) {
-        saveSetting("webdavPassword", value);
-      }
-    }, 1000);
-  };
-
   const handleCalendarEnabledChange = (checked: boolean) => {
     setCanReadCalendar(checked);
     saveSetting("canReadCalendar", String(checked));
   };
 
-  const handleWebdavAllowedCalendarsChange = (calendarUrls: string[]) => {
-    setWebdavAllowedCalendars(calendarUrls);
-    saveSetting("webdavAllowedCalendars", JSON.stringify(calendarUrls));
-  };
+  // ── CalDAV provider CRUD handlers ──
 
-  const handleRefreshCalendars = async () => {
-    setLoadingCalendars(true);
+  const handleRefreshProviderCalendars = async (providerId: number) => {
+    setCalDavProviders((prev) =>
+      prev.map((p) => p.id === providerId ? { ...p, loadingCalendars: true } : p)
+    );
     try {
-      const calendars = await fetchCalendars();
-      setAvailableCalendars(calendars);
-      persistAvailableCalendars(calendars);
+      const response = await authFetch(`/api/caldav-providers/${providerId}/calendars`);
+      if (!response.ok) {
+        toast.error("Failed to fetch calendars");
+        return;
+      }
+      const data = await response.json();
+      const calendars: CalendarInfo[] = data.calendars ?? [];
+      setCalDavProviders((prev) =>
+        prev.map((p) => p.id === providerId ? { ...p, availableCalendars: calendars, loadingCalendars: false } : p)
+      );
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`caldav_calendars_${providerId}`, JSON.stringify(calendars));
+      }
       if (calendars.length === 0) {
-        toast.error("No calendars found. Please check your CalDAV configuration.");
+        toast.error("No calendars found. Check the provider configuration.");
       } else {
         toast.success(`Found ${calendars.length} calendar(s)`);
       }
     } catch (error) {
       console.error("Error fetching calendars:", error);
       toast.error("Failed to fetch calendars");
+      setCalDavProviders((prev) =>
+        prev.map((p) => p.id === providerId ? { ...p, loadingCalendars: false } : p)
+      );
+    }
+  };
+
+  const handleSaveProvider = async (providerId: number) => {
+    const provider = calDavProviders.find((p) => p.id === providerId);
+    if (!provider) {
+      return;
+    }
+    setSavingProvider(providerId);
+    try {
+      const body: Record<string, unknown> = {
+        name: provider.name,
+        url: provider.url,
+        username: provider.username,
+        enabled: provider.enabled,
+        allowedCalendars: provider.allowedCalendars,
+      };
+      if (provider.password !== MASK_VALUE) {
+        body.password = provider.password;
+      }
+      const response = await authFetch(`/api/caldav-providers/${providerId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        toast.error("Failed to save provider");
+        return;
+      }
+      toast.success("Provider saved");
+      setExpandedProviderId(null);
+    } catch (error) {
+      console.error("Error saving provider:", error);
+      toast.error("Failed to save provider");
     } finally {
-      setLoadingCalendars(false);
+      setSavingProvider(null);
+    }
+  };
+
+  const handleCreateProvider = async () => {
+    if (!newProviderDraft.name || !newProviderDraft.url || !newProviderDraft.username || !newProviderDraft.password) {
+      toast.error("Name, URL, username, and password are required");
+      return;
+    }
+    setSavingProvider("new");
+    try {
+      const response = await authFetch("/api/caldav-providers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newProviderDraft),
+      });
+      if (!response.ok) {
+        toast.error("Failed to create provider");
+        return;
+      }
+      const created = await response.json();
+      const newProvider = created.provider ?? created;
+      setCalDavProviders((prev) => [...prev, {
+        ...newProvider,
+        allowedCalendars: newProvider.allowedCalendars ?? [],
+        availableCalendars: [],
+        loadingCalendars: false,
+      }]);
+      setNewProviderDraft({ name: "", url: "", username: "", password: "", enabled: true });
+      setExpandedProviderId(null);
+      toast.success("Provider created");
+    } catch (error) {
+      console.error("Error creating provider:", error);
+      toast.error("Failed to create provider");
+    } finally {
+      setSavingProvider(null);
+    }
+  };
+
+  const handleTestProvider = async (providerId: number) => {
+    setTestingProviderId(providerId);
+    try {
+      const response = await authFetch(`/api/caldav-providers/${providerId}/calendars`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        toast.error(data.error || "Provider is not reachable. Check the URL and credentials.");
+        return;
+      }
+      const data = await response.json();
+      const calendars: CalendarInfo[] = data.calendars ?? [];
+      toast.success(`Connected — found ${calendars.length} calendar${calendars.length !== 1 ? "s" : ""}`);
+    } catch (error) {
+      console.error("Error testing provider:", error);
+      toast.error("Connection failed. Check the URL and credentials.");
+    } finally {
+      setTestingProviderId(null);
+    }
+  };
+
+  const handleDeleteProvider = async (providerId: number) => {
+    setDeletingProviderId(providerId);
+    try {
+      const response = await authFetch(`/api/caldav-providers/${providerId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        toast.error("Failed to delete provider");
+        return;
+      }
+      setCalDavProviders((prev) => prev.filter((p) => p.id !== providerId));
+      if (expandedProviderId === providerId) {
+        setExpandedProviderId(null);
+      }
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(`caldav_calendars_${providerId}`);
+      }
+      toast.success("Provider deleted");
+    } catch (error) {
+      console.error("Error deleting provider:", error);
+      toast.error("Failed to delete provider");
+    } finally {
+      setDeletingProviderId(null);
     }
   };
 
@@ -1662,7 +1768,7 @@ export default function SettingsPage() {
             <IntegrationCard
               id="calendar-integration-webdav"
               title="Calendar Integration (CalDAV)"
-              description="Cross reference your calendar events with projects to more accurately categorize and summarize your work. This integration uses CalDAV (WebDAV), which is supported by most calendar services."
+              description="Cross reference your calendar events with projects to more accurately categorize and summarize your work. Add one or more CalDAV providers (Nextcloud, Fastmail, Google Calendar, etc.) and pick which calendars to expose to the AI."
             >
               <ToggleRow
                 id="can_read_calendar"
@@ -1672,166 +1778,328 @@ export default function SettingsPage() {
                 description="When generating time entries and weekly summaries, AI can search your calendar for meetings and events that indicate project work. This is disabled by default for privacy."
               />
 
-                {canReadCalendar && (
-                  <>
-                    <PrivacyCallout>
-                      <p>
-                        When enabled, AI will be able to search your calendar events to enrich time entries with context from meetings and appointments. This may expose sensitive or private information to the AI provider.
-                      </p>
-                      <p>
-                        In the field below, you can restrict which calendars AI is allowed to access. Leaving it empty will allow AI to search all calendars.
-                      </p>
-                    </PrivacyCallout>
+              {canReadCalendar && (
+                <>
+                  <PrivacyCallout>
+                    <p>
+                      When enabled, AI will be able to search your calendar events to enrich time entries with context from meetings and appointments. This may expose sensitive or private information to the AI provider.
+                    </p>
+                    <p>
+                      Add one or more CalDAV providers below. For each provider you can restrict which calendars AI is allowed to access — leaving the list empty allows AI to search all calendars on that provider.
+                    </p>
+                  </PrivacyCallout>
 
-                    <MultiSelectShell
-                      label="Restrict to Calendars (Optional)"
-                      action={
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={handleRefreshCalendars}
-                          disabled={loadingCalendars}
-                        >
-                          {loadingCalendars ? "Loading..." : "Refresh Calendars"}
-                        </Button>
-                      }
-                      helperText={
-                        webdavAllowedCalendars.length === 0
-                          ? "AI can search all calendars by default. Select specific calendars to restrict access."
-                          : `AI can only search ${webdavAllowedCalendars.length} selected calendar(s). Click a tag to remove it.`
-                      }
-                    >
-
-                      <Combobox
-                        multiple
-                        by="url"
-                        value={availableCalendars.filter(c => webdavAllowedCalendars.includes(c.url))}
-                        onChange={(selected: CalendarInfo[]) => {
-                          handleWebdavAllowedCalendarsChange(selected.map(c => c.url));
-                        }}
-                      >
-                        <div className="relative">
-                          <MultiSelectTrigger
-                            emptyText={availableCalendars.length === 0 ? "Click 'Refresh Calendars' first" : "Select calendars to restrict (or leave empty for all)"}
-                          >
-                            {webdavAllowedCalendars.length > 0
-                              ? availableCalendars
-                                  .filter((c) => webdavAllowedCalendars.includes(c.url))
-                                  .map((calendar) => (
-                                    <SelectionChip
-                                      key={calendar.url}
-                                      label={calendar.displayName}
-                                      leading={
-                                        calendar.color ? (
-                                          <span
-                                            className="inline-block h-2.5 w-2.5 rounded-full"
-                                            style={{ backgroundColor: calendar.color }}
-                                          />
-                                        ) : undefined
-                                      }
-                                      onRemove={() =>
-                                        handleWebdavAllowedCalendarsChange(
-                                          webdavAllowedCalendars.filter((url) => url !== calendar.url)
-                                        )
-                                      }
-                                    />
-                                  ))
-                              : null}
-                          </MultiSelectTrigger>
-
-                          <MultiSelectOptions>
-                            {availableCalendars.length === 0 ? (
-                              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                                Click &quot;Refresh Calendars&quot; to load available calendars
-                              </div>
-                            ) : (
-                              availableCalendars
-                                .sort((a, b) => {
-                                  const aSelected = webdavAllowedCalendars.includes(a.url) ? 1 : 0;
-                                  const bSelected = webdavAllowedCalendars.includes(b.url) ? 1 : 0;
-                                  return bSelected - aSelected;
-                                })
-                                .map((calendar) => (
-                                  <ComboboxOption
-                                    key={calendar.url}
-                                    value={calendar}
-                                    className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
-                                  >
-                                    {({ selected }) => (
-                                      <>
-                                        <span className="flex items-center gap-2 truncate font-normal group-data-selected:font-medium">
-                                          {calendar.color && (
-                                            <span
-                                              className="inline-block h-3 w-3 rounded-full shrink-0"
-                                              style={{ backgroundColor: calendar.color }}
-                                            />
-                                          )}
-                                          {calendar.displayName}
-                                          {calendar.description && (
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                              — {calendar.description}
-                                            </span>
-                                          )}
-                                        </span>
-                                        {selected && (
-                                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
-                                            <Check className="h-4 w-4" aria-hidden="true" />
-                                          </span>
-                                        )}
-                                      </>
-                                    )}
-                                  </ComboboxOption>
-                                ))
-                            )}
-                          </MultiSelectOptions>
+                  <div className="space-y-3">
+                    {/* Provider list */}
+                    {calDavProviders.map((provider) => (
+                      <div key={provider.id} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                        {/* Provider header row */}
+                        <div className="flex items-center justify-between gap-3 px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{provider.name}</span>
+                              {provider.enabled ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">enabled</span>
+                              ) : (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">disabled</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{provider.url}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleTestProvider(provider.id)}
+                              disabled={testingProviderId === provider.id}
+                            >
+                              {testingProviderId === provider.id ? "Testing..." : "Test"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setExpandedProviderId(expandedProviderId === provider.id ? null : provider.id)}
+                            >
+                              {expandedProviderId === provider.id ? "Collapse" : "Edit"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDeleteProvider(provider.id)}
+                              disabled={deletingProviderId === provider.id}
+                            >
+                              {deletingProviderId === provider.id ? "Deleting..." : "Delete"}
+                            </Button>
+                          </div>
                         </div>
-                      </Combobox>
-                    </MultiSelectShell>
-                  </>
-                )}
 
-                <div className="space-y-2">
-                  <Input
-                    type="text"
-                    id="webdav_url"
-                    label="CalDAV Server URL"
-                    value={webdavUrl}
-                    onChange={(e) => handleWebdavUrlChange(e.target.value)}
-                    placeholder="https://cloud.example.com/remote.php/dav"
-                  />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    The CalDAV server URL. For Nextcloud: <InlineCode>https://your-server/remote.php/dav</InlineCode>, for Fastmail: <InlineCode>https://caldav.fastmail.com/dav</InlineCode>
-                  </p>
-                </div>
+                        {/* Expanded edit form */}
+                        {expandedProviderId === provider.id && (
+                          <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-4 space-y-4">
+                            <Input
+                              type="text"
+                              id={`provider_name_${provider.id}`}
+                              label="Name"
+                              value={provider.name}
+                              onChange={(e) => setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, name: e.target.value } : p))}
+                              placeholder="My Nextcloud"
+                            />
+                            <div className="space-y-1">
+                              <Input
+                                type="text"
+                                id={`provider_url_${provider.id}`}
+                                label="CalDAV Server URL"
+                                value={provider.url}
+                                onChange={(e) => setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, url: e.target.value } : p))}
+                                placeholder="https://cloud.example.com/remote.php/dav"
+                              />
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Nextcloud: <InlineCode>https://your-server/remote.php/dav</InlineCode> · Fastmail: <InlineCode>https://caldav.fastmail.com/dav</InlineCode>
+                              </p>
+                            </div>
+                            <Input
+                              type="text"
+                              id={`provider_username_${provider.id}`}
+                              label="Username"
+                              value={provider.username}
+                              onChange={(e) => setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, username: e.target.value } : p))}
+                              placeholder="user@example.com"
+                            />
+                            <div className="space-y-1">
+                              <Input
+                                type="password"
+                                id={`provider_password_${provider.id}`}
+                                label="Password"
+                                value={provider.password}
+                                onChange={(e) => setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, password: e.target.value } : p))}
+                                placeholder="App password or account password"
+                              />
+                              {provider.password === MASK_VALUE && (
+                                <p className="text-xs text-green-600 dark:text-green-400">✓ Password is configured. Edit to update.</p>
+                              )}
+                            </div>
+                            <ToggleRow
+                              id={`provider_enabled_${provider.id}`}
+                              checked={provider.enabled}
+                              onChange={(checked) => setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, enabled: checked } : p))}
+                              title="Enable this provider"
+                              description="Disabled providers are skipped when the AI fetches calendar events."
+                            />
 
-                <Input
-                  type="text"
-                  id="webdav_username"
-                  label="CalDAV Username"
-                  value={webdavUsername}
-                  onChange={(e) => handleWebdavUsernameChange(e.target.value)}
-                  placeholder="user@example.com"
-                  helperText="Your CalDAV username (often your email address)"
-                />
+                            {/* Calendar picker for this provider */}
+                            <MultiSelectShell
+                              label="Restrict to Calendars (Optional)"
+                              action={
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleRefreshProviderCalendars(provider.id)}
+                                  disabled={provider.loadingCalendars}
+                                >
+                                  {provider.loadingCalendars ? "Loading..." : "Refresh Calendars"}
+                                </Button>
+                              }
+                              helperText={
+                                provider.allowedCalendars.length === 0
+                                  ? "AI can search all calendars from this provider. Select specific calendars to restrict access."
+                                  : `AI can only search ${provider.allowedCalendars.length} selected calendar(s). Click a tag to remove it.`
+                              }
+                            >
+                              <Combobox
+                                multiple
+                                by="url"
+                                value={provider.availableCalendars.filter((c) => provider.allowedCalendars.includes(c.url))}
+                                onChange={(selected: CalendarInfo[]) => {
+                                  const urls = selected.map((c) => c.url);
+                                  setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, allowedCalendars: urls } : p));
+                                }}
+                              >
+                                <div className="relative">
+                                  <MultiSelectTrigger
+                                    emptyText={provider.availableCalendars.length === 0 ? "Click 'Refresh Calendars' first" : "Select calendars to restrict (or leave empty for all)"}
+                                  >
+                                    {provider.allowedCalendars.length > 0
+                                      ? provider.availableCalendars
+                                          .filter((c) => provider.allowedCalendars.includes(c.url))
+                                          .map((calendar) => (
+                                            <SelectionChip
+                                              key={calendar.url}
+                                              label={calendar.displayName}
+                                              leading={
+                                                calendar.color ? (
+                                                  <span
+                                                    className="inline-block h-2.5 w-2.5 rounded-full"
+                                                    style={{ backgroundColor: calendar.color }}
+                                                  />
+                                                ) : undefined
+                                              }
+                                              onRemove={() => {
+                                                const urls = provider.allowedCalendars.filter((url) => url !== calendar.url);
+                                                setCalDavProviders((prev) => prev.map((p) => p.id === provider.id ? { ...p, allowedCalendars: urls } : p));
+                                              }}
+                                            />
+                                          ))
+                                      : null}
+                                  </MultiSelectTrigger>
+                                  <MultiSelectOptions>
+                                    {provider.availableCalendars.length === 0 ? (
+                                      <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                        Click &quot;Refresh Calendars&quot; to load available calendars
+                                      </div>
+                                    ) : (
+                                      provider.availableCalendars
+                                        .sort((a, b) => {
+                                          const aSelected = provider.allowedCalendars.includes(a.url) ? 1 : 0;
+                                          const bSelected = provider.allowedCalendars.includes(b.url) ? 1 : 0;
+                                          return bSelected - aSelected;
+                                        })
+                                        .map((calendar) => (
+                                          <ComboboxOption
+                                            key={calendar.url}
+                                            value={calendar}
+                                            className="group relative cursor-pointer select-none py-2 pl-10 pr-4 text-gray-900 dark:text-gray-100 data-focus:bg-blue-100 dark:data-focus:bg-blue-900 data-focus:text-blue-900 dark:data-focus:text-blue-100"
+                                          >
+                                            {({ selected }) => (
+                                              <>
+                                                <span className="flex items-center gap-2 truncate font-normal group-data-selected:font-medium">
+                                                  {calendar.color && (
+                                                    <span
+                                                      className="inline-block h-3 w-3 rounded-full shrink-0"
+                                                      style={{ backgroundColor: calendar.color }}
+                                                    />
+                                                  )}
+                                                  {calendar.displayName}
+                                                  {calendar.description && (
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                      — {calendar.description}
+                                                    </span>
+                                                  )}
+                                                </span>
+                                                {selected && (
+                                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-blue-600 dark:text-blue-400">
+                                                    <Check className="h-4 w-4" aria-hidden="true" />
+                                                  </span>
+                                                )}
+                                              </>
+                                            )}
+                                          </ComboboxOption>
+                                        ))
+                                    )}
+                                  </MultiSelectOptions>
+                                </div>
+                              </Combobox>
+                            </MultiSelectShell>
 
-                <div className="space-y-2">
-                  <Input
-                    type="password"
-                    id="webdav_password"
-                    label="CalDAV Password"
-                    value={webdavPassword}
-                    onChange={(e) => handleWebdavPasswordChange(e.target.value)}
-                    placeholder="Enter your CalDAV password or app password"
-                  />
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {webdavPassword === MASK_VALUE ? (
-                      <span className="text-green-600 dark:text-green-400">✓ Password is configured. Edit to update.</span>
-                    ) : (
-                      "Use an app-specific password if your provider supports it."
+                            <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                              <Button type="button" variant="secondary" size="sm" onClick={() => setExpandedProviderId(null)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleSaveProvider(provider.id)}
+                                disabled={savingProvider === provider.id}
+                              >
+                                {savingProvider === provider.id ? "Saving..." : "Save Provider"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* New provider form */}
+                    {expandedProviderId === "new" && (
+                      <div className="rounded-lg border border-blue-300 dark:border-blue-700 bg-white dark:bg-gray-900 px-4 py-4 space-y-4">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">New Provider</p>
+                        <Input
+                          type="text"
+                          id="new_provider_name"
+                          label="Name"
+                          value={newProviderDraft.name}
+                          onChange={(e) => setNewProviderDraft((d) => ({ ...d, name: e.target.value }))}
+                          placeholder="My Nextcloud"
+                        />
+                        <div className="space-y-1">
+                          <Input
+                            type="text"
+                            id="new_provider_url"
+                            label="CalDAV Server URL"
+                            value={newProviderDraft.url}
+                            onChange={(e) => setNewProviderDraft((d) => ({ ...d, url: e.target.value }))}
+                            placeholder="https://cloud.example.com/remote.php/dav"
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Nextcloud: <InlineCode>https://your-server/remote.php/dav</InlineCode> · Fastmail: <InlineCode>https://caldav.fastmail.com/dav</InlineCode>
+                          </p>
+                        </div>
+                        <Input
+                          type="text"
+                          id="new_provider_username"
+                          label="Username"
+                          value={newProviderDraft.username}
+                          onChange={(e) => setNewProviderDraft((d) => ({ ...d, username: e.target.value }))}
+                          placeholder="user@example.com"
+                        />
+                        <Input
+                          type="password"
+                          id="new_provider_password"
+                          label="Password"
+                          value={newProviderDraft.password}
+                          onChange={(e) => setNewProviderDraft((d) => ({ ...d, password: e.target.value }))}
+                          placeholder="App password or account password"
+                        />
+                        <ToggleRow
+                          id="new_provider_enabled"
+                          checked={newProviderDraft.enabled}
+                          onChange={(checked) => setNewProviderDraft((d) => ({ ...d, enabled: checked }))}
+                          title="Enable this provider"
+                          description="Disabled providers are skipped when the AI fetches calendar events."
+                        />
+                        <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setExpandedProviderId(null);
+                              setNewProviderDraft({ name: "", url: "", username: "", password: "", enabled: true });
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onClick={handleCreateProvider}
+                            disabled={savingProvider === "new"}
+                          >
+                            {savingProvider === "new" ? "Creating..." : "Create Provider"}
+                          </Button>
+                        </div>
+                      </div>
                     )}
-                  </p>
-                </div>
+
+                    {/* Add provider button */}
+                    {expandedProviderId !== "new" && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setExpandedProviderId("new")}
+                      >
+                        + Add Provider
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
             </IntegrationCard>
 
             <IntegrationCard

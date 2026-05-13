@@ -276,6 +276,37 @@ export interface ClientDashboardData {
   totalHoursThisMonth: number;
 }
 
+// CalDAV provider types
+export interface CalDavProvider {
+  id: number;
+  name: string;
+  url: string;
+  username: string;
+  password: string; // masked (••••••••) when returned from API
+  enabled: boolean;
+  allowedCalendars: string[]; // calendar URLs to restrict (empty = all calendars)
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+export interface CreateCalDavProviderInput {
+  name: string;
+  url: string;
+  username: string;
+  password: string;
+  enabled?: boolean;
+  allowedCalendars?: string[];
+}
+
+export interface UpdateCalDavProviderInput {
+  name?: string;
+  url?: string;
+  username?: string;
+  password?: string; // ignored if equals MASK_VALUE
+  enabled?: boolean;
+  allowedCalendars?: string[];
+}
+
 // Settings types
 export type AiProvider = 'openai' | 'gemini';
 

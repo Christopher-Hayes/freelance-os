@@ -13,6 +13,8 @@ export interface CalendarInfo {
   displayName: string;
   description: string | null;
   color: string | null;
+  providerId: number;
+  providerName: string;
 }
 
 export interface CalendarEvent {
@@ -24,6 +26,7 @@ export interface CalendarEvent {
   endTime: string;   // ISO timestamp
   durationMinutes: number;
   calendarName: string;
+  providerName: string;
   attendees: string[];
   organizer: string | null;
 }
@@ -32,59 +35,56 @@ export interface CalendarEvent {
 // Client helpers
 // ──────────────────────────────────────────────────
 
-/**
- * Get a CalDAV client configured from settings.
- * Returns null if CalDAV is not enabled or not configured.
- */
-async function getCalDavClient() {
-  const settings = await prisma.setting.findUnique({
-    where: { key: "main" },
-  });
-
-  if (
-    !settings?.canReadCalendar ||
-    !settings.webdavUrl ||
-    !settings.webdavUsername ||
-    !settings.webdavPassword
-  ) {
-    return null;
-  }
-
-  try {
-    const client = await createDAVClient({
-      serverUrl: settings.webdavUrl,
-      credentials: {
-        username: settings.webdavUsername,
-        password: settings.webdavPassword,
-      },
-      authMethod: "Basic",
-      defaultAccountType: "caldav",
-    });
-
-    return client;
-  } catch (error) {
-    console.error("Error creating CalDAV client:", error);
-    return null;
-  }
-}
+type ProviderClient = {
+  client: Awaited<ReturnType<typeof createDAVClient>>;
+  provider: {
+    id: number;
+    name: string;
+    allowedCalendars: string[];
+  };
+};
 
 /**
- * Get allowed calendar URLs from settings.
- * Returns null if all calendars are allowed (default behaviour).
+ * Get a CalDAV client for each enabled, fully-configured provider.
  */
-async function getAllowedCalendars(): Promise<string[] | null> {
-  const settings = await prisma.setting.findUnique({
-    where: { key: "main" },
+async function getCalDavClients(): Promise<ProviderClient[]> {
+  const providers = await prisma.calDavProvider.findMany({
+    where: { enabled: true },
+    orderBy: { createdAt: "asc" },
   });
 
-  if (
-    !settings?.webdavAllowedCalendars ||
-    settings.webdavAllowedCalendars.length === 0
-  ) {
-    return null;
+  const clients: ProviderClient[] = [];
+
+  for (const provider of providers) {
+    if (!provider.url || !provider.username || !provider.password) {
+      continue;
+    }
+
+    try {
+      const client = await createDAVClient({
+        serverUrl: provider.url,
+        credentials: {
+          username: provider.username,
+          password: provider.password,
+        },
+        authMethod: "Basic",
+        defaultAccountType: "caldav",
+      });
+
+      clients.push({
+        client,
+        provider: {
+          id: provider.id,
+          name: provider.name,
+          allowedCalendars: provider.allowedCalendars,
+        },
+      });
+    } catch (error) {
+      console.error(`Error creating CalDAV client for provider "${provider.name}":`, error);
+    }
   }
 
-  return settings.webdavAllowedCalendars;
+  return clients;
 }
 
 // ──────────────────────────────────────────────────
@@ -198,93 +198,153 @@ function cleanAttendee(raw: string): string {
 // ──────────────────────────────────────────────────
 
 /**
- * Check if CalDAV is enabled and configured.
+ * Check if CalDAV is enabled globally and at least one provider is fully configured.
  */
 export async function isWebdavEnabled(): Promise<boolean> {
   const settings = await prisma.setting.findUnique({
     where: { key: "main" },
   });
 
-  return !!(
-    settings?.canReadCalendar &&
-    settings.webdavUrl &&
-    settings.webdavUsername &&
-    settings.webdavPassword
-  );
+  if (!settings?.canReadCalendar) {
+    return false;
+  }
+
+  const enabledProviderCount = await prisma.calDavProvider.count({
+    where: {
+      enabled: true,
+      url: { not: "" },
+      username: { not: "" },
+      password: { not: "" },
+    },
+  });
+
+  return enabledProviderCount > 0;
 }
 
 /**
- * Get all available calendars from the CalDAV server.
+ * Get all available calendars from all enabled CalDAV providers.
  * Returns empty array if CalDAV is not configured or disabled.
  */
 export async function getCalendars(): Promise<CalendarInfo[]> {
-  const client = await getCalDavClient();
+  const settings = await prisma.setting.findUnique({
+    where: { key: "main" },
+  });
 
-  if (!client) {
-    console.log("CalDAV not enabled or configured, skipping getCalendars");
+  if (!settings?.canReadCalendar) {
+    console.log("CalDAV not enabled globally, skipping getCalendars");
     return [];
   }
 
-  try {
-    const calendars: DAVCalendar[] = await client.fetchCalendars();
+  const providerClients = await getCalDavClients();
 
-    const results: CalendarInfo[] = calendars.map((cal) => ({
-      url: cal.url,
-      displayName: String(cal.displayName || "(Unnamed Calendar)"),
-      description: cal.description ? String(cal.description) : null,
-      color: (cal as any).calendarColor || null,
-    }));
-
-    console.log(`CalDAV - found ${results.length} calendars`);
-    return results;
-  } catch (error) {
-    console.error("Error fetching calendars via CalDAV:", error);
+  if (providerClients.length === 0) {
+    console.log("No enabled CalDAV providers configured, skipping getCalendars");
     return [];
   }
+
+  const allCalendars: CalendarInfo[] = [];
+
+  for (const { client, provider } of providerClients) {
+    try {
+      const calendars: DAVCalendar[] = await client.fetchCalendars();
+
+      for (const cal of calendars) {
+        allCalendars.push({
+          url: cal.url,
+          displayName: String(cal.displayName || "(Unnamed Calendar)"),
+          description: cal.description ? String(cal.description) : null,
+          color: (cal as any).calendarColor || null,
+          providerId: provider.id,
+          providerName: provider.name,
+        });
+      }
+
+      console.log(`CalDAV [${provider.name}] - found ${calendars.length} calendars`);
+    } catch (error) {
+      console.error(`Error fetching calendars from provider "${provider.name}":`, error);
+    }
+  }
+
+  return allCalendars;
 }
 
 /**
- * Search calendar events within a date range.
+ * Search calendar events within a date range across all enabled providers.
+ * Each provider's allowedCalendars list is applied independently.
  * Returns empty array if CalDAV is not configured or disabled.
  */
 export async function searchEventsByDateRange(
   startInstant: Temporal.Instant,
   endInstant: Temporal.Instant,
 ): Promise<CalendarEvent[]> {
-  const client = await getCalDavClient();
+  const settings = await prisma.setting.findUnique({
+    where: { key: "main" },
+  });
 
-  if (!client) {
-    console.log("CalDAV not enabled or configured, skipping event search");
+  if (!settings?.canReadCalendar) {
+    console.log("CalDAV not enabled globally, skipping event search");
     return [];
   }
 
+  const providerClients = await getCalDavClients();
+
+  if (providerClients.length === 0) {
+    console.log("No enabled CalDAV providers configured, skipping event search");
+    return [];
+  }
+
+  const startIso = new Date(startInstant.epochMilliseconds).toISOString();
+  const endIso = new Date(endInstant.epochMilliseconds).toISOString();
+
+  // Query all providers in parallel
+  const perProviderResults = await Promise.all(
+    providerClients.map(({ client, provider }) =>
+      fetchEventsFromProvider(client, provider, startInstant, endInstant, startIso, endIso)
+    )
+  );
+
+  const allEvents = perProviderResults.flat();
+
+  // Sort by start time
+  allEvents.sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+  );
+
+  console.log(
+    `CalDAV - found ${allEvents.length} events between ${startIso} and ${endIso} across ${providerClients.length} provider(s)`
+  );
+
+  return allEvents;
+}
+
+async function fetchEventsFromProvider(
+  client: Awaited<ReturnType<typeof createDAVClient>>,
+  provider: { id: number; name: string; allowedCalendars: string[] },
+  startInstant: Temporal.Instant,
+  endInstant: Temporal.Instant,
+  startIso: string,
+  endIso: string,
+): Promise<CalendarEvent[]> {
   try {
     const calendars: DAVCalendar[] = await client.fetchCalendars();
-    const allowedCalendars = await getAllowedCalendars();
 
-    // Filter calendars if restrictions are set
-    const filteredCalendars = allowedCalendars
-      ? calendars.filter((cal) => allowedCalendars.includes(cal.url))
-      : calendars;
+    // Apply per-provider calendar filter
+    const filteredCalendars =
+      provider.allowedCalendars.length > 0
+        ? calendars.filter((cal) => provider.allowedCalendars.includes(cal.url))
+        : calendars;
 
     if (filteredCalendars.length === 0) {
-      console.log("CalDAV - no calendars to search (all filtered out)");
       return [];
     }
 
-    const startIso = new Date(startInstant.epochMilliseconds).toISOString();
-    const endIso = new Date(endInstant.epochMilliseconds).toISOString();
-
-    const allEvents: CalendarEvent[] = [];
+    const events: CalendarEvent[] = [];
 
     for (const calendar of filteredCalendars) {
       try {
         const objects: DAVObject[] = await client.fetchCalendarObjects({
           calendar,
-          timeRange: {
-            start: startIso,
-            end: endIso,
-          },
+          timeRange: { start: startIso, end: endIso },
         });
 
         for (const obj of objects) {
@@ -315,31 +375,24 @@ export async function searchEventsByDateRange(
 
             if (!startTime) continue;
 
-            // Check the event actually falls within range
             const eventStart = new Date(startTime).getTime();
             const eventEnd = endTime
               ? new Date(endTime).getTime()
-              : eventStart + 3600000; // default 1h if no end
+              : eventStart + 3600000;
             const rangeStart = startInstant.epochMilliseconds;
             const rangeEnd = endInstant.epochMilliseconds;
 
             if (eventEnd < rangeStart || eventStart > rangeEnd) continue;
 
-            // Calculate duration
-            const durationMs = eventEnd - eventStart;
-            const durationMinutes = Math.round(durationMs / 60000);
+            const durationMinutes = Math.round((eventEnd - eventStart) / 60000);
 
-            // Attendees
             const attendeesRaw = icsPropertyAll(block, "ATTENDEE");
             const attendees = attendeesRaw.map(cleanAttendee);
 
-            // Organizer
             const organizerRaw = icsProperty(block, "ORGANIZER");
-            const organizer = organizerRaw
-              ? cleanAttendee(organizerRaw)
-              : null;
+            const organizer = organizerRaw ? cleanAttendee(organizerRaw) : null;
 
-            allEvents.push({
+            events.push({
               uid,
               summary,
               description,
@@ -347,8 +400,8 @@ export async function searchEventsByDateRange(
               startTime,
               endTime: endTime || new Date(eventStart + 3600000).toISOString(),
               durationMinutes,
-              calendarName:
-                String(calendar.displayName || "(Unnamed Calendar)"),
+              calendarName: String(calendar.displayName || "(Unnamed Calendar)"),
+              providerName: provider.name,
               attendees,
               organizer,
             });
@@ -356,25 +409,15 @@ export async function searchEventsByDateRange(
         }
       } catch (calError) {
         console.error(
-          `Error fetching events from calendar "${calendar.displayName}":`,
+          `Error fetching events from calendar "${calendar.displayName}" on provider "${provider.name}":`,
           calError
         );
       }
     }
 
-    // Sort by start time
-    allEvents.sort(
-      (a, b) =>
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-    );
-
-    console.log(
-      `CalDAV - found ${allEvents.length} events between ${startIso} and ${endIso}`
-    );
-
-    return allEvents;
+    return events;
   } catch (error) {
-    console.error("Error searching calendar events via CalDAV:", error);
+    console.error(`Error fetching events from provider "${provider.name}":`, error);
     return [];
   }
 }

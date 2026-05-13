@@ -422,11 +422,7 @@ model Setting {
   jmapHostname           String?  @map("jmap_hostname") @db.Text
   canReadMailbox         Boolean  @default(false) @map("can_read_mailbox") // Allow AI to read emails via JMAP
   jmapAllowedMailboxes   String[] @default([]) @map("jmap_allowed_mailboxes") // Mailbox IDs AI can search (empty = all mailboxes)
-  webdavUrl              String?  @map("webdav_url") @db.Text // CalDAV server URL
-  webdavUsername         String?  @map("webdav_username") @db.Text
-  webdavPassword         String?  @map("webdav_password") @db.Text
-  canReadCalendar        Boolean  @default(false) @map("can_read_calendar") // Allow AI to read calendar events via CalDAV
-  webdavAllowedCalendars String[] @default([]) @map("webdav_allowed_calendars") // Calendar URLs AI can search (empty = all calendars)
+  canReadCalendar        Boolean  @default(false) @map("can_read_calendar") // Allow AI to read calendar events via CalDAV (global toggle)
   githubToken            String?  @map("github_token") @db.Text
   githubUsername         String?  @map("github_username") @db.Text
   gitlabToken            String?  @map("gitlab_token") @db.Text
@@ -448,6 +444,22 @@ model Setting {
   updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
   @@map("settings")
+}
+
+// CalDAV provider credentials — one row per CalDAV server
+// Replaces single-provider fields that were previously on Setting
+model CalDavProvider {
+  id               Int      @id @default(autoincrement())
+  name             String   @db.Text                              // User-defined label, e.g. "Work Nextcloud"
+  url              String   @db.Text                              // CalDAV server URL
+  username         String   @db.Text
+  password         String   @db.Text
+  enabled          Boolean  @default(true)                        // Whether this provider is included in AI queries
+  allowedCalendars String[] @default([]) @map("allowed_calendars") // Calendar URLs to restrict (empty = all calendars)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("caldav_providers")
 }
 
 // RescueTime project metadata extracted from archive uploads

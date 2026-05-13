@@ -109,7 +109,7 @@ export async function suggestProjectHighlights(
     }
 
     // Search calendar events
-    if (settings?.webdavUrl && settings?.canReadCalendar && await isWebdavEnabled()) {
+    if (settings?.canReadCalendar && await isWebdavEnabled()) {
       try {
         const events = await searchEventsByDateRange(startInstant, endInstant);
 

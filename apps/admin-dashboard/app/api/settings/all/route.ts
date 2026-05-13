@@ -102,7 +102,6 @@ export async function GET() {
       openaiKey: maskIfPresent(setting.openaiKey),
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
-      webdavPassword: maskIfPresent(setting.webdavPassword),
       githubToken: maskIfPresent(setting.githubToken),
       gitlabToken: maskIfPresent(setting.gitlabToken),
       codebergToken: maskIfPresent(setting.codebergToken),
@@ -115,10 +114,7 @@ export async function GET() {
       jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
-      webdavUrl: setting.webdavUrl || "",
-      webdavUsername: setting.webdavUsername || "",
       canReadCalendar: setting.canReadCalendar || false,
-      webdavAllowedCalendars: setting.webdavAllowedCalendars || [],
       githubUsername: setting.githubUsername || "",
       gitlabUsername: setting.gitlabUsername || "",
       gitlabUrl: setting.gitlabUrl || "",
@@ -137,7 +133,6 @@ export async function GET() {
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,
       hasJmapToken: !!setting.jmapToken,
-      hasWebdavPassword: !!setting.webdavPassword,
       hasGithubToken: !!setting.githubToken,
       hasGitlabToken: !!setting.gitlabToken,
       hasCodebergToken: !!setting.codebergToken,
@@ -177,11 +172,7 @@ export async function PUT(request: Request) {
       jmapToken, 
       jmapUsername, 
       jmapHostname,
-      webdavUrl,
-      webdavUsername,
-      webdavPassword,
       canReadCalendar,
-      webdavAllowedCalendars,
       githubToken,
       githubUsername,
       gitlabToken,
@@ -266,17 +257,7 @@ export async function PUT(request: Request) {
     }
     if (jmapUsername !== undefined) updateData.jmapUsername = jmapUsername || null;
     if (jmapHostname !== undefined) updateData.jmapHostname = jmapHostname || null;
-    if (webdavUrl !== undefined) updateData.webdavUrl = webdavUrl || null;
-    if (webdavUsername !== undefined) updateData.webdavUsername = webdavUsername || null;
-    if (webdavPassword !== undefined && webdavPassword !== MASK_VALUE) {
-      updateData.webdavPassword = webdavPassword || null;
-    }
     if (canReadCalendar !== undefined) updateData.canReadCalendar = canReadCalendar === "true" || canReadCalendar === true;
-    if (webdavAllowedCalendars !== undefined) {
-      updateData.webdavAllowedCalendars = typeof webdavAllowedCalendars === 'string'
-        ? JSON.parse(webdavAllowedCalendars)
-        : (webdavAllowedCalendars || []);
-    }
     if (githubUsername !== undefined) updateData.githubUsername = githubUsername || null;
     if (gitlabUsername !== undefined) updateData.gitlabUsername = gitlabUsername || null;
     if (gitlabUrl !== undefined) updateData.gitlabUrl = gitlabUrl || null;
@@ -310,13 +291,7 @@ export async function PUT(request: Request) {
         jmapToken: jmapToken && jmapToken !== MASK_VALUE ? jmapToken : null,
         jmapUsername: jmapUsername || null,
         jmapHostname: jmapHostname || null,
-        webdavUrl: webdavUrl || null,
-        webdavUsername: webdavUsername || null,
-        webdavPassword: webdavPassword && webdavPassword !== MASK_VALUE ? webdavPassword : null,
         canReadCalendar: canReadCalendar === "true" || canReadCalendar === true || false,
-        webdavAllowedCalendars: typeof webdavAllowedCalendars === 'string'
-          ? JSON.parse(webdavAllowedCalendars)
-          : (webdavAllowedCalendars || []),
         githubToken: githubToken && githubToken !== MASK_VALUE ? githubToken : null,
         githubUsername: githubUsername || null,
         gitlabToken: gitlabToken && gitlabToken !== MASK_VALUE ? gitlabToken : null,
@@ -341,7 +316,6 @@ export async function PUT(request: Request) {
       openaiKey: maskIfPresent(setting.openaiKey),
       googleApiKey: maskIfPresent(setting.googleApiKey),
       jmapToken: maskIfPresent(setting.jmapToken),
-      webdavPassword: maskIfPresent(setting.webdavPassword),
       githubToken: maskIfPresent(setting.githubToken),
       gitlabToken: maskIfPresent(setting.gitlabToken),
       codebergToken: maskIfPresent(setting.codebergToken),
@@ -352,10 +326,7 @@ export async function PUT(request: Request) {
       jmapAllowedMailboxes: setting.jmapAllowedMailboxes || [],
       jmapUsername: setting.jmapUsername || "",
       jmapHostname: setting.jmapHostname || "",
-      webdavUrl: setting.webdavUrl || "",
-      webdavUsername: setting.webdavUsername || "",
       canReadCalendar: setting.canReadCalendar || false,
-      webdavAllowedCalendars: setting.webdavAllowedCalendars || [],
       githubUsername: setting.githubUsername || "",
       gitlabUsername: setting.gitlabUsername || "",
       gitlabUrl: setting.gitlabUrl || "",
@@ -372,7 +343,6 @@ export async function PUT(request: Request) {
       hasOpenaiKey: !!setting.openaiKey,
       hasGoogleApiKey: !!setting.googleApiKey,
       hasJmapToken: !!setting.jmapToken,
-      hasWebdavPassword: !!setting.webdavPassword,
       hasGithubToken: !!setting.githubToken,
       hasGitlabToken: !!setting.gitlabToken,
       hasCodebergToken: !!setting.codebergToken,
