@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@freelance-os/database';
-import { sendEmail, generateInvoiceSentEmail } from '@freelance-os/email';
-import { getJMAPConfig, getCompanyName } from '@/lib/email';
 
 // GET /api/invoices/[id] - Get a single invoice
 export async function GET(
@@ -79,7 +77,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, status, dueDate, paidDate, notes, sendEmail: shouldSendEmail = false } = body;
+    const { amount, status, dueDate, paidDate, notes } = body;
 
     // Verify invoice exists
     const existingInvoice = await prisma.invoice.findUnique({
@@ -129,36 +127,6 @@ export async function PUT(
         },
       },
     });
-
-    // Send email notification if status changed to 'sent' OR if explicitly requested
-    const statusChangedToSent = status === 'sent' && existingInvoice.status !== 'sent';
-    if (statusChangedToSent || shouldSendEmail) {
-      try {
-        const jmapConfig = await getJMAPConfig();
-        const companyName = await getCompanyName();
-        const portalUrl = process.env.CLIENT_PORTAL_URL || process.env.NEXTAUTH_URL;
-
-        const emailContent = generateInvoiceSentEmail({
-          invoice: {
-            ...invoice,
-            amount: invoice.amount.toNumber(),
-            projectId: invoice.projectId ?? undefined,
-          } as any,
-          companyName,
-          portalUrl,
-        });
-
-        await sendEmail(jmapConfig, {
-          to: invoice.client.email,
-          ...emailContent,
-        });
-
-        console.log(`[Invoice] Email sent to ${invoice.client.email} for invoice ${invoice.invoiceNumber}`);
-      } catch (emailError) {
-        console.error('[Invoice] Failed to send email notification:', emailError);
-        // Don't fail the request if email fails - log and continue
-      }
-    }
 
     // Convert Decimal to number for JSON serialization
     const serializedInvoice = {
