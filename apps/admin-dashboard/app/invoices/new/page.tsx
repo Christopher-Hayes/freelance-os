@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Temporal } from '@js-temporal/polyfill';
 import type { Client, Project } from '@freelance-os/types';
 import { generateInvoice } from '@/lib/invoice-actions';
 import { authFetch } from '@/lib/util';
@@ -94,6 +95,51 @@ export default function NewInvoicePage() {
 
     return () => controller.abort();
   }, [mode, startDate, endDate, clientId, projectId]);
+
+  // Missing weekdays check: weekdays in the selected range with no project time 8am–8pm
+  const [missingDays, setMissingDays] = useState<string[] | null>(null);
+  const [loadingMissingDays, setLoadingMissingDays] = useState(false);
+
+  const checkStart = mode === 'generate' ? startDate : issueDate;
+  const checkEnd = mode === 'generate' ? endDate : dueDate;
+
+  useEffect(() => {
+    if (!checkStart || !checkEnd) {
+      setMissingDays(null);
+      return;
+    }
+
+    // Cap the end at today — future dates can't have work logged
+    const today = Temporal.Now.plainDateISO().toString();
+    const effectiveEnd = checkEnd < today ? checkEnd : today;
+
+    if (effectiveEnd < checkStart) {
+      setMissingDays([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingMissingDays(true);
+
+    (async () => {
+      try {
+        const params = new URLSearchParams({ startDate: checkStart, endDate: effectiveEnd });
+        const res = await authFetch(`/api/time/missing-days?${params}`, { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to fetch missing days');
+        const data = await res.json();
+        setMissingDays(data.missingDays ?? []);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch missing days', err);
+          setMissingDays(null);
+        }
+      } finally {
+        setLoadingMissingDays(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [mode, checkStart, checkEnd]);
 
   // Computed billing estimate
   const billingEstimate = useMemo(() => {
@@ -226,6 +272,40 @@ export default function NewInvoicePage() {
       }
     }
   };
+
+  function formatMissingDay(dateStr: string): string {
+    const d = Temporal.PlainDate.from(dateStr);
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${weekdays[d.dayOfWeek - 1]} ${months[d.month - 1]} ${d.day}`;
+  }
+
+  const missingDaysNotice = missingDays && missingDays.length > 0 ? (
+    <div className="mt-6 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
+      <div className="flex items-start gap-3">
+        <svg className="h-5 w-5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            {missingDays.length === 1
+              ? 'One weekday in this range has no logged project time between 8 AM and 8 PM.'
+              : `${missingDays.length} weekdays in this range have no logged project time between 8 AM and 8 PM.`}
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+            This might just mean those were light days — but it's worth a quick check before invoicing.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {missingDays.map((day) => (
+              <li key={day} className="text-xs font-medium bg-amber-100 dark:bg-amber-800/40 text-amber-800 dark:text-amber-300 px-2 py-1 rounded">
+                {formatMissingDay(day)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -420,6 +500,11 @@ export default function NewInvoicePage() {
             />
           </div>
 
+          {loadingMissingDays && (
+            <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">Checking for days without project time…</p>
+          )}
+          {missingDaysNotice}
+
           <div className="mt-6 flex gap-4">
             <button
               type="submit"
@@ -612,6 +697,11 @@ export default function NewInvoicePage() {
               placeholder="Add any additional notes... (time entry summary will be auto-generated)"
             />
           </div>
+
+          {loadingMissingDays && (
+            <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">Checking for days without project time…</p>
+          )}
+          {missingDaysNotice}
 
           <div className="mt-6 flex gap-4">
             <button
