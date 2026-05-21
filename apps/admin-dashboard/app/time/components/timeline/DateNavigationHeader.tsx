@@ -33,9 +33,9 @@ export default function DateNavigationHeader({
 
   const isToday = (date: Temporal.PlainDate) => {
     const today = Temporal.Now.plainDateISO();
-    return date.year === today.year && 
-           date.month === today.month && 
-           date.day === today.day;
+    return date.year === today.year &&
+      date.month === today.month &&
+      date.day === today.day;
   };
 
   const handleDatePickerClick = () => {
@@ -56,61 +56,79 @@ export default function DateNavigationHeader({
   return (
     <div className="p-4 border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center justify-between mb-2">
-        <button
-          onClick={onPrevDay}
-          className="px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded text-sm"
-        >
-          ← Prev
-        </button>
-        <button
-          onClick={onToday}
-          className={`px-3 py-1 rounded text-sm font-medium ${
-            isToday(selectedDate)
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
-          }`}
-        >
-          Today
-        </button>
-        <button
-          onClick={onNextDay}
-          className="px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded text-sm"
-        >
-          Next →
-        </button>
-      </div>
-      <div className="flex items-center justify-center gap-2">
-        <div className="font-semibold text-gray-900 dark:text-gray-100">
-          {formatDate(selectedDate)}
-        </div>
-        <div className="relative">
-          <input
-            ref={dateInputRef}
-            type="date"
-            value={inputValue}
-            onChange={handleDateChange}
-            className="absolute opacity-0 w-0 h-0 pointer-events-none"
-            aria-label="Select date"
-          />
+        <div className="flex items-center gap-2">
           <button
-            onClick={handleDatePickerClick}
-            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-            title="Pick a date"
+            onClick={onPrevDay}
+            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded font-medium text-sm"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
+            ← Prev
+          </button>
+          {/* if today is before selected date, show today button on left */}
+          {Temporal.PlainDate.compare(Temporal.Now.plainDateISO(), selectedDate) < 0 && (
+            <button
+              onClick={onToday}
+              className={`px-3 py-1 rounded text-sm font-medium ${isToday(selectedDate)
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
+                }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-              />
-            </svg>
+              Today
+            </button>
+          )}
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          <div className="font-semibold text-gray-900 dark:text-gray-100">
+            {formatDate(selectedDate)}
+          </div>
+          <div className="relative">
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={inputValue}
+              onChange={handleDateChange}
+              className="absolute opacity-0 w-0 h-0 pointer-events-none"
+              aria-label="Select date"
+            />
+            <button
+              onClick={handleDatePickerClick}
+              className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              title="Pick a date"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* if today is before selected date, show today button on right */}
+          {Temporal.PlainDate.compare(Temporal.Now.plainDateISO(), selectedDate) > 0 && (
+            <button
+              onClick={onToday}
+              className={`px-3 py-1 rounded text-sm font-medium ${isToday(selectedDate)
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100"
+                }`}
+            >
+              Today
+            </button>
+          )}
+          <button
+            onClick={onNextDay}
+            className="px-3 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100 rounded font-medium text-sm"
+          >
+            Next →
           </button>
         </div>
       </div>

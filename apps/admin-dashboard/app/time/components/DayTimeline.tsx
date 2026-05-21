@@ -200,14 +200,16 @@ export default function DayTimeline({ selectedDate, onDateChange }: DayTimelineP
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
-    <div className="rounded-3xl border border-slate-200/80 bg-white/95 shadow-sm ring-1 ring-white/60 backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/90 dark:ring-white/5">
-      <DateNavigationHeader
-        selectedDate={selectedDate}
-        onPrevDay={() => changeDay(-1)}
-        onNextDay={() => changeDay(1)}
-        onToday={goToToday}
-        onDateSelect={onDateChange}
-      />
+    <div className="border border-slate-200/80 bg-white/95 dark:border-white/10 dark:bg-slate-900/90 dark:ring-white/5">
+      <div className="sticky z-30 top-16 bg-white">
+        <DateNavigationHeader
+          selectedDate={selectedDate}
+          onPrevDay={() => changeDay(-1)}
+          onNextDay={() => changeDay(1)}
+          onToday={goToToday}
+          onDateSelect={onDateChange}
+        />
+      </div>
 
       <div className="p-4 relative" style={dragging ? { userSelect: "none" } : {}}>
         {dragging && (

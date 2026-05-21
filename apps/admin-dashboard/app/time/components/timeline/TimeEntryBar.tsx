@@ -171,7 +171,7 @@ const TimeEntryBar = memo(function TimeEntryBar({
         right: `calc(${100 - layout.leftPercent - layout.widthPercent}% + ${layout.gap}px)`,
         pointerEvents: isGhost ? "none" : "auto",
       }}
-      >
+    >
       <div
         className={`timeline-entry group flex items-center border-2 rounded backdrop-blur-sm px-2 ${isDragging ? "opacity-70" : ""
           } ${isGhost ? "justify-center opacity-50 border-dashed pointer-events-none" : ""
@@ -214,9 +214,14 @@ const TimeEntryBar = memo(function TimeEntryBar({
               <div className="py-2 text-xs flex flex-col gap-0.5 select-none">
                 <div className={`truncate flex gap-1 ${REDACTION_MODE ? 'blur-xs' : ''}`} style={{ color: isDragging ? colorScheme.text : colorScheme.text }}>
                   <span className="font-semibold">{entry.project.name}</span>
-                  <span className="opacity-60">({entry.project.client.name})</span>
+                  {height >= 50 && (
+                    <span className="opacity-60">({entry.project.client.name})</span>
+                  )}
+                  {height < 50 && entry.description && (
+                    <span className="line-clamp-1 opacity-80">- {entry.description}</span>
+                  )}
                 </div>
-                {height >= 40 && entry.description && (
+                {height >= 50 && entry.description && (
                   <div className={`text-xs line-clamp-2 ${REDACTION_MODE ? 'blur-xs' : ''}`} style={{ color: colorScheme.text, opacity: 0.7 }}>
                     {entry.description}
                   </div>
@@ -227,6 +232,25 @@ const TimeEntryBar = memo(function TimeEntryBar({
                     {" - "}
                     {formatTime(end)}
                   </div>
+                )}
+                {/* if < 50 height, overlay a "Show" button on hover on the right side */}
+                {height < 50 && (
+                  <button
+                    className="absolute z-20 top-1/2 right-1 -translate-y-1/2 px-1.5 py-0.5 bg-white dark:bg-gray-800 text-[9px] rounded opacity-0 group-hover:opacity-100 transition-opacity font-semibold"
+                    style={{
+                      border: `1px solid ${colorScheme.border}`,
+                      color: colorScheme.text,
+                    }}
+                    onClick={(e) => {
+                      if (!isEditing && !isDragging) {
+                        e.stopPropagation();
+                        onClick(e);
+                      }
+                    }}
+                    title="Show details"
+                  >
+                    Show
+                  </button>
                 )}
               </div>
             )}
