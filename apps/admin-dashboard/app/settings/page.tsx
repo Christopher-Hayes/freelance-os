@@ -335,6 +335,11 @@ export default function SettingsPage() {
   const [codingStatsRegenerating, setCodingStatsRegenerating] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  type ForgeTestState = { status: "idle" | "testing" | "ok" | "error"; message?: string };
+  const [githubTest, setGithubTest] = useState<ForgeTestState>({ status: "idle" });
+  const [gitlabTest, setGitlabTest] = useState<ForgeTestState>({ status: "idle" });
+  const [codebergTest, setCodebergTest] = useState<ForgeTestState>({ status: "idle" });
+
   // API Keys state
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeyListItem[]>([]);
@@ -980,6 +985,27 @@ export default function SettingsPage() {
     codebergUsernameTimerRef.current = setTimeout(() => {
       saveSetting("codebergUsername", value);
     }, 1000);
+  };
+
+  const testForge = async (forge: "github" | "gitlab" | "codeberg") => {
+    const setters = { github: setGithubTest, gitlab: setGitlabTest, codeberg: setCodebergTest };
+    const set = setters[forge];
+    set({ status: "testing" });
+    try {
+      const res = await authFetch("/api/settings/test-forge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forge }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        set({ status: "ok", message: data.message });
+      } else {
+        set({ status: "error", message: data.message + (data.detail ? ` — ${data.detail}` : "") });
+      }
+    } catch (err) {
+      set({ status: "error", message: err instanceof Error ? err.message : "Request failed" });
+    }
   };
 
   const handleFreelancerNameChange = (value: string) => {
@@ -2141,6 +2167,23 @@ export default function SettingsPage() {
                       )}
                     </p>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => testForge("github")}
+                      disabled={githubTest.status === "testing" || !githubToken || !githubUsername}
+                    >
+                      {githubTest.status === "testing" ? "Testing…" : "Test connection"}
+                    </Button>
+                    {githubTest.status === "ok" && (
+                      <span className="text-sm text-green-600 dark:text-green-400">✓ {githubTest.message}</span>
+                    )}
+                    {githubTest.status === "error" && (
+                      <span className="text-sm text-red-600 dark:text-red-400">✗ {githubTest.message}</span>
+                    )}
+                  </div>
                 </IntegrationProviderCard>
 
                 {/* GitLab */}
@@ -2184,6 +2227,23 @@ export default function SettingsPage() {
                     placeholder="https://gitlab.com"
                     helperText="Leave blank to use gitlab.com. Set this for self-hosted GitLab instances."
                   />
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => testForge("gitlab")}
+                      disabled={gitlabTest.status === "testing" || !gitlabToken || !gitlabUsername}
+                    >
+                      {gitlabTest.status === "testing" ? "Testing…" : "Test connection"}
+                    </Button>
+                    {gitlabTest.status === "ok" && (
+                      <span className="text-sm text-green-600 dark:text-green-400">✓ {gitlabTest.message}</span>
+                    )}
+                    {gitlabTest.status === "error" && (
+                      <span className="text-sm text-red-600 dark:text-red-400">✗ {gitlabTest.message}</span>
+                    )}
+                  </div>
                 </IntegrationProviderCard>
 
                 {/* Codeberg */}
@@ -2217,6 +2277,23 @@ export default function SettingsPage() {
                         </>
                       )}
                     </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => testForge("codeberg")}
+                      disabled={codebergTest.status === "testing" || !codebergToken || !codebergUsername}
+                    >
+                      {codebergTest.status === "testing" ? "Testing…" : "Test connection"}
+                    </Button>
+                    {codebergTest.status === "ok" && (
+                      <span className="text-sm text-green-600 dark:text-green-400">✓ {codebergTest.message}</span>
+                    )}
+                    {codebergTest.status === "error" && (
+                      <span className="text-sm text-red-600 dark:text-red-400">✗ {codebergTest.message}</span>
+                    )}
                   </div>
                 </IntegrationProviderCard>
               </div>
