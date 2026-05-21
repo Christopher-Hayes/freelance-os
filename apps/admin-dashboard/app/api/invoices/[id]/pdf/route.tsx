@@ -126,20 +126,24 @@ export async function GET(
       return fallback;
     })();
 
-    // ── 4. Fetch BILLABLE time entries for this project during the period ──
+    // ── 4. Fetch BILLABLE time entries for the invoice period ──
     // The invoice amount is calculated from billable entries only, so the PDF
     // must use the same filter to keep hours and dollars consistent.
+    // For multi-project invoices (no projectId), fetch across all client projects.
     const projectId = invoice.project?.id;
-    const timeEntries = projectId
-      ? await prisma.timeEntry.findMany({
-          where: {
-            projectId,
-            billable: true,
-            startTime: { gte: periodStart, lte: periodEnd },
-          },
-          orderBy: { startTime: 'asc' },
-        })
-      : [];
+    const timeEntries = await prisma.timeEntry.findMany({
+      where: {
+        billable: true,
+        startTime: { gte: periodStart, lte: periodEnd },
+        ...(projectId
+          ? { projectId }
+          : { project: { clientId: invoice.client.id } }),
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    // Collect the distinct project IDs that appear in the entries (used below).
+    const involvedProjectIds = [...new Set(timeEntries.map(e => e.projectId))];
 
     // ── 5. Build weekly time breakdown with summaries ──
     const weekMap = new Map<string, {
@@ -169,18 +173,25 @@ export async function GET(
       const [y, m, d] = key.split('-').map(Number);
       return new Date(Date.UTC(y!, m! - 1, d!));
     });
-    const weeklySummaries = projectId && weekKeys.length > 0
+    const weeklySummaries = involvedProjectIds.length > 0 && weekKeys.length > 0
       ? await prisma.weeklySummary.findMany({
           where: {
-            projectId,
+            projectId: { in: involvedProjectIds },
             weekStart: { in: utcMondayDates },
           },
+          include: { project: { select: { name: true } } },
         })
       : [];
 
-    // Key by the UTC date portion (Monday date string) — matches weekMap keys
-    // because both represent the same Monday, just stored differently.
-    const summaryMap = new Map(weeklySummaries.map(s => [s.weekStart.toISOString().slice(0, 10), s.summary]));
+    // Key by the UTC date portion (Monday date string) — matches weekMap keys.
+    // For multi-project invoices, combine each project's summary under a bold heading.
+    const summaryMap = new Map<string, string>();
+    for (const s of weeklySummaries) {
+      const key = s.weekStart.toISOString().slice(0, 10);
+      const text = projectId ? s.summary : `**${s.project.name}**\n${s.summary}`;
+      const existing = summaryMap.get(key);
+      summaryMap.set(key, existing ? `${existing}\n\n${text}` : text);
+    }
 
     const timeBreakdown: InvoicePDFData['timeBreakdown'] = Array.from(weekMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -216,7 +227,7 @@ export async function GET(
           projectName: proj.name,
           projectColor: proj.color,
           hours: (result._sum.durationMinutes ?? 0) / 60,
-          isCurrent: proj.id === projectId,
+          isCurrent: projectId ? proj.id === projectId : involvedProjectIds.includes(proj.id),
         };
       })
     );
@@ -305,11 +316,11 @@ export async function GET(
         },
         orderBy: { issueDate: 'asc' },
       }),
-      // Fetch project highlights during the invoice period
-      projectId
+      // Fetch project highlights during the invoice period (all billed projects)
+      involvedProjectIds.length > 0
         ? prisma.projectHighlight.findMany({
             where: {
-              projectId,
+              projectId: { in: involvedProjectIds },
               date: { gte: periodStart, lte: periodEnd },
             },
             orderBy: { date: 'asc' },
