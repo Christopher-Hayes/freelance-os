@@ -207,8 +207,20 @@ async function processAutofillJob(job: any) {
     // Apply time entry suggestions
     let entriesCreated = 0;
     let entriesUpdated = 0;
+    let entriesDeleted = 0;
     for (const suggestion of result.suggestions) {
       try {
+        if (suggestion.action === "delete") {
+          if (suggestion.existingEntryId == null || !existingEntryIds.has(suggestion.existingEntryId)) {
+            console.warn("Skipping autofill delete for missing entry", suggestion);
+            continue;
+          }
+          await prisma.timeEntry.delete({ where: { id: suggestion.existingEntryId } });
+          existingEntryIds.delete(suggestion.existingEntryId);
+          entriesDeleted++;
+          continue;
+        }
+
         const suggestionStartInstant = Temporal.Instant.from(suggestion.startTime);
         const suggestionEndInstant = Temporal.Instant.from(suggestion.endTime);
         const durationMinutes = Math.round(
@@ -266,6 +278,7 @@ async function processAutofillJob(job: any) {
         result: {
           entriesCreated,
           entriesUpdated,
+          entriesDeleted,
           totalSuggestions: result.suggestions.length,
           activityCount: result.activityCount,
           date: params.date,

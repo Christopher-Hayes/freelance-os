@@ -29,7 +29,7 @@ export async function generateAutofillSuggestions(params: {
   debugJobId?: number;
 }): Promise<{
   suggestions: Array<{
-    action: "create" | "update";
+    action: "create" | "update" | "delete";
     existingEntryId: number | null;
     projectId: number;
     description: string;
@@ -169,7 +169,7 @@ export async function generateAutofillSuggestions(params: {
   }));
 
   const timeEntrySuggestionSchema = z.object({
-    action: z.enum(["create", "update"]),
+    action: z.enum(["create", "update", "delete"]),
     existingEntryId: z.number().nullable(),
     projectId: z.number(),
     description: z.string(),
@@ -203,7 +203,7 @@ ${projectsInfo
 
 ${
   existingEntriesInfo.length > 0
-    ? `Existing Time Entries (you may keep these as-is OR refine them with action="update"):
+    ? `Existing Time Entries (you may keep these as-is, refine them with action="update", or remove them with action="delete"):
 ${existingEntriesInfo
   .map((e) => {
     const project = projects.find((p) => p.id === e.projectId);
@@ -231,9 +231,11 @@ Guidelines:
 - It's better to over report time than underreport.
 - For brand new entries, use action="create" and set existingEntryId to null.
 - If an existing entry should be improved, use action="update" and set existingEntryId to that entry's ID.
+- If an existing entry is clearly wrong (e.g. attributed to a project that represents a minority of the time while the majority of activity clearly belongs to a different project), use action="delete" and set existingEntryId to that entry's ID, then create a correct entry with action="create".
 - Updates may refine timeframe, description, billable flag, and even project when the evidence is strong.
+- Prefer action="update" over delete+create when the existing entry is roughly correct. Only delete when the entry is too inaccurate to salvage.
 - Treat the final combined set of kept existing entries, updated entries, and new entries as a complete day plan: no overlaps after your changes, and no overlaps among your returned suggestions.
-- Only return updates for entries that should actually change. Do not return unchanged existing entries.
+- Only return updates or deletes for entries that should actually change. Do not return unchanged existing entries.
 - Ignore casual web browsing unless window titles clearly indicate project work.
 - Entries should be at minimum 15 minutes long.
 - Keep descriptions concise but informative.`;
@@ -352,6 +354,7 @@ Guidelines:
   systemParts.push(`Prefer activity session data as the primary source for time entry timestamps.`);
   systemParts.push(`When existing time entries are present, treat them as editable drafts rather than immutable records.`);
   systemParts.push(`Only emit action="update" for entries that materially improve the day's record.`);
+  systemParts.push(`Use action="delete" (with existingEntryId set) when an existing entry is attributed to the wrong project and is too inaccurate to salvage — then emit a separate action="create" for the correct entry. Prefer update over delete+create when the entry is roughly correct.`);
 
   if (jmapIsEnabled) {
     systemParts.push(``, `Email strategy:`);
@@ -383,7 +386,7 @@ Guidelines:
     result = await generateText({
       model: aiModel,
       tools: agentTools,
-      stopWhen: stepCountIs(12),
+      stopWhen: stepCountIs(15),
       output,
       providerOptions: PROVIDER_OPTIONS,
       system: systemParts.join("\n"),
