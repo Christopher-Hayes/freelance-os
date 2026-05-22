@@ -382,7 +382,7 @@ export interface AiTelemetryStep {
 
 export interface AiTelemetryRun {
   id: number;
-  jobId: number;
+  jobId?: number | null;
   functionId: string;
   operation: string;
   modelProvider?: string;

@@ -61,7 +61,7 @@ export const PROVIDER_OPTIONS_FAST = {
 export async function maybeCreateTelemetryRun(
   telemetry?: DebugTelemetryOptions
 ): Promise<number | undefined> {
-  if (!telemetry?.jobId) return undefined;
+  if (!telemetry?.functionId) return undefined;
 
   return createTelemetryRun({
     jobId: telemetry.jobId,

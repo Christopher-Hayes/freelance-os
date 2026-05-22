@@ -13,7 +13,13 @@ import {
   type DebugTelemetryOptions,
   PROVIDER_OPTIONS,
   generateTextWithTelemetry,
+  maybeCreateTelemetryRun,
 } from "./shared";
+import {
+  recordTelemetryStep,
+  finishTelemetryRun,
+  markAiTelemetryFailed,
+} from "@/lib/ai-telemetry";
 
 /**
  * Generate a client-friendly weekly summary based on time entry descriptions.
@@ -168,8 +174,26 @@ Output short markdown: a brief overview followed by a few specific bullet points
     ? `\n\nExisting Summary (improve this — add more detail, make it more specific, but preserve accurate information):\n${params.existingSummary}`
     : '';
 
-  const result = await summaryAgent.generate({
-    prompt: `${projectContext}
+  const agentRunId = await maybeCreateTelemetryRun(
+    telemetry
+      ? {
+          ...telemetry,
+          operation: "agent",
+          inputPreview: JSON.stringify({
+            projectId: params.projectId,
+            weekStart: params.weekStart,
+            weekEnd: params.weekEnd,
+            entryCount: params.entries.length,
+            toolsEnabled: { jmap: jmapIsEnabled, git: gitForgesEnabled, calendar: calendarEnabled },
+          }),
+        }
+      : undefined
+  );
+
+  let result;
+  try {
+    result = await summaryAgent.generate({
+      prompt: `${projectContext}
 Week: ${weekStart.toString()} to ${weekEnd.toString()}
 Total Hours: ${totalHours.toFixed(1)} hours
 
@@ -177,7 +201,18 @@ Time Entries:
 ${params.entries.map((e) => `- ${e.date}: ${e.description || "Work on project"} (${e.hours.toFixed(1)}h)`).join("\n")}
 ${agentImproveSuffix}
 `,
-  });
+      onStepFinish: agentRunId
+        ? async (event) => { await recordTelemetryStep(agentRunId, event); }
+        : undefined,
+    });
+
+    if (agentRunId) {
+      await finishTelemetryRun(agentRunId, result as unknown as Record<string, unknown>);
+    }
+  } catch (error) {
+    if (agentRunId) await markAiTelemetryFailed(agentRunId, error);
+    throw error;
+  }
 
   console.log(`Generated summary with ${result.toolCalls?.length || 0} tool calls`);
 

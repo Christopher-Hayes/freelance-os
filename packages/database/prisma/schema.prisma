@@ -318,7 +318,7 @@ model AiJob {
 
 model AiTelemetryRun {
   id                 Int                     @id @default(autoincrement())
-  jobId               Int                     @map("job_id")
+  jobId               Int?                    @map("job_id")
   functionId          String                  @map("function_id") @db.VarChar(255)
   operation           String                  @default("generateText") @db.VarChar(100)
   modelProvider       String?                 @map("model_provider") @db.VarChar(100)
@@ -337,7 +337,7 @@ model AiTelemetryRun {
   createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz
 
-  job                 AiJob                   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job                 AiJob?                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   steps               AiTelemetryStep[]
   toolCalls           AiTelemetryToolCall[]
 

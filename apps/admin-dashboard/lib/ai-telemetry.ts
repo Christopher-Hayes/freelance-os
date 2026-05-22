@@ -5,7 +5,7 @@ import { prisma } from "@freelance-os/database";
 type JsonRecord = Record<string, unknown>;
 
 interface CreateAiTelemetryOptions {
-  jobId: number;
+  jobId?: number;
   functionId: string;
   operation?: string;
   metadata?: JsonRecord;
@@ -189,13 +189,29 @@ export async function finishTelemetryRun(
 ) {
   const totalUsage = usageFromUnknown(result.totalUsage ?? result.usage);
 
-  // v6: model info is in result.model.{provider, modelId}
+  // v6: model info is on result.response.modelId, not result.model
+  const responseObj = result.response as Record<string, unknown> | undefined;
   const modelObj = result.model as Record<string, unknown> | undefined;
-  const modelId = typeof modelObj?.modelId === "string"
-    ? modelObj.modelId
-    : typeof result.modelId === "string"
-      ? result.modelId
-      : undefined;
+  const modelId =
+    typeof responseObj?.modelId === "string"
+      ? responseObj.modelId
+      : typeof modelObj?.modelId === "string"
+        ? modelObj.modelId
+        : typeof result.modelId === "string"
+          ? result.modelId
+          : undefined;
+
+  // v6: durationMs lives on each StepResult, not the top-level result; sum them
+  const steps = Array.isArray(result.steps)
+    ? (result.steps as Record<string, unknown>[])
+    : [];
+  const stepDurationSum = steps.reduce(
+    (sum, s) => sum + (typeof s.durationMs === "number" ? s.durationMs : 0),
+    0
+  );
+  const totalDurationMs =
+    numberOrUndefined(result.durationMs) ??
+    (stepDurationSum > 0 ? stepDurationSum : undefined);
 
   await prisma.aiTelemetryRun.update({
     where: { id: runId },
@@ -209,7 +225,7 @@ export async function finishTelemetryRun(
       promptTokens: totalUsage.promptTokens,
       completionTokens: totalUsage.completionTokens,
       totalTokens: totalUsage.totalTokens,
-      totalDurationMs: numberOrUndefined(result.durationMs),
+      totalDurationMs,
       outputPreview: toPreview(result.text ?? result.object),
       responseText: toPreview(result.text ?? result.object, 20000),
     },

@@ -1,7 +1,10 @@
 import { prisma } from "@freelance-os/database";
-import { generateText } from "ai";
 import { getFastAiModel } from "@/lib/ai-provider";
 import { fetchAllForgeCommits } from "@/lib/git-actions";
+import {
+  generateTextWithTelemetry,
+  type DebugTelemetryOptions,
+} from "@/lib/ai-actions/shared";
 
 // ──────────────────────────────────────────────────
 // Fetch helper with timeout
@@ -699,7 +702,10 @@ async function getLocalStats(): Promise<{
 // AI Insight generation
 // ──────────────────────────────────────────────────
 
-async function generateOssSummary(contribution: OSSContribution): Promise<string> {
+async function generateOssSummary(
+  contribution: OSSContribution,
+  telemetry?: DebugTelemetryOptions
+): Promise<string> {
   try {
     const model = await getFastAiModel();
 
@@ -714,7 +720,7 @@ RULES:
 - Use past tense, lowercase, no period at end.
 - No quotes, no emoji.`;
 
-    const result = await generateText({ model, prompt });
+    const result = await generateTextWithTelemetry({ model, prompt }, telemetry);
     const text = result.text.trim().replace(/^["']|["']$/g, "").replace(/\.$/, "");
     return text.length > 60 ? text.substring(0, 57) + "..." : text;
   } catch (error) {
@@ -793,7 +799,10 @@ async function fetchRepoPackageJson(
 // AI Insight — based on recent tech stack trends
 // ──────────────────────────────────────────────────
 
-async function generateAiInsight(data: Omit<CodingStatsData, "aiInsight" | "generatedAt">): Promise<string> {
+async function generateAiInsight(
+  data: Omit<CodingStatsData, "aiInsight" | "generatedAt">,
+  telemetry?: DebugTelemetryOptions
+): Promise<string> {
   try {
     const model = await getFastAiModel();
     const configs = await getForgeConfigs();
@@ -871,7 +880,7 @@ STRICT OUTPUT RULES:
 - No emoji, no quotes, no hashtags.
 - Do NOT mention repo names, client names, or project names.`;
 
-    const result = await generateText({ model, prompt });
+    const result = await generateTextWithTelemetry({ model, prompt }, telemetry);
 
     const text = result.text.trim().replace(/^["']|["']$/g, "");
     return text.length > 120 ? text.substring(0, 117) + "..." : text;
@@ -944,7 +953,10 @@ export async function gatherCodingStats(): Promise<CodingStatsData> {
 
   // Generate AI summary for OSS contribution
   if (recentOSSContribution) {
-    recentOSSContribution.summary = await generateOssSummary(recentOSSContribution);
+    recentOSSContribution.summary = await generateOssSummary(
+      recentOSSContribution,
+      { functionId: "coding-stats.generateOssSummary" }
+    );
   }
 
   const baseData = {
@@ -963,7 +975,10 @@ export async function gatherCodingStats(): Promise<CodingStatsData> {
   };
 
   // Generate AI insight
-  const aiInsight = await generateAiInsight(baseData);
+  const aiInsight = await generateAiInsight(
+    baseData,
+    { functionId: "coding-stats.generateAiInsight" }
+  );
 
   return {
     ...baseData,

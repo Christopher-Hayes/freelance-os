@@ -1,6 +1,6 @@
 import Link from "next/link";
-import type { AiJobDebug } from "@freelance-os/types";
-import { getJobsForDebug } from "@/lib/debug-data";
+import type { AiJobDebug, AiTelemetryRun } from "@freelance-os/types";
+import { getJobsForDebug, getStandaloneTelemetryRuns } from "@/lib/debug-data";
 import { enrichJobWithDisplay, getJobStatusColor } from "@/lib/job-utils";
 
 function formatDate(value?: Date | string) {
@@ -18,12 +18,14 @@ function countTokens(job: AiJobDebug) {
 export default async function DebugPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ jobId?: string }>;
+  searchParams?: Promise<{ jobId?: string; runId?: string }>;
 }) {
   const resolvedSearchParams = await searchParams;
   const jobs = (await getJobsForDebug(100)) as AiJobDebug[];
+  const standaloneRuns = await getStandaloneTelemetryRuns(50) as AiTelemetryRun[];
   const activeJobs = jobs.filter((job) => job.status === "pending" || job.status === "processing");
   const selectedJobId = resolvedSearchParams?.jobId ? Number(resolvedSearchParams.jobId) : undefined;
+  const selectedRunId = resolvedSearchParams?.runId ? Number(resolvedSearchParams.runId) : undefined;
 
   return (
     <div className="px-4 py-8 sm:px-6 lg:px-8">
@@ -105,15 +107,45 @@ export default async function DebugPage({
                 </Link>
               );
             })}
+            {standaloneRuns.length > 0 && (
+              <>
+                <div className="border-b border-gray-200 bg-gray-50 px-6 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-400">
+                  Standalone runs (no job)
+                </div>
+                {standaloneRuns.map((run) => {
+                  const isSelected = run.id === selectedRunId;
+                  return (
+                    <Link
+                      key={run.id}
+                      href={`/debug?runId=${run.id}`}
+                      className={`block border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-gray-800 ${isSelected ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-gray-900 dark:text-white">{run.functionId}</div>
+                        <div className="mt-1 truncate text-sm text-gray-600 dark:text-gray-400">{run.outputPreview ?? run.status}</div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                        <span>run #{run.id}</span>
+                        <span>{formatDate(run.createdAt)}</span>
+                        <span>{run.totalTokens ?? 0} tokens</span>
+                        <span>{run.toolCalls?.length ?? 0} tool calls</span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </div>
         </div>
 
         <div className="min-w-0">
           {selectedJobId ? (
             <SelectedJob jobId={selectedJobId} jobs={jobs} />
+          ) : selectedRunId ? (
+            <SelectedStandaloneRun runId={selectedRunId} runs={standaloneRuns} />
           ) : (
             <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-sm text-gray-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
-              Select a job from the list to inspect telemetry details.
+              Select a job or standalone run from the list to inspect telemetry details.
             </div>
           )}
         </div>
@@ -135,4 +167,19 @@ async function SelectedJob({ jobId, jobs }: { jobId: number; jobs: AiJobDebug[] 
   }
 
   return <DebugJobDetail job={job} />;
+}
+
+async function SelectedStandaloneRun({ runId, runs }: { runId: number; runs: AiTelemetryRun[] }) {
+  const { default: DebugStandaloneRun } = await import("@/components/DebugStandaloneRun");
+  const run = runs.find((r) => r.id === runId);
+
+  if (!run) {
+    return (
+      <div className="rounded-xl border border-dashed border-red-300 bg-white p-10 text-sm text-red-600 shadow-sm dark:border-red-900 dark:bg-gray-900 dark:text-red-300">
+        Run #{runId} was not found.
+      </div>
+    );
+  }
+
+  return <DebugStandaloneRun run={run} />;
 }
