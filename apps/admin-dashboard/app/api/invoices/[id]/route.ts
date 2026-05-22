@@ -77,7 +77,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, status, dueDate, paidDate, notes } = body;
+    const { amount, status, dueDate, paidDate, notes, aiSummary } = body;
 
     // Verify invoice exists
     const existingInvoice = await prisma.invoice.findUnique({
@@ -101,6 +101,7 @@ export async function PUT(
       updateData.paidDate = paidDate ? new Date(paidDate) : null;
     }
     if (notes !== undefined) updateData.notes = notes;
+    if (aiSummary !== undefined) updateData.aiSummary = aiSummary;
 
     // If status is being set to 'paid' and paidDate is not provided, set it to now
     if (status === 'paid' && !paidDate && !existingInvoice.paidDate) {

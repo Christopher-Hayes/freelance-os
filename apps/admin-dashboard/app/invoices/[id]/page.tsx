@@ -32,6 +32,8 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
 
   // Edit form fields
   const [amount, setAmount] = useState('');
@@ -39,6 +41,7 @@ export default function InvoiceDetailPage() {
   const [dueDate, setDueDate] = useState('');
   const [paidDate, setPaidDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [aiSummary, setAiSummary] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -60,6 +63,7 @@ export default function InvoiceDetailPage() {
       setDueDate(data.dueDate.split('T')[0]);
       setPaidDate(data.paidDate ? data.paidDate.split('T')[0] : '');
       setNotes(data.notes || '');
+      setAiSummary(data.aiSummary || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -83,6 +87,7 @@ export default function InvoiceDetailPage() {
           dueDate,
           paidDate: paidDate || null,
           notes,
+          aiSummary: aiSummary || null,
         }),
       });
 
@@ -93,7 +98,54 @@ export default function InvoiceDetailPage() {
 
       const updatedInvoice = await response.json();
       setInvoice(updatedInvoice);
+      setAiSummary(updatedInvoice.aiSummary || '');
       setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSummary = async () => {
+    if (!invoice) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await authFetch(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiSummary: summaryText || null }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update summary');
+      }
+      const updatedInvoice = await response.json();
+      setInvoice({ ...invoice, aiSummary: updatedInvoice.aiSummary });
+      setEditingSummary(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSummary = async () => {
+    if (!invoice) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await authFetch(`/api/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiSummary: null }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete summary');
+      }
+      setInvoice({ ...invoice, aiSummary: null });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -215,12 +267,12 @@ export default function InvoiceDetailPage() {
 
     try {
       const result = await generateInvoiceSummary(parseInt(id), { force });
-      // Update local invoice state with the new summary
       setInvoice({ ...invoice, aiSummary: result.summary });
-      setSuccessMessage(force ? 'AI summary regenerated!' : 'AI summary generated!');
+      setAiSummary(result.summary || '');
+      setSuccessMessage(force ? 'Invoice summary regenerated!' : 'Invoice summary generated!');
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate AI summary');
+      setError(err instanceof Error ? err.message : 'Failed to generate invoice summary');
     } finally {
       setGeneratingAi(false);
     }
@@ -401,6 +453,20 @@ export default function InvoiceDetailPage() {
             />
           </div>
 
+          <div className="mt-6">
+            <label htmlFor="ai-summary" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Invoice Summary
+            </label>
+            <textarea
+              id="ai-summary"
+              value={aiSummary}
+              onChange={(e) => setAiSummary(e.target.value)}
+              rows={6}
+              placeholder="Leave blank to remove the invoice summary"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 font-mono text-sm"
+            />
+          </div>
+
           <div className="mt-6 flex justify-between items-center">
             <div className="flex gap-4">
               <button
@@ -413,7 +479,6 @@ export default function InvoiceDetailPage() {
               <button
                 onClick={() => {
                   setEditing(false);
-                  // Reset form fields
                   setAmount(invoice.amount.toString());
                   setStatus(invoice.status);
                   const dueDateStr = invoice.dueDate.split('T')[0];
@@ -421,6 +486,7 @@ export default function InvoiceDetailPage() {
                   const paidDateStr = invoice.paidDate ? invoice.paidDate.split('T')[0] : '';
                   if (paidDateStr !== undefined) setPaidDate(paidDateStr);
                   setNotes(invoice.notes || '');
+                  setAiSummary(invoice.aiSummary || '');
                 }}
                 className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
               >
@@ -493,24 +559,64 @@ export default function InvoiceDetailPage() {
             </div>
           )}
 
-          {/* AI Summary Section */}
+          {/* Invoice Summary Section */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">AI Summary</h3>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Invoice Summary</h3>
               <div className="flex gap-2">
-                {invoice.aiSummary && (
-                  <button
-                    onClick={() => handleGenerateAiSummary(true)}
-                    disabled={generatingAi}
-                    className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:text-gray-400 dark:disabled:text-gray-600 transition"
-                    title="Regenerate AI summary"
-                  >
-                    {generatingAi ? 'Regenerating…' : '↻ Regenerate'}
-                  </button>
+                {invoice.aiSummary && !editingSummary && (
+                  <>
+                    <button
+                      onClick={() => handleGenerateAiSummary(true)}
+                      disabled={generatingAi || saving}
+                      className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 disabled:text-gray-400 dark:disabled:text-gray-600 transition"
+                      title="Regenerate invoice summary"
+                    >
+                      {generatingAi ? 'Regenerating…' : '↻ Regenerate'}
+                    </button>
+                    <button
+                      onClick={() => { setSummaryText(invoice.aiSummary || ''); setEditingSummary(true); }}
+                      disabled={generatingAi || saving}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:text-gray-400 dark:disabled:text-gray-600 transition"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDeleteSummary}
+                      disabled={generatingAi || saving}
+                      className="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:text-gray-400 dark:disabled:text-gray-600 transition"
+                    >
+                      Delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-            {invoice.aiSummary ? (
+            {editingSummary ? (
+              <div>
+                <textarea
+                  value={summaryText}
+                  onChange={(e) => setSummaryText(e.target.value)}
+                  rows={6}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 font-mono text-sm"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={handleSaveSummary}
+                    disabled={saving}
+                    className="text-xs bg-blue-500 dark:bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-600 dark:hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 transition"
+                  >
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setEditingSummary(false)}
+                    className="text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : invoice.aiSummary ? (
               <div className="bg-purple-50 dark:bg-purple-900/20 border-l-4 border-purple-500 dark:border-purple-400 rounded-r-lg py-2 px-4">
                 <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap text-sm leading-relaxed">
                   <ReactMarkdown>{invoice.aiSummary}</ReactMarkdown>
@@ -528,14 +634,14 @@ export default function InvoiceDetailPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Generating executive summary…
+                    Generating invoice summary…
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Generate AI Summary
+                    Generate Invoice Summary
                   </>
                 )}
               </button>
