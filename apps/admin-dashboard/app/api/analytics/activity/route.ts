@@ -72,6 +72,16 @@ export async function GET(request: Request) {
 
     const topApps = Object.entries(appTotals)
       .map(([app, hours]) => ({ app, hours }))
+      // combine apps that have the same name after renaming (e.g. different versions of the same app)
+      .reduce((acc, { app, hours }) => {
+        const existing = acc.find((a) => a.app === app);
+        if (existing) {
+          existing.hours += hours;
+        } else {
+          acc.push({ app, hours });
+        }
+        return acc;
+      }, [] as { app: string; hours: number }[])
       .sort((a, b) => b.hours - a.hours)
       .slice(0, 10);
 

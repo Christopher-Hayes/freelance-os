@@ -407,6 +407,18 @@ async function getDashboardData(): Promise<DashboardData> {
       sessions: value.sessions,
       share: totalActivitySeconds > 0 ? (value.durationSeconds / totalActivitySeconds) * 100 : 0,
     }))
+    // combine apps that have the same name after renaming (e.g. different versions of the same app)
+    .reduce((acc, app) => {
+      const existing = acc.find((a) => a.appName === app.appName);
+      if (existing) {
+        existing.durationSeconds += app.durationSeconds;
+        existing.sessions += app.sessions;
+        existing.share += app.share;
+      } else {
+        acc.push(app);
+      }
+      return acc;
+    }, [] as TopApp[])
     .sort((a, b) => b.durationSeconds - a.durationSeconds)
     .slice(0, 4);
 

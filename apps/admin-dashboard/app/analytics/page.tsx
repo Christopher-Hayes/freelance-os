@@ -188,13 +188,13 @@ export default function AnalyticsPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Total hours"
-              value={summary?.totalHours.toFixed(1) || '0.0'}
+              value={Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(summary?.totalHours || 0)}
               meta="Tracked from activity sessions"
               icon={<Clock3 className="h-5 w-5" />}
             />
             <StatCard
               label="Total sessions"
-              value={summary?.totalSessions || 0}
+              value={Intl.NumberFormat().format(summary?.totalSessions || 0)}
               meta="Captured activity intervals"
               icon={<ChartColumn className="h-5 w-5" />}
             />
