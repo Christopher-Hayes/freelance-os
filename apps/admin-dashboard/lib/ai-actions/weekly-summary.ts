@@ -61,6 +61,7 @@ export async function generateWeeklySummary(
   }
 
   const totalHours = params.entries.reduce((sum, e) => sum + e.hours, 0);
+  const isLowHours = totalHours < 5;
 
   let projectContext = `Project: ${project.name}`;
   projectContext += `\nClient: ${project.client.name} (${project.client.email})`;
@@ -96,15 +97,17 @@ export async function generateWeeklySummary(
 
   if (!jmapIsEnabled && !gitForgesEnabled && !calendarEnabled) {
     const improveSuffix = params.existingSummary
-      ? `\n\nExisting Summary (improve this — add more detail, make it more specific, but preserve the overall structure and any accurate information):\n${params.existingSummary}`
+      ? `\n\nExisting Summary (improve this — add more specific details, fix inaccuracies, but preserve the overall structure):\n${params.existingSummary}`
       : '';
 
     const { text } = await generateTextWithTelemetry(
       {
         model,
         system: params.existingSummary
-          ? `You are improving an existing weekly summary for a client invoice. Make it more specific and detailed using the time entry data, while preserving accurate information that's already there. Output short markdown: a brief overview followed by a few bullet points of specific work done. No more than 3 bullet points, keep the bullets concise. Bold important points. No total hours. Output only the summary.`
-          : `You are writing a weekly summary for a client invoice. Output short markdown: a brief overview followed by a few bullet points of specific work done. Be specific and outcome-focused. No more than 3 bullet points, keep the bullets concise. Bold important points. No total hours. Output only the summary.`,
+          ? `You are improving an existing weekly summary for a client invoice. Add more specific details using the time entry data, fix inaccuracies, preserve general layout. Output short markdown: ${isLowHours ? `a single-sentence overview. If the original summary is longer, condense it to no more than 2 sentences.` : `a brief overview followed by a few bullet points of specific work done. No more than 3 bullet points, keep the bullets concise.`} Bold important points. No total hours. Output only the summary.`
+          : isLowHours
+            ? `You are writing a weekly summary for a client invoice. Output a single sentence overview of the work done. Be specific and outcome-focused. Bold important points. No total hours. Output only the summary.`
+            : `You are writing a weekly summary for a client invoice. Output short markdown: a brief overview followed by a few bullet points of specific work done. Be specific and outcome-focused. No more than 3 bullet points, keep the bullets concise. Bold important points. No total hours. Output only the summary.`,
         prompt: `${projectContext}
 Week: ${weekStart.toString()} to ${weekEnd.toString()}
 Total Hours: ${totalHours.toFixed(1)} hours
@@ -160,8 +163,16 @@ ${
     ? `\nWhen calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window.`
     : ""
 }
-Output short markdown: a brief overview followed by a few specific bullet points. No total hours. Output only the summary.`
-      : `You are writing a weekly summary for a client invoice. If the time entries are vague, use the available tools to find more specific context (emails, commits, calendar events), then write the summary.
+Output short markdown: ${isLowHours ? `a single-sentence overview. If the original summary is longer, condense it to no more than 2 sentences.` : `a brief overview followed by a few specific bullet points.`} No total hours. Output only the summary.`
+      : isLowHours
+        ? `You are writing a weekly summary for a client invoice. If the time entries are vague, use the available tools to find more specific context (emails, commits, calendar events), then write the summary.
+${
+  gitForgesEnabled
+    ? `\nWhen calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window.`
+    : ""
+}
+Output a single sentence overview of the work done. No total hours. Output only the summary.`
+        : `You are writing a weekly summary for a client invoice. If the time entries are vague, use the available tools to find more specific context (emails, commits, calendar events), then write the summary.
 ${
   gitForgesEnabled
     ? `\nWhen calling searchGitCommits, always pass the exact weekly startTime and endTime for this summary window.`
