@@ -1,6 +1,5 @@
 import { prisma } from "@freelance-os/database";
 import { getFastAiModel } from "@/lib/ai-provider";
-import { fetchAllForgeCommits } from "@/lib/git-actions";
 import {
   generateTextWithTelemetry,
   type DebugTelemetryOptions,
@@ -49,6 +48,13 @@ export interface OSSContribution {
   summary?: string; // AI-generated short description of the contribution
 }
 
+export interface ActivityBreakdown {
+  coding: number; // hours, last 7 days
+  designing: number;
+  planning: number;
+  testing: number;
+}
+
 export interface CodingStatsData {
   freelancerName: string;
   forges: ForgeStats[];
@@ -61,8 +67,8 @@ export interface CodingStatsData {
   totalRepos: number;
   activeProjectCount: number; // from internal project tracking (count only, no names)
   weeklyHoursCoded: number; // from activity sessions (editor time in last 7 days)
+  activityBreakdown: ActivityBreakdown; // coding vs designing vs planning vs testing split (last 7 days)
   recentOSSContribution: OSSContribution | null;
-  aiInsight: string; // AI-generated one-liner
   generatedAt: string; // ISO timestamp
 }
 
@@ -645,9 +651,31 @@ async function fetchCodebergStats(config: ForgeConfig): Promise<ForgeStats> {
 // Local data (activity sessions, projects)
 // ──────────────────────────────────────────────────
 
+// App classes that count toward each activity category. Figma is a special
+// case — it's used via a browser, so it's detected by window title instead.
+const DESIGNING_APP_PATTERNS = ["inkscape", "tldraw", "ourpaint", "our paint", "gimp", "krita"];
+const CODING_APP_PATTERNS = [
+  "code", "vscode", "vscodium", "cursor",
+  "terminal", "ptyxis", "konsole", "alacritty", "kitty", "wezterm", "xterm", "tilix", "gnome-terminal",
+];
+const PLANNING_APP_PATTERNS = ["libreoffice", "soffice", "obsidian", "thunderbird"];
+const BROWSER_APP_PATTERNS = [
+  "firefox", "chrome", "chromium", "brave", "vivaldi", "opera", "edge", "safari", "librewolf", "waterfox", "zen",
+];
+
+function overlapsAnyTimeEntry(
+  session: { startTime: Date; endTime: Date },
+  timeEntries: Array<{ startTime: Date; endTime: Date }>,
+): boolean {
+  return timeEntries.some(
+    (entry) => session.startTime < entry.endTime && session.endTime > entry.startTime,
+  );
+}
+
 async function getLocalStats(): Promise<{
   activeProjectCount: number;
   weeklyHoursCoded: number;
+  activityBreakdown: ActivityBreakdown;
 }> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -673,28 +701,68 @@ async function getLocalStats(): Promise<{
   });
   const hiddenSet = new Set(hiddenApps.map((a) => a.appClass.toLowerCase()));
 
-  const sessions = await prisma.activitySession.findMany({
-    where: {
-      startTime: { gte: sevenDaysAgo },
-    },
-    select: {
-      appClass: true,
-      durationSeconds: true,
-    },
-  });
+  const [sessions, timeEntries] = await Promise.all([
+    prisma.activitySession.findMany({
+      where: {
+        startTime: { gte: sevenDaysAgo },
+      },
+      select: {
+        appClass: true,
+        windowTitle: true,
+        durationSeconds: true,
+        startTime: true,
+        endTime: true,
+      },
+    }),
+    prisma.timeEntry.findMany({
+      where: {
+        startTime: { gte: sevenDaysAgo },
+      },
+      select: {
+        startTime: true,
+        endTime: true,
+      },
+    }),
+  ]);
 
   let totalEditorSeconds = 0;
+  let codingSeconds = 0;
+  let designingSeconds = 0;
+  let planningSeconds = 0;
+  let testingSeconds = 0;
+
   for (const session of sessions) {
     const appLower = session.appClass.toLowerCase();
     if (hiddenSet.has(appLower)) continue;
     if (editorPatterns.some((pattern) => appLower.includes(pattern))) {
       totalEditorSeconds += session.durationSeconds;
     }
+
+    if (DESIGNING_APP_PATTERNS.some((pattern) => appLower.includes(pattern))) {
+      designingSeconds += session.durationSeconds;
+    } else if (CODING_APP_PATTERNS.some((pattern) => appLower.includes(pattern))) {
+      codingSeconds += session.durationSeconds;
+    } else if (PLANNING_APP_PATTERNS.some((pattern) => appLower.includes(pattern))) {
+      planningSeconds += session.durationSeconds;
+    } else if (BROWSER_APP_PATTERNS.some((pattern) => appLower.includes(pattern))) {
+      const titleLower = session.windowTitle?.toLowerCase() ?? "";
+      if (titleLower.includes("figma")) {
+        designingSeconds += session.durationSeconds;
+      } else if (overlapsAnyTimeEntry(session, timeEntries)) {
+        testingSeconds += session.durationSeconds;
+      }
+    }
   }
 
   return {
     activeProjectCount,
     weeklyHoursCoded: Math.round((totalEditorSeconds / 3600) * 10) / 10,
+    activityBreakdown: {
+      coding: Math.round((codingSeconds / 3600) * 10) / 10,
+      designing: Math.round((designingSeconds / 3600) * 10) / 10,
+      planning: Math.round((planningSeconds / 3600) * 10) / 10,
+      testing: Math.round((testingSeconds / 3600) * 10) / 10,
+    },
   };
 }
 
@@ -726,167 +794,6 @@ RULES:
   } catch (error) {
     console.error("[CodingStats] OSS summary generation error:", error);
     return "contributed code";
-  }
-}
-
-// ──────────────────────────────────────────────────
-// Fetch package.json from a forge repo
-// ──────────────────────────────────────────────────
-
-async function fetchRepoPackageJson(
-  repo: string,
-  forge: "github" | "gitlab" | "codeberg",
-  configs: { github: ForgeConfig | null; gitlab: ForgeConfig | null; codeberg: ForgeConfig | null },
-): Promise<Record<string, string> | null> {
-  try {
-    let content: string | null = null;
-
-    if (forge === "github" && configs.github) {
-      const res = await fetchWithTimeout(
-        `https://api.github.com/repos/${repo}/contents/package.json`,
-        {
-          headers: {
-            Authorization: `Bearer ${configs.github.token}`,
-            Accept: "application/vnd.github.raw+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        },
-      );
-      if (res.ok) content = await res.text();
-    } else if (forge === "gitlab" && configs.gitlab) {
-      const baseUrl = configs.gitlab.baseUrl || "https://gitlab.com";
-      const encodedPath = encodeURIComponent("package.json");
-      // GitLab needs project ID or URL-encoded path
-      const encodedRepo = encodeURIComponent(repo);
-      const res = await fetchWithTimeout(
-        `${baseUrl}/api/v4/projects/${encodedRepo}/repository/files/${encodedPath}/raw?ref=HEAD`,
-        { headers: { "Private-Token": configs.gitlab.token } },
-      );
-      if (res.ok) content = await res.text();
-    } else if (forge === "codeberg" && configs.codeberg) {
-      const res = await fetchWithTimeout(
-        `https://codeberg.org/api/v1/repos/${repo}/contents/package.json?ref=HEAD`,
-        {
-          headers: {
-            Authorization: `token ${configs.codeberg.token}`,
-            Accept: "application/json",
-          },
-        },
-      );
-      if (res.ok) {
-        const data = await res.json();
-        // Gitea returns base64-encoded content
-        if (data.content) {
-          content = Buffer.from(data.content, "base64").toString("utf-8");
-        }
-      }
-    }
-
-    if (!content) return null;
-
-    const parsed = JSON.parse(content);
-    // Merge dependencies and devDependencies into one flat map
-    return {
-      ...(parsed.dependencies ?? {}),
-      ...(parsed.devDependencies ?? {}),
-    };
-  } catch {
-    return null;
-  }
-}
-
-// ──────────────────────────────────────────────────
-// AI Insight — based on recent tech stack trends
-// ──────────────────────────────────────────────────
-
-async function generateAiInsight(
-  data: Omit<CodingStatsData, "aiInsight" | "generatedAt">,
-  telemetry?: DebugTelemetryOptions
-): Promise<string> {
-  try {
-    const model = await getFastAiModel();
-    const configs = await getForgeConfigs();
-
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    // 1. Find the most active repos in the last 30 days
-    const commits = await fetchAllForgeCommits(thirtyDaysAgo.toISOString(), now.toISOString());
-    const repoActivity: Record<string, { count: number; forge: "github" | "gitlab" | "codeberg" }> = {};
-    for (const c of commits) {
-      if (!repoActivity[c.repo]) repoActivity[c.repo] = { count: 0, forge: c.forge };
-      repoActivity[c.repo]!.count++;
-    }
-
-    const topRepos = Object.entries(repoActivity)
-      .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 5);
-
-    // 2. Fetch package.json from each top repo
-    const repoDeps: Array<{ repo: string; forge: string; commits: number; deps: string[] }> = [];
-
-    await Promise.all(
-      topRepos.map(async ([repo, { count, forge }]) => {
-        const deps = await fetchRepoPackageJson(repo, forge, configs);
-        if (deps) {
-          repoDeps.push({
-            repo,
-            forge,
-            commits: count,
-            deps: Object.keys(deps),
-          });
-        }
-      }),
-    );
-
-    if (repoDeps.length === 0) {
-      // Fallback: no package.json found in any active repo
-      return "Building with a polyglot stack across multiple forges";
-    }
-
-    // 3. Build a summary of recent tech activity for the AI
-    const repoLines = repoDeps
-      .sort((a, b) => b.commits - a.commits)
-      .map((r) => `- ${r.repo} (${r.commits} commits/30d): ${r.deps.join(", ")}`)
-      .join("\n");
-
-    const prompt = `You are writing a single "insight" line for a developer's public stats card. The audience is visitors to their profile.
-
-Here are the most active repositories in the last 30 days, with their full dependency lists from package.json:
-
-${repoLines}
-
-Your task:
-1. Look through the dependencies and find ONE interesting, notable, or unusual technology choice.
-2. Write a third-person observation about what they're recently working with.
-
-WHAT'S INTERESTING:
-- Domain-specific libraries that reveal the kind of work (e.g. three.js = 3D graphics, maplibre-gl = maps, sharp = image processing, ffmpeg = video, puppeteer = automation, d3 = data viz, playcanvas = game dev)
-- New/cutting-edge tech that shows early adoption (e.g. temporal-polyfill = Temporal API early adopter, bun = new runtime, deno fresh = new framework, effect = effect system for TS)
-- Unexpected tech combos (e.g. Rust + WebAssembly, AI SDK + maps, Prisma + graph database)
-- Framework choices that tell a story (e.g. Next.js + tRPC, Svelte + Supabase, Hono + Cloudflare Workers)
-
-WHAT'S NOT INTERESTING (skip these):
-- Generic utilities everyone uses: zod, lodash, axios, dotenv, uuid, prettier, eslint, typescript, jest, vitest
-- Standard framework deps that are obvious from the language bar: react, next, vue, express
-- Build tooling: webpack, vite, turbo, tsup, esbuild (unless it's the ONLY notable thing)
-
-STRICT OUTPUT RULES:
-- One sentence, max 100 characters.
-- Third person. Never "you"/"your".
-- Reference the specific technology by name.
-- Sound like a curious observer, not a recruiter.
-- No: "developer", "coder", "impressive", "passionate", "leveraging".
-- No emoji, no quotes, no hashtags.
-- Do NOT mention repo names, client names, or project names.`;
-
-    const result = await generateTextWithTelemetry({ model, prompt }, telemetry);
-
-    const text = result.text.trim().replace(/^["']|["']$/g, "");
-    return text.length > 120 ? text.substring(0, 117) + "..." : text;
-  } catch (error) {
-    console.error("[CodingStats] AI insight generation error:", error);
-    return "Building across the open-source ecosystem";
   }
 }
 
@@ -959,7 +866,7 @@ export async function gatherCodingStats(): Promise<CodingStatsData> {
     );
   }
 
-  const baseData = {
+  return {
     freelancerName,
     forges,
     mergedLanguages,
@@ -971,18 +878,8 @@ export async function gatherCodingStats(): Promise<CodingStatsData> {
     totalRepos,
     activeProjectCount: local.activeProjectCount,
     weeklyHoursCoded: local.weeklyHoursCoded,
+    activityBreakdown: local.activityBreakdown,
     recentOSSContribution,
-  };
-
-  // Generate AI insight
-  const aiInsight = await generateAiInsight(
-    baseData,
-    { functionId: "coding-stats.generateAiInsight" }
-  );
-
-  return {
-    ...baseData,
-    aiInsight,
     generatedAt: new Date().toISOString(),
   };
 }

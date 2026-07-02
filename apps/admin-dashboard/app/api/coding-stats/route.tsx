@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getCachedCodingStats } from "@/lib/coding-stats";
-import type { CodingStatsData, ForgeStats } from "@/lib/coding-stats";
+import type { ActivityBreakdown, CodingStatsData, ForgeStats } from "@/lib/coding-stats";
 
 export const runtime = "nodejs";
 
@@ -21,7 +21,6 @@ interface Theme {
   statValueColor: string;
   statLabelColor: string;
   forgeUsernameColor: string;
-  aiInsightColor: string;
   ossLabelColor: string;
   ossRepoColor: string;
   ossSummaryColor: string;
@@ -47,7 +46,6 @@ const darkTheme: Theme = {
   statValueColor: "#E2E8F0",
   statLabelColor: "#64748B",
   forgeUsernameColor: "#94A3B8",
-  aiInsightColor: "#94A3B8",
   ossLabelColor: "#475569",
   ossRepoColor: "#64748B",
   ossSummaryColor: "#94A3B8",
@@ -73,7 +71,6 @@ const lightTheme: Theme = {
   statValueColor: "#0F172A",
   statLabelColor: "#94A3B8",
   forgeUsernameColor: "#475569",
-  aiInsightColor: "#64748B",
   ossLabelColor: "#94A3B8",
   ossRepoColor: "#475569",
   ossSummaryColor: "#64748B",
@@ -451,6 +448,109 @@ function ForgeSplitBar({ forges, theme }: { forges: ForgeStats[]; theme: Theme }
   );
 }
 
+const ACTIVITY_COLORS: Record<keyof ActivityBreakdown, string> = {
+  coding: "#3B82F6",
+  designing: "#EC4899",
+  planning: "#F59E0B",
+  testing: "#22C55E",
+};
+
+const ACTIVITY_LABELS: Record<keyof ActivityBreakdown, string> = {
+  coding: "Coding",
+  designing: "Designing",
+  planning: "Planning",
+  testing: "Testing",
+};
+
+function ActivityBar({ breakdown, theme }: { breakdown: ActivityBreakdown; theme: Theme }) {
+  const total = breakdown.coding + breakdown.designing + breakdown.planning + breakdown.testing;
+  if (total === 0) return null;
+
+  const categories = (Object.keys(breakdown) as Array<keyof ActivityBreakdown>)
+    .filter((key) => breakdown[key] > 0)
+    .map((key) => ({
+      key,
+      hours: breakdown[key],
+      percentage: (breakdown[key] / total) * 100,
+    }));
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "5px",
+        width: "100%",
+      }}
+    >
+      <span
+        style={{
+          fontSize: "9px",
+          color: theme.forgeActivityLabelColor,
+          textTransform: "uppercase",
+          letterSpacing: "0.5px",
+        }}
+      >
+        Time Breakdown (7d)
+      </span>
+      {/* Bar */}
+      <div
+        style={{
+          display: "flex",
+          height: "6px",
+          borderRadius: "3px",
+          overflow: "hidden",
+          width: "100%",
+        }}
+      >
+        {categories.map((c) => (
+          <div
+            key={c.key}
+            style={{
+              width: `${c.percentage}%`,
+              backgroundColor: ACTIVITY_COLORS[c.key],
+              minWidth: "3px",
+            }}
+          />
+        ))}
+      </div>
+      {/* Labels */}
+      <div
+        style={{
+          display: "flex",
+          gap: "12px",
+        }}
+      >
+        {categories.map((c) => (
+          <div
+            key={c.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              fontSize: "9px",
+              color: theme.forgeBarLabelColor,
+            }}
+          >
+            <div
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                backgroundColor: ACTIVITY_COLORS[c.key],
+              }}
+            />
+            <span>{ACTIVITY_LABELS[c.key]}</span>
+            <span style={{ color: theme.forgeBarPercentColor }}>
+              {c.hours}h ({c.percentage.toFixed(0)}%)
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StatsCard({ data, theme }: { data: CodingStatsData; theme: Theme }) {
   // Prepare languages
   const totalLangCount = Object.values(data.mergedLanguages).reduce(
@@ -586,7 +686,17 @@ function StatsCard({ data, theme }: { data: CodingStatsData; theme: Theme }) {
         </div>
       )}
 
-      {/* Bottom section: AI insight + OSS contribution */}
+      {/* Activity breakdown bar */}
+      {(data.activityBreakdown.coding +
+        data.activityBreakdown.designing +
+        data.activityBreakdown.planning +
+        data.activityBreakdown.testing) > 0 && (
+        <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column" }}>
+          <ActivityBar breakdown={data.activityBreakdown} theme={theme} />
+        </div>
+      )}
+
+      {/* Bottom section: OSS contribution */}
       <div
         style={{
           display: "flex",
@@ -595,30 +705,6 @@ function StatsCard({ data, theme }: { data: CodingStatsData; theme: Theme }) {
           marginTop: "2px",
         }}
       >
-        {/* AI Insight */}
-        <div
-          style={{
-            fontSize: "10px",
-            color: theme.aiInsightColor,
-            fontStyle: "italic",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-          }}
-        >
-          <div
-            style={{
-              width: "6px",
-              height: "6px",
-              borderRadius: "1px",
-              backgroundColor: "#8B5CF6",
-              transform: "rotate(45deg)",
-              flexShrink: 0,
-            }}
-          />
-          <span>{data.aiInsight}</span>
-        </div>
-
         {/* Recent OSS contribution */}
         {data.recentOSSContribution && (
           <div
