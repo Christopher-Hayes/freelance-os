@@ -356,14 +356,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.gray800,
   },
-  notes: {
-    fontSize: 10,
-    color: COLORS.gray600,
+  paymentTerms: {
+    fontSize: 9,
+    color: COLORS.gray500,
     lineHeight: 1.5,
     marginTop: 8,
     padding: 12,
-    backgroundColor: COLORS.gray50,
-    borderRadius: 4,
+    backgroundColor: COLORS.warningLight,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftStyle: 'solid',
+    borderLeftColor: COLORS.warning,
+    width: '45%',
   },
   footer: {
     position: 'absolute',
@@ -380,18 +384,6 @@ const styles = StyleSheet.create({
     color: COLORS.gray400,
     textAlign: 'center',
     lineHeight: 1.4,
-  },
-  paymentTerms: {
-    fontSize: 9,
-    color: COLORS.gray500,
-    lineHeight: 1.5,
-    padding: 12,
-    marginTop: 8,
-    backgroundColor: COLORS.warningLight,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftStyle: 'solid',
-    borderLeftColor: COLORS.warning,
   },
   // ── Insights page styles ──
   insightsPage: {
@@ -928,13 +920,13 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               </Text>
             )}
           </View>
-          {/* Notes */}
-          {invoice.notes && (
-            <View style={{ width: '45%' }}>
-              <Text style={styles.label}>Notes</Text>
-              <Text style={styles.notes}>{invoice.notes}</Text>
-            </View>
-          )}
+          {/* Payment Terms */}
+          <View style={styles.paymentTerms}>
+            <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>Payment Terms</Text>
+            <Text>
+              Payment due date is: {formatDate(invoice.dueDate)}. (in {formatDueInDays(invoice.issueDate, invoice.dueDate)})
+            </Text>
+          </View>
         </View>
 
         {/* AI Summary — if provided, show on page 1 as a highlight */}
@@ -944,15 +936,6 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             <MarkdownPDF style={styles.aiSummaryText}>{invoice.aiSummary}</MarkdownPDF>
           </View>
         )}
-
-
-        {/* Payment Terms */}
-        <View style={styles.paymentTerms}>
-          <Text style={{ fontWeight: 'bold', marginBottom: 5 }}>Payment Terms</Text>
-          <Text>
-            Payment due date is: {formatDate(invoice.dueDate)}. (in {formatDueInDays(invoice.issueDate, invoice.dueDate)})
-          </Text>
-        </View>
 
         {/* Footer */}
         <View style={styles.footer}>
