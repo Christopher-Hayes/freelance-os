@@ -233,6 +233,7 @@ export async function GET(
     );
 
     const projectComparison = projectHoursResults.filter(p => p.hours > 0);
+    const projectNameById = new Map(allClientProjects.map(p => [p.id, p.name]));
 
     // ── 7. Daily hours heatmap ──
     // Group by LOCAL date (not UTC) so the heatmap matches the /time page.
@@ -375,6 +376,7 @@ export async function GET(
             date: h.date.toISOString().slice(0, 10),
             label: h.label,
             emoji: h.emoji,
+            projectName: projectNameById.get(h.projectId) ?? null,
           }))
         : undefined,
     };

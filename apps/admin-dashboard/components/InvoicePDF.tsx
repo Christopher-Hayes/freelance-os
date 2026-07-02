@@ -219,6 +219,7 @@ export interface InvoicePDFData {
     date: string; // YYYY-MM-DD
     label: string;
     emoji: string | null;
+    projectName?: string | null;
   }[];
 }
 
@@ -1246,6 +1247,9 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                           </Text>
                           <Text style={{ fontSize: 7, color: COLORS.gray400, marginTop: 1 }}>
                             {formatDateShort(hl.date)}
+                            {hl.projectName && invoice.projectComparison && invoice.projectComparison.length > 1
+                              ? ` — ${hl.projectName}`
+                              : ''}
                           </Text>
                         </View>
                       </View>
