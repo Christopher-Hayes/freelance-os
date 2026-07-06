@@ -160,6 +160,7 @@ export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
 export interface Invoice {
   id: number;
   invoiceNumber: string;
+  name?: string;
   clientId: number;
   projectId?: number;
   amount: number;
@@ -178,6 +179,7 @@ export interface Invoice {
 
 export interface CreateInvoiceInput {
   invoiceNumber: string;
+  name?: string;
   clientId: number;
   projectId?: number;
   amount: number;
@@ -190,6 +192,7 @@ export interface CreateInvoiceInput {
 }
 
 export interface UpdateInvoiceInput {
+  name?: string;
   amount?: number;
   status?: InvoiceStatus;
   dueDate?: Date;

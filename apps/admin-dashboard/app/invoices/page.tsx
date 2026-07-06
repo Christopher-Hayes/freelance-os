@@ -31,14 +31,17 @@ import {
 import { Temporal } from '@/lib/temporal-polyfill';
 import { generateCode } from '@/lib/ai-actions';
 import { formatDate } from '@/lib/datetime';
+import { getInvoiceDisplayName } from '@/lib/invoice-format';
 import { authFetch } from '@/lib/util';
 
-interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
+interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate' | 'periodStart' | 'periodEnd'> {
   createdAt: string;
   updatedAt: string;
   issueDate: string;
   dueDate: string;
   paidDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
   client: Pick<Client, 'id' | 'name' | 'email' | 'company'>;
   project?: Pick<Project, 'id' | 'name'> | null;
 }
@@ -294,6 +297,7 @@ export default function InvoicesPage() {
                   <thead className="bg-slate-50 dark:bg-slate-950/80">
                     <tr>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Invoice</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Name</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Client</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Project</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Amount</th>
@@ -313,6 +317,9 @@ export default function InvoicesPage() {
                             <Link href={`/invoices/${invoice.id}`} className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
                               {invoice.invoiceNumber}
                             </Link>
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
+                            {getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name })}
                           </td>
                           <td className="px-6 py-4 align-top">
                             <div className="text-sm font-medium text-slate-900 dark:text-white">{invoice.client.name}</div>

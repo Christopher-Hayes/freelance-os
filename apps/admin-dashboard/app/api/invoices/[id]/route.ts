@@ -77,7 +77,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { amount, status, dueDate, paidDate, notes, aiSummary } = body;
+    const { name, amount, status, dueDate, paidDate, notes, aiSummary } = body;
 
     // Verify invoice exists
     const existingInvoice = await prisma.invoice.findUnique({
@@ -93,7 +93,8 @@ export async function PUT(
 
     // Build update data
     const updateData: any = {};
-    
+
+    if (name !== undefined) updateData.name = name || null;
     if (amount !== undefined) updateData.amount = amount;
     if (status !== undefined) updateData.status = status;
     if (dueDate !== undefined) updateData.dueDate = new Date(dueDate);

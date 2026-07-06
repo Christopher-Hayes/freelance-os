@@ -150,6 +150,7 @@ model TimeEntry {
 model Invoice {
   id          Int      @id @default(autoincrement())
   invoiceNumber String @unique @map("invoice_number")
+  name        String?  @db.VarChar(255) // User-set label shown in invoice lists; falls back to the billing period when unset
   clientId    Int      @map("client_id")
   projectId   Int?     @map("project_id")
   amount      Decimal  @db.Decimal(10, 2)

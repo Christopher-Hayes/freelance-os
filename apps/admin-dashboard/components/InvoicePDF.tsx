@@ -138,6 +138,9 @@ const MarkdownPDF: React.FC<{ children: string; style?: any }> = ({ children, st
 // Define types for the invoice data
 export interface InvoicePDFData {
   invoiceNumber: string;
+  // Resolved display name — the user-set name, or a fallback (billing
+  // period / project / issue date) computed server-side.
+  name: string;
   issueDate: string;
   dueDate: string;
   paidDate?: string | null;
@@ -167,6 +170,8 @@ export interface InvoicePDFData {
   // Actual date range of the work being billed (first and last time entry dates)
   workPeriodStart?: string | null;
   workPeriodEnd?: string | null;
+  // Billing period start (stored on the invoice, falls back to a 90-day window if unset)
+  periodStart?: string | null;
   // Optional time breakdown
   timeBreakdown?: {
     weekStart: string;
@@ -207,10 +212,11 @@ export interface InvoicePDFData {
   invoiceHistory?: {
     invoiceNumber: string;
     issueDate: string;
+    periodStart: string | null;
     amount: number;
     currency: string;
     status: string;
-    projectName?: string | null;
+    name: string;
   }[];
   // AI-generated cover letter / executive summary
   aiSummary?: string | null;
@@ -653,7 +659,8 @@ const HorizontalBar: React.FC<{
   color: string;
   suffix?: string;
   isCurrent?: boolean;
-}> = ({ label, value, maxValue, color, suffix = 'h', isCurrent }) => {
+  isCurrency?: boolean;
+}> = ({ label, value, maxValue, color, suffix = 'h', isCurrent, isCurrency }) => {
   const pct = maxValue > 0 ? Math.max((value / maxValue) * 100, 2) : 0;
   return (
     <View style={styles.barRow}>
@@ -663,7 +670,9 @@ const HorizontalBar: React.FC<{
       <View style={styles.barTrack}>
         <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 3 }} />
       </View>
-      <Text style={styles.barValue}>{Math.round(value)}{suffix}</Text>
+      <Text style={styles.barValue}>
+        {isCurrency ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value) : `${value.toFixed(1)}${suffix}`}
+      </Text>
     </View>
   );
 };
@@ -841,6 +850,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               </View>
             </View>
           </View>
+          <Text style={{ fontSize: 10, color: COLORS.gray500, marginTop: 4, textAlign: 'right' }}>{invoice.name}</Text>
         </View>
 
         {/* Billing Information */}
@@ -1355,21 +1365,27 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               const all = [...(invoice.invoiceHistory ?? []), {
                 invoiceNumber: invoice.invoiceNumber,
                 issueDate: invoice.issueDate,
+                periodStart: invoice.periodStart ?? null,
                 amount: invoice.amount,
                 currency: invoice.currency,
                 status: invoice.status,
-                projectName: invoice.project?.name,
+                name: invoice.name,
               }];
               const maxAmt = Math.max(...all.map(h => h.amount));
-              return all.map((h, i) => (
+              // Order by when the billing period started, not when the invoice was issued;
+              // invoices without a stored period (e.g. flat-rate) fall back to issue date.
+              const sortKey = (h: typeof all[number]) => new Date(h.periodStart ?? h.issueDate).getTime();
+              return all.sort((a, b) => sortKey(a) - sortKey(b))
+                .map((h, i) => (
                 <HorizontalBar
                   key={i}
-                  label={formatDateShort(h.issueDate)}
+                  label={h.name}
                   value={h.amount}
                   maxValue={maxAmt}
                   color={h.invoiceNumber === invoice.invoiceNumber ? COLORS.primary : COLORS.gray300}
                   suffix={` ${h.currency}`}
                   isCurrent={h.invoiceNumber === invoice.invoiceNumber}
+                  isCurrency={true}
                 />
               ));
             })()}
@@ -1380,8 +1396,8 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             <Text style={styles.sectionTitle}>Detail</Text>
             <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderCell, { width: '22%' }]}>Invoice #</Text>
-              <Text style={[styles.tableHeaderCell, { width: '18%' }]}>Date</Text>
-              <Text style={[styles.tableHeaderCell, { width: '25%' }]}>Project</Text>
+              <Text style={[styles.tableHeaderCell, { width: '13%' }]}>Invoiced</Text>
+              <Text style={[styles.tableHeaderCell, { width: '30%' }]}>Name</Text>
               <Text style={[styles.tableHeaderCell, { width: '18%', textAlign: 'right' }]}>Amount</Text>
               <Text style={[styles.tableHeaderCell, { width: '17%', textAlign: 'center' }]}>Status</Text>
             </View>
@@ -1390,8 +1406,8 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               return (
                 <View key={i} style={styles.tableRow}>
                   <Text style={[styles.tableCell, { width: '22%' }]}>{h.invoiceNumber}</Text>
-                  <Text style={[styles.tableCell, { width: '18%' }]}>{formatDateShort(h.issueDate)}</Text>
-                  <Text style={[styles.tableCell, { width: '25%' }]}>{h.projectName ?? '—'}</Text>
+                  <Text style={[styles.tableCell, { width: '13%' }]}>{formatDateShort(h.issueDate)}</Text>
+                  <Text style={[styles.tableCell, { width: '30%' }]}>{h.name}</Text>
                   <Text style={[styles.tableCell, { width: '18%', textAlign: 'right', fontWeight: 'bold' }]}>
                     {formatCurrency(h.amount, h.currency)}
                   </Text>
@@ -1414,8 +1430,8 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             {/* Current invoice row highlighted */}
             <View style={[styles.tableRow, { backgroundColor: COLORS.primaryLight }]}>
               <Text style={[styles.tableCell, { width: '22%', fontWeight: 'bold' }]}>{invoice.invoiceNumber}</Text>
-              <Text style={[styles.tableCell, { width: '18%' }]}>{formatDateShort(invoice.issueDate)}</Text>
-              <Text style={[styles.tableCell, { width: '25%' }]}>{invoice.project?.name ?? '—'}</Text>
+              <Text style={[styles.tableCell, { width: '13%' }]}>{formatDateShort(invoice.issueDate)}</Text>
+              <Text style={[styles.tableCell, { width: '30%' }]}>{invoice.name}</Text>
               <Text style={[styles.tableCell, { width: '18%', textAlign: 'right', fontWeight: 'bold' }]}>
                 {formatCurrency(invoice.amount, invoice.currency)}
               </Text>

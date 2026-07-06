@@ -175,6 +175,46 @@ export function fromLocalDate(date: Temporal.PlainDate): Temporal.Instant {
   return zdt.toInstant();
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_ABBREV = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Formats an invoice period as a human label — "Quarter 4 of 2025 (Oct–Dec)"
+ * or "March 2026" when the range lines up with a calendar quarter/month,
+ * falling back to a plain date range otherwise. Computed here rather than
+ * left to the AI since date arithmetic is an easy place for a model to
+ * quietly get things wrong.
+ */
+export function formatPeriodLabel(periodStart: Date | string, periodEnd: Date | string): string {
+  const startMs = typeof periodStart === 'string' ? new Date(periodStart).getTime() : periodStart.getTime();
+  const endMs = typeof periodEnd === 'string' ? new Date(periodEnd).getTime() : periodEnd.getTime();
+  const localTz = Temporal.Now.timeZoneId();
+  const start = Temporal.Instant.fromEpochMilliseconds(startMs).toZonedDateTimeISO(localTz).toPlainDate();
+  const end = Temporal.Instant.fromEpochMilliseconds(endMs).toZonedDateTimeISO(localTz).toPlainDate();
+
+  const startsOnMonthStart = start.day === 1;
+  const endsOnMonthEnd = end.day === end.daysInMonth;
+
+  const quarterNumber = Math.floor((start.month - 1) / 3) + 1;
+  const isFullQuarter = startsOnMonthStart && endsOnMonthEnd
+    && start.year === end.year
+    && start.month === (quarterNumber - 1) * 3 + 1
+    && end.month === start.month + 2;
+
+  if (isFullQuarter) {
+    return `Quarter ${quarterNumber} of ${start.year} (${MONTH_ABBREV[start.month - 1]}–${MONTH_ABBREV[end.month - 1]})`;
+  }
+
+  if (startsOnMonthStart && endsOnMonthEnd && start.year === end.year && start.month === end.month) {
+    return `${MONTH_NAMES[start.month - 1]} ${start.year}`;
+  }
+
+  if (start.year === end.year) {
+    return `${MONTH_ABBREV[start.month - 1]} ${start.day} – ${MONTH_ABBREV[end.month - 1]} ${end.day}, ${end.year}`;
+  }
+  return `${MONTH_ABBREV[start.month - 1]} ${start.day}, ${start.year} – ${MONTH_ABBREV[end.month - 1]} ${end.day}, ${end.year}`;
+}
+
 /**
  * Duration formatting helpers
  */

@@ -21,6 +21,7 @@ export default function NewInvoicePage() {
 
   // Manual form fields
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [name, setName] = useState('');
   const [clientId, setClientId] = useState<number | ''>('');
   const [projectId, setProjectId] = useState<number | ''>('');
   const [amount, setAmount] = useState('');
@@ -208,6 +209,7 @@ export default function NewInvoicePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           invoiceNumber,
+          name: name || undefined,
           clientId: Number(clientId),
           projectId: projectId ? Number(projectId) : undefined,
           amount: parseFloat(amount),
@@ -242,6 +244,7 @@ export default function NewInvoicePage() {
       const invoice = await generateInvoice({
         clientId: Number(clientId),
         projectId: projectId ? Number(projectId) : undefined,
+        name: name || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         hourlyRate: parseFloat(hourlyRate),
@@ -373,6 +376,20 @@ export default function NewInvoicePage() {
                   Generate
                 </button>
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="invoice-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Name (Optional)
+              </label>
+              <input
+                type="text"
+                id="invoice-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Defaults to the billing period"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
+              />
             </div>
 
             <div>
@@ -549,6 +566,20 @@ export default function NewInvoicePage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="gen-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Name (Optional)
+              </label>
+              <input
+                type="text"
+                id="gen-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Defaults to the billing period"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
+              />
             </div>
 
             <div>

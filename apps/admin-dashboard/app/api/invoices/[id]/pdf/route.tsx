@@ -4,6 +4,7 @@ import { renderToStream } from '@react-pdf/renderer';
 import { Temporal } from '@js-temporal/polyfill';
 import { InvoicePDF } from '@/components/InvoicePDF';
 import type { InvoicePDFData } from '@/components/InvoicePDF';
+import { getInvoiceDisplayName } from '@/lib/invoice-format';
 
 // Use the server's local timezone so dates match what the admin sees
 // on the /time page (which uses the browser's local timezone).
@@ -332,10 +333,11 @@ export async function GET(
     const invoiceHistory: InvoicePDFData['invoiceHistory'] = pastInvoices.map(inv => ({
       invoiceNumber: inv.invoiceNumber,
       issueDate: toLocalDateStr(inv.issueDate),
+      periodStart: inv.periodStart ? toLocalDateStr(inv.periodStart) : null,
       amount: Number(inv.amount),
       currency: inv.currency,
       status: inv.status,
-      projectName: inv.project?.name ?? null,
+      name: getInvoiceDisplayName({ ...inv, projectName: inv.project?.name ?? null }),
     }));
 
     // ── 10. Assemble PDF data ──
@@ -343,6 +345,7 @@ export async function GET(
     // via `new Date()`, so convert to local date strings to match the /invoices view.
     const invoiceData: InvoicePDFData = {
       invoiceNumber: invoice.invoiceNumber,
+      name: getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name ?? null }),
       issueDate: toLocalDateStr(invoice.issueDate),
       dueDate: toLocalDateStr(invoice.dueDate),
       paidDate: invoice.paidDate ? toLocalDateStr(invoice.paidDate) : null,
@@ -352,6 +355,7 @@ export async function GET(
       notes: invoice.notes,
       workPeriodStart: timeEntries.length > 0 ? toLocalDateStr(timeEntries[0]!.startTime) : null,
       workPeriodEnd: timeEntries.length > 0 ? toLocalDateStr(timeEntries[timeEntries.length - 1]!.startTime) : null,
+      periodStart: toLocalDateStr(periodStart),
       client: {
         name: invoice.client.name,
         email: invoice.client.email,

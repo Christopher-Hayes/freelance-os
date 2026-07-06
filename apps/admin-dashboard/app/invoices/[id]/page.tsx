@@ -6,15 +6,18 @@ import Link from 'next/link';
 import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/types';
 import { EditButton, DownloadButton, PreviewButton } from '@repo/ui';
 import { sendInvoiceEmail, generateInvoiceSummary } from '@/lib/invoice-actions';
+import { getInvoiceDisplayName } from '@/lib/invoice-format';
 import { authFetch } from '@/lib/util';
 import ReactMarkdown from 'react-markdown';
 
-interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate'> {
+interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate' | 'periodStart' | 'periodEnd'> {
   createdAt: string;
   updatedAt: string;
   issueDate: string;
   dueDate: string;
   paidDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
   client: Pick<Client, 'id' | 'name' | 'email' | 'company'>;
   project?: Pick<Project, 'id' | 'name'> | null;
 }
@@ -36,6 +39,7 @@ export default function InvoiceDetailPage() {
   const [summaryText, setSummaryText] = useState('');
 
   // Edit form fields
+  const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<InvoiceStatus>('draft');
   const [dueDate, setDueDate] = useState('');
@@ -58,6 +62,7 @@ export default function InvoiceDetailPage() {
       setInvoice(data);
       
       // Initialize form fields
+      setName(data.name || '');
       setAmount(data.amount.toString());
       setStatus(data.status);
       setDueDate(data.dueDate.split('T')[0]);
@@ -82,6 +87,7 @@ export default function InvoiceDetailPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: name || null,
           amount: parseFloat(amount),
           status,
           dueDate,
@@ -349,7 +355,10 @@ export default function InvoiceDetailPage() {
         </Link>
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold dark:text-white mb-2">{invoice.invoiceNumber}</h1>
+            <h1 className="text-3xl font-bold dark:text-white">{invoice.invoiceNumber}</h1>
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
+              {getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name })}
+            </p>
             <span className={getStatusBadgeClass(invoice.status)}>
               {invoice.status}
             </span>
@@ -380,6 +389,20 @@ export default function InvoiceDetailPage() {
           <h2 className="text-xl font-semibold dark:text-white mb-4">Edit Invoice</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="md:col-span-2">
+              <label htmlFor="invoice-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                id="invoice-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={`Defaults to "${getInvoiceDisplayName({ ...invoice, name: null, projectName: invoice.project?.name })}"`}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
+              />
+            </div>
+
             <div>
               <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Amount
@@ -479,6 +502,7 @@ export default function InvoiceDetailPage() {
               <button
                 onClick={() => {
                   setEditing(false);
+                  setName(invoice.name || '');
                   setAmount(invoice.amount.toString());
                   setStatus(invoice.status);
                   const dueDateStr = invoice.dueDate.split('T')[0];
