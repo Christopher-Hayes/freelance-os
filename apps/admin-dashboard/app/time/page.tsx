@@ -208,11 +208,30 @@ export default function TimeEntriesPage() {
   const [selectedDate, setSelectedDate] = useState<Temporal.PlainDate>(() => {
     return parseDateParam(searchParams.get(TIME_DATE_QUERY_PARAM)) ?? Temporal.Now.plainDateISO();
   });
+  const [isToday, setIsToday] = useState<boolean>(() => {
+    const today = Temporal.Now.plainDateISO();
+    return selectedDate.equals(today);
+  });
+  const [isThisWeek, setIsThisWeek] = useState<boolean>(() => {
+    const today = Temporal.Now.plainDateISO();
+    const startOfWeek = today.subtract({ days: today.dayOfWeek - 1 });
+    const endOfWeek = startOfWeek.add({ days: 6 });
+    return Temporal.PlainDate.compare(selectedDate, startOfWeek) >= 0 && Temporal.PlainDate.compare(selectedDate, endOfWeek) <= 0;
+  });
   // Filters
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  useEffect(() => {
+    const today = Temporal.Now.plainDateISO();
+    setIsToday(selectedDate.equals(today));
+
+    const startOfWeek = today.subtract({ days: today.dayOfWeek - 1 });
+    const endOfWeek = startOfWeek.add({ days: 6 });
+    setIsThisWeek(Temporal.PlainDate.compare(selectedDate, startOfWeek) >= 0 && Temporal.PlainDate.compare(selectedDate, endOfWeek) <= 0);
+  }, [selectedDate]);
 
   // URL → state: runs only when searchParams changes (back/forward, external link).
   // Intentionally excludes `selectedDate` from deps — adding it would cause this effect
@@ -469,7 +488,7 @@ export default function TimeEntriesPage() {
           {/* Day stats */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              {formatPlainDateLabel(selectedDate)}
+              {isToday ? "Today" : formatPlainDateLabel(selectedDate)}
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
@@ -502,7 +521,7 @@ export default function TimeEntriesPage() {
                 icon={<TimerReset className="h-4 w-4" />}
               />
               <StatCard
-                label="Top project today"
+                label="Top project"
                 value={selectedDayStats.topProject ? (
                   <span style={{ color: selectedDayStats.topProject.color }}>
                     {selectedDayStats.topProject.name}
@@ -522,18 +541,18 @@ export default function TimeEntriesPage() {
           {/* Week stats */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              {formatWeekLabel(selectedDate)}
+              {isThisWeek ? "This week" : formatWeekLabel(selectedDate)}
             </h2>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label="Hours this week"
+                label={`Hours ${isThisWeek ? "this week" : `week of ${formatPlainDateLabel(startDate)}`}`}
                 value={selectedWeekStats.totalHours.toFixed(1)}
                 meta={`${selectedWeekStats.count} entr${selectedWeekStats.count === 1 ? "y" : "ies"} recorded`}
                 tone="info"
                 icon={<Clock3 className="h-4 w-4" />}
               />
               <StatCard
-                label="Billable this week"
+                label={`Billable ${isThisWeek ? "this week" : `week of ${formatPlainDateLabel(selectedDate)}`}`}
                 value={selectedWeekStats.billableHours.toFixed(1)}
                 meta={
                   selectedWeekStats.totalMinutes > 0
@@ -544,7 +563,7 @@ export default function TimeEntriesPage() {
                 icon={<Coins className="h-4 w-4" />}
               />
               <StatCard
-                label="Top project this week"
+                label={`Top project ${isThisWeek ? "this week" : `week of ${formatPlainDateLabel(selectedDate)}`}`}
                 value={selectedWeekStats.topProject ? (
                   <span style={{ color: selectedWeekStats.topProject.color }}>
                     {selectedWeekStats.topProject.name}
@@ -559,7 +578,7 @@ export default function TimeEntriesPage() {
                 icon={<FolderKanban className="h-4 w-4" />}
               />
               <StatCard
-                label="Top app this week"
+                label={`Top app ${isThisWeek ? "this week" : `week of ${formatPlainDateLabel(selectedDate)}`}`}
                 value={summary?.topAppThisWeek ? formatAppTitle(summary.topAppThisWeek.appClass) : "No data"}
                 meta={summary?.topAppThisWeek ? (
                   <Link
