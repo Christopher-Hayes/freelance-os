@@ -85,12 +85,12 @@ export default function CalendarEventsColumn({
   // instead of overwriting newer data.
   const requestIdRef = useRef(0);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = useCallback(async (forceRefresh = false) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const dateStr = formatDateStr(selectedDate);
-      const data = await fetchCalendarEventsForDay(dateStr);
+      const data = await fetchCalendarEventsForDay(dateStr, { forceRefresh });
       if (requestId !== requestIdRef.current) return;
       setEvents(data);
     } catch (err) {
@@ -136,7 +136,7 @@ export default function CalendarEventsColumn({
         </h3>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={fetchEvents}
+            onClick={() => fetchEvents(true)}
             disabled={loading}
             className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200"
             title="Refresh calendar events"

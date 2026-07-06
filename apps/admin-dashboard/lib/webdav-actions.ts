@@ -23,13 +23,35 @@ export async function checkCalDavEnabled(): Promise<boolean> {
   }
 }
 
+const CALENDAR_EVENTS_CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
+
+interface CalendarEventsCacheEntry {
+  events: CalendarEvent[];
+  fetchedAt: number;
+}
+
+// Module-level cache, shared across requests on this server instance.
+const calendarEventsCache = new Map<string, CalendarEventsCacheEntry>();
+
 /**
  * Server action to fetch calendar events for a specific day.
  * Returns empty array if CalDAV is not configured or no events found.
+ * Results are cached in-memory per day for CALENDAR_EVENTS_CACHE_TTL_MS;
+ * pass forceRefresh to bypass the cache.
  */
 export async function fetchCalendarEventsForDay(
-  dateStr: string
+  dateStr: string,
+  options?: { forceRefresh?: boolean }
 ): Promise<CalendarEvent[]> {
+  const cached = calendarEventsCache.get(dateStr);
+  if (
+    !options?.forceRefresh &&
+    cached &&
+    Date.now() - cached.fetchedAt < CALENDAR_EVENTS_CACHE_TTL_MS
+  ) {
+    return cached.events;
+  }
+
   try {
     const date = Temporal.PlainDate.from(dateStr);
     const timeZone = Temporal.Now.timeZoneId();
@@ -41,13 +63,16 @@ export async function fetchCalendarEventsForDay(
       .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
       .toZonedDateTime(timeZone);
 
-    return await searchEventsByDateRange(
+    const events = await searchEventsByDateRange(
       startOfDay.toInstant(),
       endOfDay.toInstant()
     );
+    calendarEventsCache.set(dateStr, { events, fetchedAt: Date.now() });
+    return events;
   } catch (error) {
     console.error("Error fetching calendar events for day:", error);
-    return [];
+    // Prefer stale cached data over nothing if a refresh attempt fails.
+    return cached?.events ?? [];
   }
 }
 
