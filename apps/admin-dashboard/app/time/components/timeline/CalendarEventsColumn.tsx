@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import type { CalendarEvent } from "@/lib/webdav-provider";
 import { fetchCalendarEventsForDay } from "@/lib/webdav-actions";
@@ -80,18 +80,27 @@ export default function CalendarEventsColumn({
 }: CalendarEventsColumnProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  // Tracks the most recently issued fetch so stale responses (e.g. from a
+  // previous day, if the user switches days before it resolves) get ignored
+  // instead of overwriting newer data.
+  const requestIdRef = useRef(0);
 
   const fetchEvents = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const dateStr = formatDateStr(selectedDate);
       const data = await fetchCalendarEventsForDay(dateStr);
+      if (requestId !== requestIdRef.current) return;
       setEvents(data);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch calendar events:", err);
       setEvents([]);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [selectedDate]);
 
