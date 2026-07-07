@@ -196,6 +196,8 @@ export interface InvoicePDFData {
   dailyHours?: {
     date: string; // YYYY-MM-DD
     hours: number;
+    // Color of the project with the most hours that day (for multi-project invoices)
+    projectColor?: string | null;
   }[];
   // Key stats
   stats?: {
@@ -226,6 +228,7 @@ export interface InvoicePDFData {
     label: string;
     emoji: string | null;
     projectName?: string | null;
+    projectColor?: string | null;
   }[];
 }
 
@@ -234,8 +237,9 @@ const COLORS = {
   primary: '#2563eb',
   primaryLight: '#dbeafe',
   primaryDark: '#1e40af',
-  accent: '#8b5cf6',
-  accentLight: '#ede9fe',
+  // accent: '#8b5cf6',
+  accent: '#000',
+  accentLight: '#f8f8f8',
   success: '#059669',
   successLight: '#d1fae5',
   successDark: '#065f46',
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderBottomWidth: 2,
     borderBottomStyle: 'solid',
-    borderBottomColor: COLORS.primary,
+    borderBottomColor: COLORS.accent,
     paddingBottom: 10,
   },
   companyName: {
@@ -347,14 +351,14 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   amountSection: {
-    backgroundColor: COLORS.gray50,
+    backgroundColor: COLORS.accentLight,
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 8,
   },
   amountLabel: {
     fontSize: 11,
-    color: COLORS.gray500,
+    color: COLORS.accent,
     marginBottom: 5,
   },
   amountValue: {
@@ -364,16 +368,17 @@ const styles = StyleSheet.create({
   },
   paymentTerms: {
     fontSize: 9,
-    color: COLORS.gray500,
+    color: COLORS.gray700,
     lineHeight: 1.5,
     marginTop: 8,
     padding: 12,
-    backgroundColor: COLORS.warningLight,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftStyle: 'solid',
-    borderLeftColor: COLORS.warning,
-    width: '45%',
+    flex: 1,
+    // backgroundColor: COLORS.warningLight,
+    // borderRadius: 8,
+    // borderLeftWidth: 3,
+    // borderLeftStyle: 'solid',
+    // borderLeftColor: COLORS.warning,
+    // width: '45%',
   },
   footer: {
     position: 'absolute',
@@ -406,7 +411,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderBottomWidth: 2,
     borderBottomStyle: 'solid',
-    borderBottomColor: COLORS.primary,
+    borderBottomColor: COLORS.accent,
     paddingBottom: 12,
   },
   pageTitle: {
@@ -440,16 +445,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderLeftWidth: 3,
     borderLeftStyle: 'solid',
-    borderLeftColor: COLORS.primary,
+    borderLeftColor: COLORS.accent,
   },
   statCardAlt: {
     borderLeftColor: COLORS.accent,
   },
   statCardSuccess: {
-    borderLeftColor: COLORS.success,
+    borderLeftColor: COLORS.accent,
   },
   statCardWarn: {
-    borderLeftColor: COLORS.warning,
+    borderLeftColor: COLORS.accent,
   },
   statValue: {
     fontSize: 18,
@@ -486,7 +491,7 @@ const styles = StyleSheet.create({
   weekCardHours: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: COLORS.accent,
   },
   weekCardSummary: {
     fontSize: 9,
@@ -561,7 +566,6 @@ const styles = StyleSheet.create({
   heatmapLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     width: 226,
     marginTop: 4,
   },
@@ -695,14 +699,37 @@ const StatCard: React.FC<{
   );
 };
 
+/** Parse a hex color (#rgb or #rrggbb) into 0-255 RGB components. */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const num = parseInt(h, 16);
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+
+/** Mix a hex color towards white (ratio > 0) or black (ratio < 0). ratio in [-1, 1]. */
+function shadeHex(hex: string, ratio: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const target = ratio >= 0 ? 255 : 0;
+  const t = Math.abs(ratio);
+  const mix = (c: number) => Math.round(c + (target - c) * t);
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The four intensity-scale colors used by the heatmap and its legend, derived from a base project color. */
+function heatmapScale(baseColor: string): [string, string, string, string] {
+  return [shadeHex(baseColor, 0.82), shadeHex(baseColor, 0.45), baseColor, shadeHex(baseColor, -0.25)];
+}
+
 /** Get background color for heatmap cell based on hours worked. */
-function heatmapColor(hours: number, maxHours: number): string {
+function heatmapColor(hours: number, maxHours: number, baseColor: string): string {
   if (hours === 0) return COLORS.gray100;
   const intensity = Math.min(hours / Math.max(maxHours, 1), 1);
-  if (intensity < 0.25) return '#dbeafe';
-  if (intensity < 0.5) return '#93c5fd';
-  if (intensity < 0.75) return '#3b82f6';
-  return '#1d4ed8';
+  const [light, mediumLight, medium, dark] = heatmapScale(baseColor);
+  if (intensity < 0.25) return light;
+  if (intensity < 0.5) return mediumLight;
+  if (intensity < 0.75) return medium;
+  return dark;
 }
 
 /** Status badge color for invoice history. */
@@ -805,6 +832,16 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
   // Heatmap max
   const maxDailyHours = invoice.dailyHours?.reduce((m, d) => Math.max(m, d.hours), 0) ?? 0;
+  // Base color for the intensity legend: the invoice's own project if set, otherwise
+  // whichever project accounted for the most hours in the comparison (multi-project invoices).
+  const dominantComparisonProject = invoice.projectComparison
+    ?.slice()
+    .sort((a, b) => b.hours - a.hours)[0];
+  const heatmapBaseColor = invoice.project?.color || dominantComparisonProject?.projectColor || COLORS.primary;
+  // Distinct projects that appear in the heatmap, for the "Projects" color key
+  const heatmapProjects = invoice.projectComparison && invoice.projectComparison.length > 1
+    ? invoice.projectComparison.filter(p => p.hours > 0)
+    : [];
 
   // Build highlight lookup by date for heatmap marker overlay
   // Emojis don't render in react-pdf (Helvetica has no emoji glyphs),
@@ -814,10 +851,17 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
     label: string;
     index: number;
     emoji: string | null;
+    projectColor?: string | null;
   }>();
   for (let i = 0; i < sortedHighlights.length; i++) {
     const h = sortedHighlights[i]!;
-    highlightMap.set(h.date.slice(0, 10), { label: h.label, index: i + 1, emoji: h.emoji });
+
+    highlightMap.set(h.date.slice(0, 10), {
+      label: h.label,
+      index: i + 1,
+      emoji: h.emoji,
+      projectColor: h.projectColor,
+    });
   }
 
   return (
@@ -859,7 +903,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             <Text style={styles.label}>Bill To</Text>
             {/* <Text style={{ ...styles.value, fontWeight: 'semibold' }}>{invoice.client.name}</Text> */}
             {/* {invoice.client.company && invoice.client.company !== invoice.client.name && ( */}
-              <Text style={{ ...styles.value, fontWeight: 'semibold' }}>{invoice.client.company}</Text>
+            <Text style={{ ...styles.value, fontWeight: 'semibold' }}>{invoice.client.company}</Text>
             {/* )} */}
             <Text style={styles.value}>{invoice.client.email}</Text>
           </View>
@@ -917,7 +961,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
         <View style={styles.divider} />
 
-        <View style={{ ...styles.section, marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ ...styles.section, marginTop: 10, display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           {/* Amount */}
           <View style={styles.amountSection}>
             <Text style={styles.amountLabel}>Total Amount Due</Text>
@@ -1036,7 +1080,11 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                     // Build a lookup: date string → hours
                     const sorted = [...invoice.dailyHours].sort((a, b) => a.date.localeCompare(b.date));
                     const hoursMap = new Map<string, number>();
-                    for (const d of sorted) hoursMap.set(d.date.slice(0, 10), d.hours);
+                    const dayColorMap = new Map<string, string | undefined>();
+                    for (const d of sorted) {
+                      hoursMap.set(d.date.slice(0, 10), d.hours);
+                      dayColorMap.set(d.date.slice(0, 10), d.projectColor ?? undefined);
+                    }
 
                     if (sorted.length === 0) return null;
 
@@ -1052,7 +1100,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                     const rangeEnd = effectiveLastDate;
 
                     // Iterate day-by-day from rangeStart to rangeEnd, grouping into months then weeks
-                    type DayEntry = { date: string; hours: number };
+                    type DayEntry = { date: string; hours: number; projectColor?: string };
                     type MonthBlock = {
                       key: string;
                       label: string;
@@ -1102,7 +1150,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
                       const dateStr = cursor.toString();
                       const hours = hoursMap.get(dateStr) ?? 0;
-                      currentWeek.push({ date: dateStr, hours });
+                      currentWeek.push({ date: dateStr, hours, projectColor: dayColorMap.get(dateStr) });
 
                       // End week row on Saturday
                       if (cursor.dayOfWeek === 6) {
@@ -1140,7 +1188,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                                     style={[
                                       styles.heatmapCell,
                                       {
-                                        backgroundColor: day.hours < 0 ? 'transparent' : heatmapColor(day.hours, maxDailyHours),
+                                        backgroundColor: day.hours < 0 ? 'transparent' : heatmapColor(day.hours, maxDailyHours, day.projectColor || heatmapBaseColor),
                                         position: 'relative' as const,
                                       },
                                     ]}
@@ -1155,7 +1203,10 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                                         justifyContent: 'center',
                                         alignItems: 'center',
                                       }}>
-                                        <Text style={{ fontSize: 8, color: COLORS.accent, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                                        <Text style={{
+                                          fontSize: 8,
+                                          fontFamily: 'Helvetica-Bold', lineHeight: 1
+                                        }}>
                                           {hl.emoji}
                                         </Text>
                                       </View>
@@ -1168,11 +1219,12 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                                         width: 8,
                                         height: 8,
                                         borderRadius: 4,
-                                        backgroundColor: COLORS.accent,
+                                        backgroundColor: 'white',
+                                        border: `1px solid ${COLORS.gray300}`,
                                         justifyContent: 'center',
                                         alignItems: 'center',
                                       }}>
-                                        <Text style={{ fontSize: 5, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                                        <Text style={{ fontSize: 5, color: 'black', fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
                                           {hl.index}
                                         </Text>
                                       </View>
@@ -1199,56 +1251,79 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                       </View>
                     ));
                   })()}
-                  {/* Legend */}
-                  <View style={styles.heatmapLegend}>
-                    <Text style={styles.heatmapLegendLabel}>Less</Text>
-                    {[COLORS.gray100, '#dbeafe', '#93c5fd', '#3b82f6', '#1d4ed8'].map((c, i) => (
-                      <View key={i} style={[styles.heatmapLegendBox, { backgroundColor: c }]} />
-                    ))}
-                    <Text style={[styles.heatmapLegendLabel, { marginLeft: 4 }]}>More</Text>
-                  </View>
                 </View>
 
-                {/* Right side: highlights list */}
-                {sortedHighlights.length > 0 && (
-                  <View style={{ width: '50%' }}>
-                    <Text style={{ fontSize: 10, fontWeight: 'bold', color: COLORS.gray800, marginBottom: 8 }}>
-                      Highlights
-                    </Text>
-                    {sortedHighlights.map((hl, i) => (
-                      <View key={i} style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'flex-start' }}>
-                        <View style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 6,
-                          backgroundColor: COLORS.accent,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginRight: 8,
-                          marginTop: 2,
-                        }}>
-                          <Text style={{ fontSize: 6, color: COLORS.white, fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
-                            {i + 1}
-                          </Text>
+                {/* Right side content */}
+                <View style={{ width: '50%' }}>
+                  {/* Highlights list */}
+                  {sortedHighlights.length > 0 && (
+                    <View style={{ width: '100%' }}>
+                      <Text style={{ fontSize: 10, fontWeight: 'bold', color: COLORS.gray800, marginBottom: 8 }}>
+                        Highlights
+                      </Text>
+                      {sortedHighlights.map((hl, i) => (
+                        <View key={i} style={{ flexDirection: 'row', marginBottom: 10, alignItems: 'flex-start' }}>
+                          <View style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 6,
+                            backgroundColor: 'white',
+                            border: `1px solid ${COLORS.gray300}`,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            marginRight: 8,
+                            marginTop: 2,
+                          }}>
+                            <Text style={{ fontSize: 6, color: 'black', fontFamily: 'Helvetica-Bold', lineHeight: 1 }}>
+                              {i + 1}
+                            </Text>
+                          </View>
+                          {/* <Text style={{ fontSize: 10, marginRight: 4, lineHeight: 1.2 }}>
+                            {hl.emoji || '⭐'}
+                          </Text> */}
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 8, color: COLORS.gray800, lineHeight: 1.3 }}>
+                              {hl.label}{' '}
+                              <Text style={{ color: COLORS.gray400 }}>
+                                ({formatDateShort(hl.date)})
+                              </Text>
+                            </Text>
+                            <Text style={{ fontSize: 6, fontWeight: 'semibold', color: COLORS.gray400, marginTop: 1 }}>
+                              <Text style={{ color: hl.projectColor || COLORS.gray600 }}>
+                              {hl.projectName && invoice.projectComparison && invoice.projectComparison.length > 1
+                                ? `${hl.projectName}`
+                                : ''}
+                              </Text>
+                            </Text>
+                          </View>
                         </View>
-                        <Text style={{ fontSize: 10, marginRight: 4, lineHeight: 1.2 }}>
-                          {hl.emoji || '⭐'}
-                        </Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 8, color: COLORS.gray800, lineHeight: 1.3 }}>
-                            {hl.label}
-                          </Text>
-                          <Text style={{ fontSize: 7, color: COLORS.gray400, marginTop: 1 }}>
-                            {formatDateShort(hl.date)}
-                            {hl.projectName && invoice.projectComparison && invoice.projectComparison.length > 1
-                              ? ` — ${hl.projectName}`
-                              : ''}
-                          </Text>
-                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Legend and color key */}
+                  <View style={{ flex: 1, width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', marginTop: 10, gap: 8 }}>
+                      {/* Legend */}
+                      <View style={styles.heatmapLegend}>
+                        <Text style={styles.heatmapLegendLabel}>Less</Text>
+                        {[COLORS.gray100, ...heatmapScale(heatmapBaseColor)].map((c, i) => (
+                          <View key={i} style={[styles.heatmapLegendBox, { backgroundColor: c }]} />
+                        ))}
+                        <Text style={[styles.heatmapLegendLabel, { marginLeft: 4 }]}>More</Text>
                       </View>
-                    ))}
-                  </View>
-                )}
+                      {/* Per-project color key — cell hue reflects the day's dominant project */}
+                      {heatmapProjects.length > 0 && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 }}>
+                          {heatmapProjects.map((p) => (
+                            <View key={p.projectName} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8, marginTop: 2 }}>
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: p.projectColor, marginRight: 3 }} />
+                              <Text style={{ fontSize: 6, color: COLORS.gray500 }}>{p.projectName}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                </View>
               </View>
             </View>
           )}
@@ -1360,7 +1435,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
 
           {/* Amount trend — horizontal bars */}
           <View style={{ marginBottom: 20 }}>
-            <Text style={styles.sectionTitle}>Invoice Amounts Over Time</Text>
+            <Text style={styles.sectionTitle}>Invoices <Text style={{ color: COLORS.gray400 }}>by work period</Text></Text>
             {(() => {
               const all = [...(invoice.invoiceHistory ?? []), {
                 invoiceNumber: invoice.invoiceNumber,
@@ -1377,27 +1452,27 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               const sortKey = (h: typeof all[number]) => new Date(h.periodStart ?? h.issueDate).getTime();
               return all.sort((a, b) => sortKey(a) - sortKey(b))
                 .map((h, i) => (
-                <HorizontalBar
-                  key={i}
-                  label={h.name}
-                  value={h.amount}
-                  maxValue={maxAmt}
-                  color={h.invoiceNumber === invoice.invoiceNumber ? COLORS.primary : COLORS.gray300}
-                  suffix={` ${h.currency}`}
-                  isCurrent={h.invoiceNumber === invoice.invoiceNumber}
-                  isCurrency={true}
-                />
-              ));
+                  <HorizontalBar
+                    key={i}
+                    label={h.name}
+                    value={h.amount}
+                    maxValue={maxAmt}
+                    color={h.invoiceNumber === invoice.invoiceNumber ? COLORS.primary : COLORS.gray300}
+                    suffix={` ${h.currency}`}
+                    isCurrent={h.invoiceNumber === invoice.invoiceNumber}
+                    isCurrency={true}
+                  />
+                ));
             })()}
           </View>
 
           {/* Table */}
           <View>
-            <Text style={styles.sectionTitle}>Detail</Text>
+            <Text style={styles.sectionTitle}>Invoices <Text style={{ color: COLORS.gray400 }}>by issue date</Text></Text>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderCell, { width: '22%' }]}>Invoice #</Text>
               <Text style={[styles.tableHeaderCell, { width: '13%' }]}>Invoiced</Text>
-              <Text style={[styles.tableHeaderCell, { width: '30%' }]}>Name</Text>
+              <Text style={[styles.tableHeaderCell, { width: '22%' }]}>Invoice #</Text>
+              <Text style={[styles.tableHeaderCell, { width: '30%' }]}>Description</Text>
               <Text style={[styles.tableHeaderCell, { width: '18%', textAlign: 'right' }]}>Amount</Text>
               <Text style={[styles.tableHeaderCell, { width: '17%', textAlign: 'center' }]}>Status</Text>
             </View>
@@ -1405,8 +1480,8 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               const sc = historyStatusColor(h.status);
               return (
                 <View key={i} style={styles.tableRow}>
-                  <Text style={[styles.tableCell, { width: '22%' }]}>{h.invoiceNumber}</Text>
                   <Text style={[styles.tableCell, { width: '13%' }]}>{formatDateShort(h.issueDate)}</Text>
+                  <Text style={[styles.tableCell, { width: '22%' }]}>{h.invoiceNumber}</Text>
                   <Text style={[styles.tableCell, { width: '30%' }]}>{h.name}</Text>
                   <Text style={[styles.tableCell, { width: '18%', textAlign: 'right', fontWeight: 'bold' }]}>
                     {formatCurrency(h.amount, h.currency)}
@@ -1429,8 +1504,8 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             })}
             {/* Current invoice row highlighted */}
             <View style={[styles.tableRow, { backgroundColor: COLORS.primaryLight }]}>
-              <Text style={[styles.tableCell, { width: '22%', fontWeight: 'bold' }]}>{invoice.invoiceNumber}</Text>
               <Text style={[styles.tableCell, { width: '13%' }]}>{formatDateShort(invoice.issueDate)}</Text>
+              <Text style={[styles.tableCell, { width: '22%', fontWeight: 'bold' }]}>{invoice.invoiceNumber}</Text>
               <Text style={[styles.tableCell, { width: '30%' }]}>{invoice.name}</Text>
               <Text style={[styles.tableCell, { width: '18%', textAlign: 'right', fontWeight: 'bold' }]}>
                 {formatCurrency(invoice.amount, invoice.currency)}

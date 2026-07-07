@@ -235,13 +235,33 @@ export async function GET(
 
     const projectComparison = projectHoursResults.filter(p => p.hours > 0);
     const projectNameById = new Map(allClientProjects.map(p => [p.id, p.name]));
+    const projectColorById = new Map(allClientProjects.map(p => [p.id, p.color]));
 
     // ── 7. Daily hours heatmap ──
     // Group by LOCAL date (not UTC) so the heatmap matches the /time page.
     const dailyMap = new Map<string, number>();
+    // Per day, per project minutes — used to color each day by its dominant project
+    // (relevant for multi-project invoices, which have no single invoice.project).
+    const dailyProjectMinutes = new Map<string, Map<number, number>>();
     for (const entry of timeEntries) {
       const dateKey = toLocalDateStr(entry.startTime);
       dailyMap.set(dateKey, (dailyMap.get(dateKey) ?? 0) + entry.durationMinutes / 60);
+
+      const perProject = dailyProjectMinutes.get(dateKey) ?? new Map<number, number>();
+      perProject.set(entry.projectId, (perProject.get(entry.projectId) ?? 0) + entry.durationMinutes);
+      dailyProjectMinutes.set(dateKey, perProject);
+    }
+
+    /** Color of whichever project accounted for the most minutes on this date. */
+    function dominantProjectColor(dateKey: string): string | null {
+      const perProject = dailyProjectMinutes.get(dateKey);
+      if (!perProject || perProject.size === 0) return null;
+      let bestProjectId = -1;
+      let bestMinutes = -1;
+      for (const [pid, minutes] of perProject) {
+        if (minutes > bestMinutes) { bestProjectId = pid; bestMinutes = minutes; }
+      }
+      return projectColorById.get(bestProjectId) ?? null;
     }
 
     // Fill in zero-days across complete weeks (Mon–Sun) so the heatmap
@@ -259,7 +279,7 @@ export async function GET(
       let cursor = firstDate;
       while (Temporal.PlainDate.compare(cursor, lastDate) <= 0) {
         const key = cursor.toString(); // YYYY-MM-DD
-        dailyHours.push({ date: key, hours: dailyMap.get(key) ?? 0 });
+        dailyHours.push({ date: key, hours: dailyMap.get(key) ?? 0, projectColor: dominantProjectColor(key) });
         cursor = cursor.add({ days: 1 });
       }
     }
@@ -381,6 +401,7 @@ export async function GET(
             label: h.label,
             emoji: h.emoji,
             projectName: projectNameById.get(h.projectId) ?? null,
+            projectColor: projectColorById.get(h.projectId) ?? null,
           }))
         : undefined,
     };
