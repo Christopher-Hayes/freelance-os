@@ -36,10 +36,15 @@ export async function GET(
             email: true,
           },
         },
-        project: {
-          select: {
-            name: true,
-            clientDescription: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+                clientDescription: true,
+              },
+            },
           },
         },
       },
@@ -59,8 +64,10 @@ export async function GET(
       invoice.status !== "cancelled" &&
       invoice.dueDate < now;
 
+    const { projects, ...invoiceRest } = invoice;
     return NextResponse.json({
-      ...invoice,
+      ...invoiceRest,
+      projects: projects.map(ip => ip.project),
       isOverdue,
     });
   } catch (error) {

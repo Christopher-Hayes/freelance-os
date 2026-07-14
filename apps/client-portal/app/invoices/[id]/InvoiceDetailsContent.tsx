@@ -17,10 +17,11 @@ interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' |
     company?: string | null;
     email: string;
   };
-  project?: {
+  projects: {
+    id: number;
     name: string;
-    description?: string | null;
-  } | null;
+    clientDescription?: string | null;
+  }[];
 }
 
 export function InvoiceDetailsContent() {
@@ -209,16 +210,32 @@ export function InvoiceDetailsContent() {
               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Due Date</dt>
               <dd className="text-base text-gray-900 dark:text-white">{formatDate(invoice.dueDate)}</dd>
             </div>
-            {invoice.project && (
+            {invoice.projects.length > 0 && (
               <div>
-                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">Project</dt>
+                <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                  {invoice.projects.length === 1 ? 'Project' : 'Projects'}
+                </dt>
                 <dd className="text-base text-gray-900 dark:text-white">
-                  <Link
-                    href={`/projects/${invoice.projectId}`}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                  >
-                    {invoice.project.name}
-                  </Link>
+                  {invoice.projects.length === 1 ? (
+                    <Link
+                      href={`/projects/${invoice.projects[0]!.id}`}
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                    >
+                      {invoice.projects[0]!.name}
+                    </Link>
+                  ) : (
+                    invoice.projects.map((p, i) => (
+                      <span key={p.id}>
+                        {i > 0 && ', '}
+                        <Link
+                          href={`/projects/${p.id}`}
+                          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                        >
+                          {p.name}
+                        </Link>
+                      </span>
+                    ))
+                  )}
                 </dd>
               </div>
             )}

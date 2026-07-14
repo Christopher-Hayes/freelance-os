@@ -10,6 +10,7 @@ import { getInvoiceDisplayName } from '@/lib/invoice-format';
 import { formatPlainDate } from '@/lib/datetime';
 import { authFetch } from '@/lib/util';
 import ReactMarkdown from 'react-markdown';
+import ProjectMultiSelect from '@/components/ProjectMultiSelect';
 
 interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' | 'issueDate' | 'dueDate' | 'paidDate' | 'periodStart' | 'periodEnd'> {
   createdAt: string;
@@ -20,7 +21,7 @@ interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' |
   periodStart?: string;
   periodEnd?: string;
   client: Pick<Client, 'id' | 'name' | 'email' | 'company'>;
-  project?: Pick<Project, 'id' | 'name'> | null;
+  projects: Pick<Project, 'id' | 'name'>[];
 }
 
 export default function InvoiceDetailPage() {
@@ -29,6 +30,7 @@ export default function InvoiceDetailPage() {
   const id = params.id as string;
 
   const [invoice, setInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [clientProjects, setClientProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -48,6 +50,7 @@ export default function InvoiceDetailPage() {
   const [paidDate, setPaidDate] = useState('');
   const [notes, setNotes] = useState('');
   const [aiSummary, setAiSummary] = useState('');
+  const [editProjectIds, setEditProjectIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -62,7 +65,7 @@ export default function InvoiceDetailPage() {
       if (!response.ok) throw new Error('Failed to fetch invoice');
       const data = await response.json();
       setInvoice(data);
-      
+
       // Initialize form fields
       setName(data.name || '');
       setAmount(data.amount.toString());
@@ -72,6 +75,13 @@ export default function InvoiceDetailPage() {
       setPaidDate(data.paidDate ? data.paidDate.split('T')[0] : '');
       setNotes(data.notes || '');
       setAiSummary(data.aiSummary || '');
+      setEditProjectIds(data.projectIds ?? []);
+
+      // Fetch all of this client's projects so the user can reassign the invoice
+      const projectsResponse = await authFetch(`/api/projects?clientId=${data.clientId}`);
+      if (projectsResponse.ok) {
+        setClientProjects(await projectsResponse.json());
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -98,6 +108,7 @@ export default function InvoiceDetailPage() {
           paidDate: paidDate || null,
           notes,
           aiSummary: aiSummary || null,
+          projectIds: editProjectIds,
         }),
       });
 
@@ -361,7 +372,7 @@ export default function InvoiceDetailPage() {
           <div>
             <h1 className="text-3xl font-bold dark:text-white">{invoice.invoiceNumber}</h1>
             <p className="text-lg text-gray-600 dark:text-gray-400 mb-2">
-              {getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name })}
+              {getInvoiceDisplayName({ ...invoice, projectNames: invoice.projects.map(p => p.name) })}
             </p>
             <span className={getStatusBadgeClass(invoice.status)}>
               {invoice.status}
@@ -402,7 +413,7 @@ export default function InvoiceDetailPage() {
                 id="invoice-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={`Defaults to "${getInvoiceDisplayName({ ...invoice, name: null, projectName: invoice.project?.name })}"`}
+                placeholder={`Defaults to "${getInvoiceDisplayName({ ...invoice, name: null, projectNames: invoice.projects.map(p => p.name) })}"`}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
               />
             </div>
@@ -478,6 +489,18 @@ export default function InvoiceDetailPage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
               />
             </div>
+
+            <div className="md:col-span-2">
+              <label htmlFor="edit-projects" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Projects
+              </label>
+              <ProjectMultiSelect
+                id="edit-projects"
+                projects={clientProjects}
+                selectedIds={editProjectIds}
+                onChange={setEditProjectIds}
+              />
+            </div>
           </div>
 
           <div className="mt-6">
@@ -530,6 +553,7 @@ export default function InvoiceDetailPage() {
                   if (paidDateStr !== undefined) setPaidDate(paidDateStr);
                   setNotes(invoice.notes || '');
                   setAiSummary(invoice.aiSummary || '');
+                  setEditProjectIds(invoice.projects.map((p) => p.id));
                 }}
                 className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition"
               >
@@ -563,8 +587,14 @@ export default function InvoiceDetailPage() {
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Project</h3>
-              <p className="text-lg dark:text-white">{invoice.project?.name || 'No specific project'}</p>
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                {invoice.projects.length === 1 ? 'Project' : 'Projects'}
+              </h3>
+              <p className="text-lg dark:text-white">
+                {invoice.projects.length > 0
+                  ? invoice.projects.map(p => p.name).join(', ')
+                  : 'All projects'}
+              </p>
             </div>
           </div>
 

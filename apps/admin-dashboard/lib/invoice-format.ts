@@ -10,13 +10,15 @@ export function getInvoiceDisplayName(invoice: {
   periodStart?: Date | string | null;
   periodEnd?: Date | string | null;
   issueDate: Date | string;
-  projectName?: string | null;
+  projectNames?: string[] | null;
 }): string {
   if (invoice.name) return invoice.name;
   if (invoice.periodStart && invoice.periodEnd) {
     return formatPeriodLabel(invoice.periodStart, invoice.periodEnd);
   }
-  if (invoice.projectName) return invoice.projectName;
+  if (invoice.projectNames && invoice.projectNames.length > 0) {
+    return invoice.projectNames.join(', ');
+  }
 
   const issueDateIso = typeof invoice.issueDate === 'string' ? invoice.issueDate : invoice.issueDate.toISOString();
   return formatDate(issueDateIso);

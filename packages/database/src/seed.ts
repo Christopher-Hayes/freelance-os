@@ -83,13 +83,13 @@ async function main() {
     create: {
       invoiceNumber: 'INV-2025-001',
       clientId: client1.id,
-      projectId: project1.id,
       amount: 5400.00,
       currency: 'USD',
       status: 'sent',
       issueDate: new Date('2025-10-25'),
       dueDate: new Date('2025-11-25'),
       notes: 'October 2025 - Design work',
+      projects: { create: [{ projectId: project1.id }] },
     },
   });
 
@@ -99,7 +99,6 @@ async function main() {
     create: {
       invoiceNumber: 'INV-2025-002',
       clientId: client2.id,
-      projectId: project2.id,
       amount: 3200.00,
       currency: 'USD',
       status: 'paid',
@@ -107,6 +106,7 @@ async function main() {
       dueDate: new Date('2025-11-20'),
       paidDate: new Date('2025-10-28'),
       notes: 'Initial development sprint',
+      projects: { create: [{ projectId: project2.id }] },
     },
   });
 

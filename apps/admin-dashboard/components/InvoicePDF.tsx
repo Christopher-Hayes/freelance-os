@@ -153,11 +153,14 @@ export interface InvoicePDFData {
     email: string;
     company?: string | null;
   };
-  project?: {
+  projects: {
     name: string;
     color?: string | null;
     hourlyRate?: number | null;
-  } | null;
+  }[];
+  // True when `projects` covers every project the client has — render as
+  // "All Projects" instead of spelling out the full (long) list.
+  isAllProjects?: boolean;
   // Freelancer/company information
   companyInfo: {
     name: string;
@@ -388,7 +391,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopStyle: 'solid',
     borderTopColor: COLORS.gray200,
-    paddingTop: 15,
+    paddingTop: 5,
   },
   footerText: {
     fontSize: 8,
@@ -638,7 +641,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftStyle: 'solid',
     borderLeftColor: COLORS.accent,
-    marginBottom: 10,
+    marginBottom: 2,
   },
   aiSummaryTitle: {
     fontSize: 11,
@@ -762,6 +765,9 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
+      // No cents / decimals
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -833,15 +839,26 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
   // Heatmap max
   const maxDailyHours = invoice.dailyHours?.reduce((m, d) => Math.max(m, d.hours), 0) ?? 0;
   // Base color for the intensity legend: the invoice's own project if set, otherwise
-  // whichever project accounted for the most hours in the comparison (multi-project invoices).
-  const dominantComparisonProject = invoice.projectComparison
-    ?.slice()
+  // whichever of the invoice's *own* billed projects accounted for the most hours
+  // (multi-project invoices). Must not fall back to other client projects that
+  // aren't actually part of this invoice, even if they logged more time in the period.
+  const currentProjectsInComparison = invoice.projectComparison?.filter(p => p.isCurrent) ?? [];
+  const dominantComparisonProject = currentProjectsInComparison
+    .slice()
     .sort((a, b) => b.hours - a.hours)[0];
-  const heatmapBaseColor = invoice.project?.color || dominantComparisonProject?.projectColor || COLORS.primary;
+  const singleProject = invoice.projects.length === 1 ? invoice.projects[0] : undefined;
+  const projectsLabel = invoice.isAllProjects
+    ? 'All Projects'
+    : invoice.projects.map(p => p.name).join(', ');
+  const heatmapBaseColor = singleProject?.color || dominantComparisonProject?.projectColor || COLORS.primary;
   // Distinct projects that appear in the heatmap, for the "Projects" color key
-  const heatmapProjects = invoice.projectComparison && invoice.projectComparison.length > 1
-    ? invoice.projectComparison.filter(p => p.hours > 0)
+  const heatmapProjects = currentProjectsInComparison.length > 1
+    ? currentProjectsInComparison.filter(p => p.hours > 0)
     : [];
+
+  // Whether more than one distinct project actually shows up among this
+  // invoice's own highlights (as opposed to the client's project count overall).
+  const distinctHighlightProjects = new Set((invoice.highlights ?? []).map(h => h.projectName).filter(Boolean));
 
   // Build highlight lookup by date for heatmap marker overlay
   // Emojis don't render in react-pdf (Helvetica has no emoji glyphs),
@@ -934,18 +951,18 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
         </View>
 
         {/* Project + Work Period row */}
-        {(invoice.project || hasWorkPeriod) && (
+        {(invoice.projects.length > 0 || hasWorkPeriod) && (
           <View style={[styles.row, { marginBottom: 0 }]}>
-            {invoice.project && (
+            {invoice.projects.length > 0 && (
               <View style={styles.column}>
-                <Text style={styles.label}>Project</Text>
+                <Text style={styles.label}>{!invoice.isAllProjects && invoice.projects.length === 1 ? 'Project' : 'Projects'}</Text>
                 <Text style={styles.value}>
-                  {invoice.project.name}
+                  {projectsLabel}
                   {totalTimeHours > 0 && ` — ${totalTimeHours.toFixed(1)}h across ${totalWeeks} week${totalWeeks !== 1 ? 's' : ''}`}
                 </Text>
-                {invoice.project.hourlyRate && (
+                {singleProject?.hourlyRate && (
                   <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 2 }}>
-                    Rate: {formatCurrency(invoice.project.hourlyRate, invoice.currency)} / hour
+                    Rate: {formatCurrency(singleProject.hourlyRate, invoice.currency)} / hour
                   </Text>
                 )}
               </View>
@@ -968,9 +985,9 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
             <Text style={styles.amountValue}>
               {formatCurrency(invoice.amount, invoice.currency)}
             </Text>
-            {totalTimeHours > 0 && invoice.project?.hourlyRate && (
+            {totalTimeHours > 0 && singleProject?.hourlyRate && (
               <Text style={{ fontSize: 9, color: COLORS.gray500, marginTop: 4 }}>
-                {totalTimeHours.toFixed(1)} hours × {formatCurrency(invoice.project.hourlyRate, invoice.currency)} / hour
+                {totalTimeHours.toFixed(1)} hours × {formatCurrency(singleProject.hourlyRate, invoice.currency)} / hour
               </Text>
             )}
           </View>
@@ -1041,7 +1058,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
               <Text style={{ fontSize: 8, color: COLORS.gray400, marginBottom: 8 }}>
                 All {invoice.client.name} projects{hasWorkPeriod
                   ? ` between ${formatDate(workPeriodStart!)} and ${formatDate(workPeriodEnd!)}`
-                  : ' during invoice period'}.
+                  : ' during invoice period'}. {(!invoice.isAllProjects && invoice.projects.length > 1) ? 'Note: All projects shown for comparison, this invoice is for specific project(s).' : ''}
               </Text>
               {invoice.projectComparison
                 .sort((a, b) => b.hours - a.hours)
@@ -1290,7 +1307,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
                             </Text>
                             <Text style={{ fontSize: 6, fontWeight: 'semibold', color: COLORS.gray400, marginTop: 1 }}>
                               <Text style={{ color: hl.projectColor || COLORS.gray600 }}>
-                              {hl.projectName && invoice.projectComparison && invoice.projectComparison.length > 1
+                              {hl.projectName && distinctHighlightProjects.size > 1
                                 ? `${hl.projectName}`
                                 : ''}
                               </Text>
@@ -1340,7 +1357,7 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
           <View style={styles.pageHeader}>
             <Text style={styles.pageTitle}>Weekly Breakdown</Text>
             <Text style={styles.pageSubtitle}>
-              {invoice.project?.name ?? 'All Projects'} — {totalTimeHours.toFixed(1)} total hours
+              {invoice.projects.length > 0 ? projectsLabel : 'All Projects'} — {totalTimeHours.toFixed(1)} total hours
             </Text>
           </View>
 

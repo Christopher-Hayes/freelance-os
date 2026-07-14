@@ -20,15 +20,15 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
 
     const where: any = {};
-    
+
     if (clientId) {
       where.clientId = parseInt(clientId);
     }
-    
+
     if (projectId) {
-      where.projectId = parseInt(projectId);
+      where.projects = { some: { projectId: parseInt(projectId) } };
     }
-    
+
     if (status) {
       where.status = status;
     }
@@ -44,10 +44,14 @@ export async function GET(request: NextRequest) {
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -56,11 +60,28 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Convert Decimal to number for JSON serialization
-    const serializedInvoices = invoices.map(invoice => ({
-      ...invoice,
-      amount: invoice.amount.toNumber(),
-    }));
+    // Count each client's total projects so we can tell whether an invoice's
+    // selection covers all of them (vs. happening to list every one by name).
+    const projectCounts = await prisma.project.groupBy({
+      by: ['clientId'],
+      _count: { id: true },
+      where: { clientId: { in: [...new Set(invoices.map(inv => inv.clientId))] } },
+    });
+    const projectCountByClientId = new Map(projectCounts.map(pc => [pc.clientId, pc._count.id]));
+
+    // Convert Decimal to number for JSON serialization; flatten the
+    // InvoiceProject join rows into a simple projects/projectIds array
+    const serializedInvoices = invoices.map(({ projects, ...invoice }) => {
+      const clientProjectCount = projectCountByClientId.get(invoice.clientId) ?? 0;
+      return {
+        ...invoice,
+        amount: invoice.amount.toNumber(),
+        projects: projects.map(ip => ip.project),
+        projectIds: projects.map(ip => ip.projectId),
+        isAllProjects: projects.length === 0
+          || (clientProjectCount > 0 && projects.length === clientProjectCount),
+      };
+    });
 
     return NextResponse.json(serializedInvoices);
   } catch (error) {
@@ -89,7 +110,7 @@ export async function POST(request: NextRequest) {
       invoiceNumber,
       name,
       clientId,
-      projectId,
+      projectIds,
       amount,
       currency = 'USD',
       status = 'draft',
@@ -98,6 +119,10 @@ export async function POST(request: NextRequest) {
       paidDate,
       notes,
     } = body;
+
+    const uniqueProjectIds: number[] = Array.isArray(projectIds)
+      ? [...new Set(projectIds.map((id: any) => Number(id)))]
+      : [];
 
     // Validation
     if (!invoiceNumber || !clientId || !amount || !issueDate || !dueDate) {
@@ -131,23 +156,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify project exists if provided
-    if (projectId) {
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
+    // Verify projects exist and belong to the client, if provided
+    if (uniqueProjectIds.length > 0) {
+      const matchingProjects = await prisma.project.findMany({
+        where: { id: { in: uniqueProjectIds } },
       });
 
-      if (!project) {
+      if (matchingProjects.length !== uniqueProjectIds.length) {
         return NextResponse.json(
-          { error: 'Project not found' },
+          { error: 'One or more projects not found' },
           { status: 404 }
         );
       }
 
-      // Verify project belongs to client
-      if (project.clientId !== clientId) {
+      if (matchingProjects.some(p => p.clientId !== clientId)) {
         return NextResponse.json(
-          { error: 'Project does not belong to the specified client' },
+          { error: 'One or more projects do not belong to the specified client' },
           { status: 400 }
         );
       }
@@ -158,7 +182,6 @@ export async function POST(request: NextRequest) {
         invoiceNumber,
         name: name || null,
         clientId,
-        projectId: projectId || null,
         amount,
         currency,
         status,
@@ -166,6 +189,9 @@ export async function POST(request: NextRequest) {
         dueDate: new Date(dueDate),
         paidDate: paidDate ? new Date(paidDate) : null,
         notes,
+        projects: {
+          create: uniqueProjectIds.map(projectId => ({ projectId })),
+        },
       },
       include: {
         client: {
@@ -176,19 +202,26 @@ export async function POST(request: NextRequest) {
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
     });
 
     // Convert Decimal to number for JSON serialization
+    const { projects, ...invoiceRest } = invoice;
     const serializedInvoice = {
-      ...invoice,
+      ...invoiceRest,
       amount: invoice.amount.toNumber(),
+      projects: projects.map(ip => ip.project),
+      projectIds: projects.map(ip => ip.projectId),
     };
 
     return NextResponse.json(serializedInvoice, { status: 201 });

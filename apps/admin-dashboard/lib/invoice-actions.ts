@@ -22,7 +22,7 @@ function generateInvoiceNumber(): string {
 
 interface GenerateInvoiceParams {
   clientId: number;
-  projectId?: number;
+  projectIds?: number[];
   name?: string;
   startDate?: string;
   endDate?: string;
@@ -38,7 +38,7 @@ interface GenerateInvoiceParams {
 export async function generateInvoice(params: GenerateInvoiceParams) {
   const {
     clientId,
-    projectId,
+    projectIds,
     name,
     startDate,
     endDate,
@@ -48,13 +48,15 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
     dueInDays = 30,
   } = params;
 
+  const uniqueProjectIds = [...new Set(projectIds ?? [])];
+
   // Validation
   if (!clientId || !hourlyRate) {
     throw new Error('Missing required fields: clientId, hourlyRate');
   }
 
-  if (!startDate && !endDate && !projectId) {
-    throw new Error('Must provide either projectId or date range (startDate/endDate)');
+  if (!startDate && !endDate && uniqueProjectIds.length === 0) {
+    throw new Error('Must provide either projectIds or date range (startDate/endDate)');
   }
 
   // Verify client exists
@@ -74,20 +76,20 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
     },
   };
 
-  if (projectId) {
-    where.projectId = projectId;
-    
-    // Verify project exists and belongs to client
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+  if (uniqueProjectIds.length > 0) {
+    where.projectId = { in: uniqueProjectIds };
+
+    // Verify projects exist and belong to client
+    const matchingProjects = await prisma.project.findMany({
+      where: { id: { in: uniqueProjectIds } },
     });
 
-    if (!project) {
-      throw new Error('Project not found');
+    if (matchingProjects.length !== uniqueProjectIds.length) {
+      throw new Error('One or more projects not found');
     }
 
-    if (project.clientId !== clientId) {
-      throw new Error('Project does not belong to the specified client');
+    if (matchingProjects.some(p => p.clientId !== clientId)) {
+      throw new Error('One or more projects do not belong to the specified client');
     }
   }
 
@@ -181,7 +183,6 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
       invoiceNumber,
       name: name || null,
       clientId,
-      projectId: projectId || null,
       amount,
       currency,
       status: 'draft',
@@ -190,6 +191,9 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
       periodStart: queryStartDate ?? timeEntries[0]?.startTime ?? issueDate,
       periodEnd: queryEndDate ?? timeEntries[timeEntries.length - 1]?.startTime ?? issueDate,
       notes,
+      projects: {
+        create: uniqueProjectIds.map(projectId => ({ projectId })),
+      },
     },
     include: {
       client: {
@@ -200,19 +204,26 @@ export async function generateInvoice(params: GenerateInvoiceParams) {
           company: true,
         },
       },
-      project: {
-        select: {
-          id: true,
-          name: true,
+      projects: {
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
   });
 
   // Convert Decimal to number for JSON serialization
+  const { projects, ...invoiceRest } = invoice;
   return {
-    ...invoice,
+    ...invoiceRest,
     amount: invoice.amount.toNumber(),
+    projects: projects.map(ip => ip.project),
+    projectIds: projects.map(ip => ip.projectId),
     summary: {
       totalHours: parseFloat(totalHours.toFixed(2)),
       hourlyRate,
@@ -237,10 +248,14 @@ export async function sendInvoiceEmail(invoiceId: number) {
           company: true,
         },
       },
-      project: {
-        select: {
-          id: true,
-          name: true,
+      projects: {
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
@@ -266,7 +281,6 @@ export async function sendInvoiceEmail(invoiceId: number) {
     invoice: {
       ...invoice,
       amount: invoice.amount.toNumber(),
-      projectId: invoice.projectId ?? undefined,
     } as any,
     companyName,
     portalUrl,
@@ -293,10 +307,14 @@ export async function sendInvoiceEmail(invoiceId: number) {
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -332,11 +350,18 @@ export async function generateInvoiceSummary(
     where: { id: invoiceId },
     include: {
       client: { select: { name: true, company: true } },
-      project: { select: { id: true, name: true, clientDescription: true, hourlyRate: true } },
+      projects: {
+        include: {
+          project: { select: { id: true, name: true, clientDescription: true, hourlyRate: true } },
+        },
+      },
     },
   });
 
   if (!invoice) throw new Error('Invoice not found');
+
+  const selectedProjects = invoice.projects.map(ip => ip.project);
+  const selectedProjectIds = selectedProjects.map(p => p.id);
 
   // Return cached summary unless forced
   if (invoice.aiSummary && !force) {
@@ -357,15 +382,16 @@ export async function generateInvoiceSummary(
     return fallback;
   })();
 
-  // 4. Fetch billable time entries. For multi-project invoices (no projectId),
-  // pull across all of the client's projects — same fallback the PDF generator
-  // uses — otherwise these invoices get no time entries at all.
-  const projectId = invoice.project?.id;
+  // 4. Fetch billable time entries. For all-projects invoices (no selected
+  // projects), pull across all of the client's projects — same fallback the
+  // PDF generator uses — otherwise these invoices get no time entries at all.
   const timeEntries = await prisma.timeEntry.findMany({
     where: {
       billable: true,
       startTime: { gte: periodStart, lte: periodEnd },
-      ...(projectId ? { projectId } : { project: { clientId: invoice.clientId } }),
+      ...(selectedProjectIds.length > 0
+        ? { projectId: { in: selectedProjectIds } }
+        : { project: { clientId: invoice.clientId } }),
     },
     orderBy: { startTime: 'asc' },
     select: { startTime: true, durationMinutes: true, description: true, projectId: true },
@@ -426,15 +452,17 @@ export async function generateInvoiceSummary(
 
   const projectsText = involvedProjects.length > 0
     ? involvedProjects.map(p => p.name).join(', ')
-    : (invoice.project?.name ?? 'General work');
+    : (selectedProjects[0]?.name ?? 'General work');
 
   // The opening line ("This invoice is for **all** X work in **period**.") is
   // assembled here rather than left to the AI, since it's just the invoice
   // scope + period restated in a fixed shape — no need to burn model
   // creativity (or risk date mistakes) on it.
   const periodLabel = formatPeriodLabel(periodStart, periodEnd);
-  const openingLine = projectId
-    ? `This invoice is for work on **${invoice.project!.name}** in **${periodLabel}**.`
+  const openingLine = selectedProjects.length === 1
+    ? `This invoice is for work on **${selectedProjects[0]!.name}** in **${periodLabel}**.`
+    : selectedProjects.length > 1
+    ? `This invoice is for work on **${selectedProjects.map(p => p.name).join(', ')}** in **${periodLabel}**.`
     : `This invoice is for **all** ${invoice.client.company ?? invoice.client.name} work in **${periodLabel}**.`;
 
   const weeklySummaryText = weeklySummaries.length > 0
@@ -457,7 +485,7 @@ export async function generateInvoiceSummary(
 
 Client: ${clientLabel}
 Project(s) worked on: ${projectsText}
-${invoice.project?.clientDescription ? `Project description: ${invoice.project.clientDescription}` : ''}
+${selectedProjects.length === 1 && selectedProjects[0]!.clientDescription ? `Project description: ${selectedProjects[0]!.clientDescription}` : ''}
 Invoice period: ${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}
 Total hours: ${totalHours.toFixed(1)} (${totalEntries} time entries)
 

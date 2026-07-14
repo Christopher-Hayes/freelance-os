@@ -96,12 +96,16 @@ export async function GET(
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            hourlyRate: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                hourlyRate: true,
+              },
+            },
           },
         },
       },
@@ -113,6 +117,9 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    const selectedProjects = invoice.projects.map(ip => ip.project);
+    const selectedProjectIds = selectedProjects.map(p => p.id);
 
     // ── 2. Fetch settings ──
     const settings = await prisma.setting.findUnique({
@@ -141,14 +148,13 @@ export async function GET(
     // ── 4. Fetch BILLABLE time entries for the invoice period ──
     // The invoice amount is calculated from billable entries only, so the PDF
     // must use the same filter to keep hours and dollars consistent.
-    // For multi-project invoices (no projectId), fetch across all client projects.
-    const projectId = invoice.project?.id;
+    // For all-projects invoices (no selected projects), fetch across all client projects.
     const timeEntries = await prisma.timeEntry.findMany({
       where: {
         billable: true,
         startTime: { gte: periodStart, lte: periodEnd },
-        ...(projectId
-          ? { projectId }
+        ...(selectedProjectIds.length > 0
+          ? { projectId: { in: selectedProjectIds } }
           : { project: { clientId: invoice.client.id } }),
       },
       orderBy: { startTime: 'asc' },
@@ -200,7 +206,7 @@ export async function GET(
     const summaryMap = new Map<string, string>();
     for (const s of weeklySummaries) {
       const key = s.weekStart.toISOString().slice(0, 10);
-      const text = projectId ? s.summary : `**${s.project.name}**\n${s.summary}`;
+      const text = involvedProjectIds.length > 1 ? `**${s.project.name}**\n${s.summary}` : s.summary;
       const existing = summaryMap.get(key);
       summaryMap.set(key, existing ? `${existing}\n\n${text}` : text);
     }
@@ -225,6 +231,11 @@ export async function GET(
       select: { id: true, name: true, color: true },
     });
 
+    // True when the invoice covers every project the client has (either no
+    // explicit selection, or a selection that happens to include them all).
+    const isAllProjects = selectedProjectIds.length === 0
+      || (allClientProjects.length > 0 && selectedProjectIds.length === allClientProjects.length);
+
     const projectHoursResults = await Promise.all(
       allClientProjects.map(async (proj) => {
         const result = await prisma.timeEntry.aggregate({
@@ -239,7 +250,9 @@ export async function GET(
           projectName: proj.name,
           projectColor: proj.color,
           hours: (result._sum.durationMinutes ?? 0) / 60,
-          isCurrent: projectId ? proj.id === projectId : involvedProjectIds.includes(proj.id),
+          isCurrent: selectedProjectIds.length > 0
+            ? selectedProjectIds.includes(proj.id)
+            : involvedProjectIds.includes(proj.id),
         };
       })
     );
@@ -345,7 +358,7 @@ export async function GET(
           id: { not: invoice.id },
         },
         include: {
-          project: { select: { name: true } },
+          projects: { include: { project: { select: { name: true } } } },
         },
         orderBy: { issueDate: 'asc' },
       }),
@@ -368,7 +381,7 @@ export async function GET(
       amount: Number(inv.amount),
       currency: inv.currency,
       status: inv.status,
-      name: getInvoiceDisplayName({ ...inv, projectName: inv.project?.name ?? null }),
+      name: getInvoiceDisplayName({ ...inv, projectNames: inv.projects.map(ip => ip.project.name) }),
     }));
 
     // ── 10. Assemble PDF data ──
@@ -377,7 +390,7 @@ export async function GET(
     // toLocalDateStr — to avoid shifting a day in timezones behind UTC.
     const invoiceData: InvoicePDFData = {
       invoiceNumber: invoice.invoiceNumber,
-      name: getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name ?? null }),
+      name: getInvoiceDisplayName({ ...invoice, projectNames: selectedProjects.map(p => p.name) }),
       issueDate: toUtcDateStr(invoice.issueDate),
       dueDate: toUtcDateStr(invoice.dueDate),
       paidDate: invoice.paidDate ? toUtcDateStr(invoice.paidDate) : null,
@@ -393,11 +406,12 @@ export async function GET(
         email: invoice.client.email,
         company: invoice.client.company,
       },
-      project: invoice.project ? {
-        name: invoice.project.name,
-        color: invoice.project.color,
-        hourlyRate: invoice.project.hourlyRate ? Number(invoice.project.hourlyRate) : null,
-      } : null,
+      projects: selectedProjects.map(p => ({
+        name: p.name,
+        color: p.color,
+        hourlyRate: p.hourlyRate ? Number(p.hourlyRate) : null,
+      })),
+      isAllProjects,
       companyInfo,
       timeBreakdown: timeBreakdown.length > 0 ? timeBreakdown : undefined,
       projectComparison: projectComparison.length > 0 ? projectComparison : undefined,

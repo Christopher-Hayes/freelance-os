@@ -35,9 +35,13 @@ export async function GET(request: NextRequest) {
             company: true,
           },
         },
-        project: {
-          select: {
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -48,8 +52,9 @@ export async function GET(request: NextRequest) {
 
     // Calculate if invoice is overdue (unpaid invoices past due date)
     const now = new Date();
-    const invoicesWithOverdue = invoices.map((invoice) => ({
+    const invoicesWithOverdue = invoices.map(({ projects, ...invoice }) => ({
       ...invoice,
+      projects: projects.map(ip => ip.project),
       isOverdue:
         invoice.status !== "paid" &&
         invoice.status !== "cancelled" &&

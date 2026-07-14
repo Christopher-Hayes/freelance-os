@@ -162,7 +162,7 @@ export interface Invoice {
   invoiceNumber: string;
   name?: string;
   clientId: number;
-  projectId?: number;
+  projectIds: number[]; // Empty = all of the client's projects
   amount: number;
   currency: string;
   status: InvoiceStatus;
@@ -181,7 +181,7 @@ export interface CreateInvoiceInput {
   invoiceNumber: string;
   name?: string;
   clientId: number;
-  projectId?: number;
+  projectIds?: number[]; // Empty/omitted = all of the client's projects
   amount: number;
   currency?: string;
   status?: InvoiceStatus;
@@ -199,6 +199,7 @@ export interface UpdateInvoiceInput {
   dueDate?: Date;
   paidDate?: Date;
   notes?: string;
+  projectIds?: number[];
 }
 
 // App metadata types

@@ -28,10 +28,14 @@ export async function GET(
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
@@ -45,9 +49,12 @@ export async function GET(
     }
 
     // Convert Decimal to number for JSON serialization
+    const { projects, ...invoiceRest } = invoice;
     const serializedInvoice = {
-      ...invoice,
+      ...invoiceRest,
       amount: invoice.amount.toNumber(),
+      projects: projects.map(ip => ip.project),
+      projectIds: projects.map(ip => ip.projectId),
     };
 
     return NextResponse.json(serializedInvoice);
@@ -77,7 +84,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, amount, status, issueDate, dueDate, paidDate, notes, aiSummary } = body;
+    const { name, amount, status, issueDate, dueDate, paidDate, notes, aiSummary, projectIds } = body;
 
     // Verify invoice exists
     const existingInvoice = await prisma.invoice.findUnique({
@@ -89,6 +96,33 @@ export async function PUT(
         { error: 'Invoice not found' },
         { status: 404 }
       );
+    }
+
+    // Verify projects exist and belong to the invoice's client, if provided
+    if (projectIds !== undefined) {
+      const uniqueProjectIds: number[] = Array.isArray(projectIds)
+        ? [...new Set(projectIds.map((pid: any) => Number(pid)))]
+        : [];
+
+      if (uniqueProjectIds.length > 0) {
+        const matchingProjects = await prisma.project.findMany({
+          where: { id: { in: uniqueProjectIds } },
+        });
+
+        if (matchingProjects.length !== uniqueProjectIds.length) {
+          return NextResponse.json(
+            { error: 'One or more projects not found' },
+            { status: 404 }
+          );
+        }
+
+        if (matchingProjects.some(p => p.clientId !== existingInvoice.clientId)) {
+          return NextResponse.json(
+            { error: 'One or more projects do not belong to this invoice\'s client' },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Build update data
@@ -104,6 +138,15 @@ export async function PUT(
     }
     if (notes !== undefined) updateData.notes = notes;
     if (aiSummary !== undefined) updateData.aiSummary = aiSummary;
+    if (projectIds !== undefined) {
+      const uniqueProjectIds: number[] = Array.isArray(projectIds)
+        ? [...new Set(projectIds.map((pid: any) => Number(pid)))]
+        : [];
+      updateData.projects = {
+        deleteMany: {},
+        create: uniqueProjectIds.map(projectId => ({ projectId })),
+      };
+    }
 
     // If status is being set to 'paid' and paidDate is not provided, set it to now
     if (status === 'paid' && !paidDate && !existingInvoice.paidDate) {
@@ -122,19 +165,26 @@ export async function PUT(
             company: true,
           },
         },
-        project: {
-          select: {
-            id: true,
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
       },
     });
 
     // Convert Decimal to number for JSON serialization
+    const { projects, ...invoiceRest } = invoice;
     const serializedInvoice = {
-      ...invoice,
+      ...invoiceRest,
       amount: invoice.amount.toNumber(),
+      projects: projects.map(ip => ip.project),
+      projectIds: projects.map(ip => ip.projectId),
     };
 
     return NextResponse.json(serializedInvoice);

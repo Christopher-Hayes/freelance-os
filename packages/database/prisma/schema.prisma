@@ -82,7 +82,7 @@ model Project {
   client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   linkedRtProject   RescueTimeProject? @relation(fields: [linkedRtProjectId], references: [rtProjectId])
   timeEntries       TimeEntry[]
-  invoices          Invoice[]
+  invoiceProjects   InvoiceProject[]
   weeklySummaries   WeeklySummary[]
   highlights        ProjectHighlight[]
 
@@ -152,7 +152,6 @@ model Invoice {
   invoiceNumber String @unique @map("invoice_number")
   name        String?  @db.VarChar(255) // User-set label shown in invoice lists; falls back to the billing period when unset
   clientId    Int      @map("client_id")
-  projectId   Int?     @map("project_id")
   amount      Decimal  @db.Decimal(10, 2)
   currency    String   @default("USD") @db.VarChar(3)
   status      String   @default("draft") // draft, sent, paid, overdue, cancelled
@@ -165,15 +164,30 @@ model Invoice {
   aiSummary   String?  @map("ai_summary") @db.Text // AI-generated executive summary for the invoice period
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
-  
+
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projects    InvoiceProject[] // Empty = all of the client's projects; one or more = the selected subset
 
   @@index([clientId])
-  @@index([projectId])
   @@index([status])
   @@index([issueDate])
   @@map("invoices")
+}
+
+// Join table linking an invoice to the subset of client projects it covers.
+// No rows for a given invoice means "all of the client's projects."
+model InvoiceProject {
+  id        Int @id @default(autoincrement())
+  invoiceId Int @map("invoice_id")
+  projectId Int @map("project_id")
+
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, projectId])
+  @@index([invoiceId])
+  @@index([projectId])
+  @@map("invoice_projects")
 }
 
 // NextAuth.js tables for client portal authentication

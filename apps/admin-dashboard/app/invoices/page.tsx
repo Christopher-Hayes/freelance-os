@@ -43,7 +43,8 @@ interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' |
   periodStart?: string;
   periodEnd?: string;
   client: Pick<Client, 'id' | 'name' | 'email' | 'company'>;
-  project?: Pick<Project, 'id' | 'name'> | null;
+  projects: Pick<Project, 'id' | 'name'>[];
+  isAllProjects: boolean;
 }
 
 const invoiceStatusVariants: Record<InvoiceStatus, 'default' | 'success' | 'warning' | 'danger' | 'info' | 'subtle'> = {
@@ -319,14 +320,16 @@ export default function InvoicesPage() {
                             </Link>
                           </td>
                           <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
-                            {getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name })}
+                            {getInvoiceDisplayName({ ...invoice, projectNames: invoice.projects.map(p => p.name) })}
                           </td>
                           <td className="px-6 py-4 align-top">
                             <div className="text-sm font-medium text-slate-900 dark:text-white">{invoice.client.name}</div>
                             <div className="text-sm text-slate-500 dark:text-slate-400">{invoice.client.company || invoice.client.email}</div>
                           </td>
                           <td className="px-6 py-4 align-top text-sm text-slate-600 dark:text-slate-400">
-                            {invoice.project?.name || '—'}
+                            {(invoice.isAllProjects && invoice.projects.length > 1)
+                              ? 'All projects'
+                              : invoice.projects.map(p => p.name).join(', ')}
                           </td>
                           <td className="px-6 py-4 align-top text-sm font-semibold text-slate-900 dark:text-white">
                             {formatCurrency(Number(invoice.amount), invoice.currency)}

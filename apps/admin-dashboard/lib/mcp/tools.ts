@@ -336,14 +336,14 @@ export function registerAdminMcpTools(server: McpServer) {
 				requireMcpPermission(context, "read:invoices");
 				const where: Record<string, unknown> = {};
 				if (args.clientId) where.clientId = args.clientId;
-				if (args.projectId) where.projectId = args.projectId;
+				if (args.projectId) where.projects = { some: { projectId: args.projectId } };
 				if (args.status) where.status = args.status;
 
 				const invoices = await prisma.invoice.findMany({
 					where,
 					include: {
 						client: { select: { id: true, name: true, email: true, company: true } },
-						project: { select: { id: true, name: true } },
+						projects: { include: { project: { select: { id: true, name: true } } } },
 					},
 					orderBy: { issueDate: "desc" },
 				});

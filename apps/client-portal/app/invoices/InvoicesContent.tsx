@@ -16,9 +16,9 @@ interface InvoiceWithRelations extends Omit<Invoice, 'createdAt' | 'updatedAt' |
     name: string;
     company?: string | null;
   };
-  project?: {
+  projects: {
     name: string;
-  } | null;
+  }[];
 }
 
 export function InvoicesContent() {
@@ -237,7 +237,7 @@ export function InvoicesContent() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {invoice.project?.name || '-'}
+                      {invoice.projects.length > 0 ? invoice.projects.map(p => p.name).join(', ') : 'All projects'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                       {formatCurrency(Number(invoice.amount), invoice.currency)}

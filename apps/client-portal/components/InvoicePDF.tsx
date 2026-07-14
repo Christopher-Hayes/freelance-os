@@ -16,9 +16,10 @@ export interface InvoicePDFData {
     email: string;
     company?: string | null;
   };
-  project?: {
+  projects: {
     name: string;
-  } | null;
+  }[];
+  isAllProjects?: boolean;
   // Freelancer/company information
   companyInfo: {
     name: string;
@@ -265,10 +266,12 @@ export const InvoicePDF: React.FC<{ invoice: InvoicePDFData }> = ({ invoice }) =
         </View>
 
         {/* Project Information */}
-        {invoice.project && (
+        {invoice.projects.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.label}>Project</Text>
-            <Text style={styles.value}>{invoice.project.name}</Text>
+            <Text style={styles.label}>{!invoice.isAllProjects && invoice.projects.length === 1 ? 'Project' : 'Projects'}</Text>
+            <Text style={styles.value}>
+              {invoice.isAllProjects ? 'All Projects' : invoice.projects.map(p => p.name).join(', ')}
+            </Text>
           </View>
         )}
 

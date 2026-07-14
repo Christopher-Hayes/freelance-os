@@ -8,6 +8,7 @@ import type { Client, Project } from '@freelance-os/types';
 import { generateInvoice } from '@/lib/invoice-actions';
 import { authFetch } from '@/lib/util';
 import MiniCalendar from '@/components/MiniCalendar';
+import ProjectMultiSelect from '@/components/ProjectMultiSelect';
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function NewInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [name, setName] = useState('');
   const [clientId, setClientId] = useState<number | ''>('');
-  const [projectId, setProjectId] = useState<number | ''>('');
+  const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [status, setStatus] = useState<'draft' | 'sent'>('draft');
@@ -46,6 +47,21 @@ export default function NewInvoicePage() {
   const [rangeStats, setRangeStats] = useState<RangeStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
 
+  const filteredProjects = useMemo(
+    () => projects.filter((project) => !clientId || project.clientId === Number(clientId)),
+    [projects, clientId]
+  );
+
+  // Default project selection to "all projects for this client" whenever the
+  // available project set changes (client switch, or projects finish loading).
+  useEffect(() => {
+    setSelectedProjectIds(filteredProjects.map((p) => p.id));
+  }, [filteredProjects]);
+
+  // MiniCalendar only understands a single project filter; when more than one
+  // project is selected, fall back to its "no project" (multi-color) view.
+  const singleProjectId = selectedProjectIds.length === 1 ? selectedProjectIds[0]! : '';
+
   // Fetch range stats when both start and end dates are set in generate mode
   useEffect(() => {
     if (mode !== 'generate' || !startDate || !endDate || !clientId) {
@@ -63,14 +79,18 @@ export default function NewInvoicePage() {
           endDate,
           clientId: String(clientId),
         });
-        if (projectId) params.set('projectId', String(projectId));
 
         const res = await authFetch(`/api/time?${params}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error('Failed to fetch time entries');
         const data = await res.json();
-        const entries = data.timeEntries ?? [];
+        const allEntries = data.timeEntries ?? [];
+        // Empty selection is treated the same as "all projects" (matches the
+        // backend's interpretation of an empty projectIds array).
+        const entries = selectedProjectIds.length > 0
+          ? allEntries.filter((e: any) => selectedProjectIds.includes(e.projectId))
+          : allEntries;
 
         let totalMinutes = 0;
         let billableMinutes = 0;
@@ -95,7 +115,7 @@ export default function NewInvoicePage() {
     })();
 
     return () => controller.abort();
-  }, [mode, startDate, endDate, clientId, projectId]);
+  }, [mode, startDate, endDate, clientId, selectedProjectIds]);
 
   // Missing weekdays check: weekdays in the selected range with no project time 8am–8pm
   const [missingDays, setMissingDays] = useState<string[] | null>(null);
@@ -211,7 +231,7 @@ export default function NewInvoicePage() {
           invoiceNumber,
           name: name || undefined,
           clientId: Number(clientId),
-          projectId: projectId ? Number(projectId) : undefined,
+          projectIds: selectedProjectIds.length === filteredProjects.length ? undefined : selectedProjectIds,
           amount: parseFloat(amount),
           currency,
           status,
@@ -243,7 +263,7 @@ export default function NewInvoicePage() {
     try {
       const invoice = await generateInvoice({
         clientId: Number(clientId),
-        projectId: projectId ? Number(projectId) : undefined,
+        projectIds: selectedProjectIds.length === filteredProjects.length ? undefined : selectedProjectIds,
         name: name || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -261,15 +281,12 @@ export default function NewInvoicePage() {
     }
   };
 
-  const filteredProjects = projects.filter(
-    (project) => !clientId || project.clientId === Number(clientId)
-  );
-
-  // When project selection changes, prefill hourly rate from project data
-  const handleProjectChange = (newProjectId: number | '') => {
-    setProjectId(newProjectId);
-    if (newProjectId) {
-      const selected = projects.find((p) => p.id === Number(newProjectId));
+  // When the project selection narrows to exactly one project, prefill the
+  // hourly rate from that project's data.
+  const handleProjectSelectionChange = (newProjectIds: number[]) => {
+    setSelectedProjectIds(newProjectIds);
+    if (newProjectIds.length === 1) {
+      const selected = projects.find((p) => p.id === newProjectIds[0]);
       if (selected?.hourlyRate != null) {
         setHourlyRate(String(selected.hourlyRate));
       }
@@ -401,7 +418,6 @@ export default function NewInvoicePage() {
                 value={clientId}
                 onChange={(e) => {
                   setClientId(Number(e.target.value));
-                  setProjectId('');
                 }}
                 required
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
@@ -417,22 +433,15 @@ export default function NewInvoicePage() {
 
             <div>
               <label htmlFor="project" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Project (Optional)
+                Projects
               </label>
-              <select
+              <ProjectMultiSelect
                 id="project"
-                value={projectId}
-                onChange={(e) => setProjectId(Number(e.target.value))}
+                projects={filteredProjects}
+                selectedIds={selectedProjectIds}
+                onChange={setSelectedProjectIds}
                 disabled={!clientId}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
-              >
-                <option value="">No specific project</option>
-                {filteredProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
@@ -487,7 +496,7 @@ export default function NewInvoicePage() {
               value={issueDate}
               onChange={setIssueDate}
               clientId={clientId}
-              projectId={projectId}
+              projectId={singleProjectId}
               rangeStart={issueDate}
               rangeEnd={dueDate}
             />
@@ -497,7 +506,7 @@ export default function NewInvoicePage() {
               value={dueDate}
               onChange={setDueDate}
               clientId={clientId}
-              projectId={projectId}
+              projectId={singleProjectId}
               rangeStart={issueDate}
               rangeEnd={dueDate}
             />
@@ -553,7 +562,6 @@ export default function NewInvoicePage() {
                 value={clientId}
                 onChange={(e) => {
                   setClientId(Number(e.target.value));
-                  setProjectId('');
                   setHourlyRate('');
                 }}
                 required
@@ -584,22 +592,16 @@ export default function NewInvoicePage() {
 
             <div>
               <label htmlFor="gen-project" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Project (Optional)
+                Projects
               </label>
-              <select
+              <ProjectMultiSelect
                 id="gen-project"
-                value={projectId}
-                onChange={(e) => handleProjectChange(e.target.value ? Number(e.target.value) : '')}
+                projects={filteredProjects}
+                selectedIds={selectedProjectIds}
+                onChange={handleProjectSelectionChange}
                 disabled={!clientId}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
-              >
-                <option value="">All projects for client</option>
-                {filteredProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}{project.hourlyRate != null ? ` ($${Number(project.hourlyRate).toFixed(2)}/hr)` : ''}
-                  </option>
-                ))}
-              </select>
+                showRates
+              />
             </div>
 
             <div>
@@ -617,7 +619,7 @@ export default function NewInvoicePage() {
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
                 placeholder="e.g., 75.00"
               />
-              {projectId && hourlyRate && projects.find((p) => p.id === Number(projectId))?.hourlyRate != null && (
+              {singleProjectId && hourlyRate && projects.find((p) => p.id === Number(singleProjectId))?.hourlyRate != null && (
                 <p className="mt-1 text-xs text-green-600 dark:text-green-400">
                   Auto-filled from project rate
                 </p>
@@ -645,7 +647,7 @@ export default function NewInvoicePage() {
               value={startDate}
               onChange={setStartDate}
               clientId={clientId}
-              projectId={projectId}
+              projectId={singleProjectId}
               rangeStart={startDate}
               rangeEnd={endDate}
             />
@@ -655,7 +657,7 @@ export default function NewInvoicePage() {
               value={endDate}
               onChange={setEndDate}
               clientId={clientId}
-              projectId={projectId}
+              projectId={singleProjectId}
               rangeStart={startDate}
               rangeEnd={endDate}
             />

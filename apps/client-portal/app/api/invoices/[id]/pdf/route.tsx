@@ -43,9 +43,13 @@ export async function GET(
             company: true,
           },
         },
-        project: {
-          select: {
-            name: true,
+        projects: {
+          include: {
+            project: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -57,6 +61,14 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    // True when the invoice covers every project the client has (either no
+    // explicit selection, or a selection that happens to include them all).
+    const clientProjectCount = await prisma.project.count({
+      where: { clientId: invoice.clientId },
+    });
+    const isAllProjects = invoice.projects.length === 0
+      || (clientProjectCount > 0 && invoice.projects.length === clientProjectCount);
 
     // Fetch company/freelancer settings
     const settings = await prisma.setting.findFirst();
@@ -84,7 +96,8 @@ export async function GET(
         email: invoice.client.email,
         company: invoice.client.company,
       },
-      project: invoice.project,
+      projects: invoice.projects.map(ip => ip.project),
+      isAllProjects,
       companyInfo,
     };
 
