@@ -195,6 +195,7 @@ export interface UpdateInvoiceInput {
   name?: string;
   amount?: number;
   status?: InvoiceStatus;
+  issueDate?: Date;
   dueDate?: Date;
   paidDate?: Date;
   notes?: string;

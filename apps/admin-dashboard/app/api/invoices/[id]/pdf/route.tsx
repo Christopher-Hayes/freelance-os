@@ -18,6 +18,17 @@ function toLocalDateStr(date: Date): string {
     .toString();
 }
 
+/**
+ * Convert a JS Date to a YYYY-MM-DD string using its UTC calendar date.
+ * Use this for pure calendar-date fields (issueDate, dueDate, paidDate,
+ * periodStart/periodEnd) — they're stored as UTC midnight for the date the
+ * user picked, so reading them back through the local timezone (as
+ * toLocalDateStr does) can shift the date by a day in timezones behind UTC.
+ */
+function toUtcDateStr(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
 /** Get the local-timezone PlainDate for a JS Date. */
 function toLocalPlainDate(date: Date): Temporal.PlainDate {
   return Temporal.Instant.fromEpochMilliseconds(date.getTime())
@@ -352,8 +363,8 @@ export async function GET(
 
     const invoiceHistory: InvoicePDFData['invoiceHistory'] = pastInvoices.map(inv => ({
       invoiceNumber: inv.invoiceNumber,
-      issueDate: toLocalDateStr(inv.issueDate),
-      periodStart: inv.periodStart ? toLocalDateStr(inv.periodStart) : null,
+      issueDate: toUtcDateStr(inv.issueDate),
+      periodStart: inv.periodStart ? toUtcDateStr(inv.periodStart) : null,
       amount: Number(inv.amount),
       currency: inv.currency,
       status: inv.status,
@@ -361,21 +372,22 @@ export async function GET(
     }));
 
     // ── 10. Assemble PDF data ──
-    // Invoice dates (issueDate, dueDate, paidDate) are stored as real timestamps
-    // via `new Date()`, so convert to local date strings to match the /invoices view.
+    // Invoice dates (issueDate, dueDate, paidDate, periodStart) are plain calendar
+    // dates stored as UTC midnight, so read them back via toUtcDateStr — not
+    // toLocalDateStr — to avoid shifting a day in timezones behind UTC.
     const invoiceData: InvoicePDFData = {
       invoiceNumber: invoice.invoiceNumber,
       name: getInvoiceDisplayName({ ...invoice, projectName: invoice.project?.name ?? null }),
-      issueDate: toLocalDateStr(invoice.issueDate),
-      dueDate: toLocalDateStr(invoice.dueDate),
-      paidDate: invoice.paidDate ? toLocalDateStr(invoice.paidDate) : null,
+      issueDate: toUtcDateStr(invoice.issueDate),
+      dueDate: toUtcDateStr(invoice.dueDate),
+      paidDate: invoice.paidDate ? toUtcDateStr(invoice.paidDate) : null,
       status: invoice.status,
       amount: Number(invoice.amount),
       currency: invoice.currency,
       notes: invoice.notes,
       workPeriodStart: timeEntries.length > 0 ? toLocalDateStr(timeEntries[0]!.startTime) : null,
       workPeriodEnd: timeEntries.length > 0 ? toLocalDateStr(timeEntries[timeEntries.length - 1]!.startTime) : null,
-      periodStart: toLocalDateStr(periodStart),
+      periodStart: toUtcDateStr(periodStart),
       client: {
         name: invoice.client.name,
         email: invoice.client.email,

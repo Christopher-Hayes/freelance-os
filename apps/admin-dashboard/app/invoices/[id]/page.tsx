@@ -7,6 +7,7 @@ import type { Invoice, Client, Project, InvoiceStatus } from '@freelance-os/type
 import { EditButton, DownloadButton, PreviewButton } from '@repo/ui';
 import { sendInvoiceEmail, generateInvoiceSummary } from '@/lib/invoice-actions';
 import { getInvoiceDisplayName } from '@/lib/invoice-format';
+import { formatPlainDate } from '@/lib/datetime';
 import { authFetch } from '@/lib/util';
 import ReactMarkdown from 'react-markdown';
 
@@ -42,6 +43,7 @@ export default function InvoiceDetailPage() {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState<InvoiceStatus>('draft');
+  const [issueDate, setIssueDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [paidDate, setPaidDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -65,6 +67,7 @@ export default function InvoiceDetailPage() {
       setName(data.name || '');
       setAmount(data.amount.toString());
       setStatus(data.status);
+      setIssueDate(data.issueDate.split('T')[0]);
       setDueDate(data.dueDate.split('T')[0]);
       setPaidDate(data.paidDate ? data.paidDate.split('T')[0] : '');
       setNotes(data.notes || '');
@@ -90,6 +93,7 @@ export default function InvoiceDetailPage() {
           name: name || null,
           amount: parseFloat(amount),
           status,
+          issueDate,
           dueDate,
           paidDate: paidDate || null,
           notes,
@@ -437,6 +441,19 @@ export default function InvoiceDetailPage() {
             </div>
 
             <div>
+              <label htmlFor="issue-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Issue Date
+              </label>
+              <input
+                type="date"
+                id="issue-date"
+                value={issueDate}
+                onChange={(e) => setIssueDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600"
+              />
+            </div>
+
+            <div>
               <label htmlFor="due-date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Due Date
               </label>
@@ -505,6 +522,8 @@ export default function InvoiceDetailPage() {
                   setName(invoice.name || '');
                   setAmount(invoice.amount.toString());
                   setStatus(invoice.status);
+                  const issueDateStr = invoice.issueDate.split('T')[0];
+                  if (issueDateStr) setIssueDate(issueDateStr);
                   const dueDateStr = invoice.dueDate.split('T')[0];
                   if (dueDateStr) setDueDate(dueDateStr);
                   const paidDateStr = invoice.paidDate ? invoice.paidDate.split('T')[0] : '';
@@ -553,18 +572,18 @@ export default function InvoiceDetailPage() {
             <div className="grid grid-cols-2 gap-8">
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Issue Date</h3>
-                <p className="text-lg dark:text-white">{formatDate(invoice.issueDate)}</p>
+                <p className="text-lg dark:text-white">{formatPlainDate(invoice.issueDate, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
 
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Due Date</h3>
-                <p className="text-lg dark:text-white">{formatDate(invoice.dueDate)}</p>
+                <p className="text-lg dark:text-white">{formatPlainDate(invoice.dueDate, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
 
               {invoice.paidDate && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Paid Date</h3>
-                  <p className="text-lg dark:text-white">{formatDate(invoice.paidDate)}</p>
+                  <p className="text-lg dark:text-white">{formatPlainDate(invoice.paidDate, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
               )}
             </div>
