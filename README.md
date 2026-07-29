@@ -2,14 +2,18 @@
 
 A unified monorepo for managing your freelance business operations - from activity tracking to client management, invoicing, and analytics.
 
-## 🏗️ Architecture
+## Architecture
 
 This monorepo contains:
 
 ### Apps
 
-- **`apps/admin-dashboard`** - Admin dashboard for analytics, charts, and business management (port 3010)
-- **`apps/client-portal`** - Client-facing portal for viewing time tracking, invoices, and project status (port 3011)
+- **`apps/admin-dashboard`**
+  - Status: Fully working
+  - Admin dashboard for analytics, charts, and business management (port 3010)
+- **`apps/client-portal`**
+  - Status: Still a WIP
+  - Client-facing portal for viewing time tracking, invoices, and project status (port 3011)
 
 ### Packages
 
@@ -20,7 +24,7 @@ This monorepo contains:
 - **`packages/tailwind-config`** - Shared Tailwind CSS configuration
 - **`packages/typescript-config`** - Shared TypeScript configurations
 
-## 🎯 Features
+## Features
 
 ### Activity Tracking
 
@@ -46,7 +50,7 @@ This monorepo contains:
 - Track payment status (draft, sent, paid, overdue, cancelled)
 - Clients can view their invoices in the portal
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -123,7 +127,7 @@ This will start:
 - Admin Dashboard: <http://localhost:3000>
 - Client Portal: <http://localhost:3001>
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 freelance-os/
@@ -156,7 +160,7 @@ freelance-os/
 - `time_entries` - Time tracking entries per project
 - `invoices` - Invoice generation and payment tracking
 
-## 🔧 Development
+## Development
 
 ### Available Scripts
 
@@ -204,7 +208,7 @@ pnpm db:studio
 pnpm db:seed
 ```
 
-## 🔗 Integration with Activity Tracking Utility
+## Integration with Activity Tracking Utility
 
 Your existing activity tracking utility can connect directly to the same PostgreSQL database:
 
@@ -215,7 +219,7 @@ Your existing activity tracking utility can connect directly to the same Postgre
 
 The utility will continue to populate `activity_sessions` and `activity_summaries` tables, which the admin dashboard can then visualize.
 
-## 📊 Admin Dashboard Features
+## Admin Dashboard Features
 
 - **Activity Analytics** - Charts and graphs of your computer usage
 - **Client Management** - CRUD operations for clients
@@ -224,14 +228,14 @@ The utility will continue to populate `activity_sessions` and `activity_summarie
 - **Invoice Generation** - Create and manage invoices
 - **Financial Overview** - Revenue tracking and reporting
 
-## 👥 Client Portal Features
+## Client Portal Features
 
 - **Time Tracking View** - Clients can see hours logged on their projects
 - **Weekly Breakdown** - Distribution of time week-by-week
 - **Invoice Access** - View all invoices and payment status
 - **Project Status** - See current project progress
 
-## 🔒 Security
+## Security
 
 - Client portal uses NextAuth.js for authentication
 - Clients can only access their own data
@@ -239,7 +243,7 @@ The utility will continue to populate `activity_sessions` and `activity_summarie
 - Database connection uses SSL in production
 - Environment variables for sensitive configuration
 
-## 📝 Adding New Features
+## Adding New Features
 
 1. **Add database models**: Edit `packages/database/prisma/schema.prisma`
 2. **Generate types**: Run `pnpm db:generate`
@@ -247,7 +251,7 @@ The utility will continue to populate `activity_sessions` and `activity_summarie
 4. **Build UI components**: Add to `packages/ui/src/`
 5. **Use in apps**: Import from `@freelance-os/database`, `@freelance-os/types`, `@repo/ui`
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Database Connection Issues
 
@@ -266,16 +270,10 @@ cd packages/database
 pnpm db:generate
 ```
 
-### Port Already in Use
+## Project Status
 
-```bash
-# Change ports in app package.json files
-# admin-dashboard: "dev": "next dev"
-# client-portal: "dev": "next dev --port 3010"
-```
+**Production Readiness:** This is software I personally use for my freelance work. I'm working on it in an open-source manner, but not everything yet works out-of-the-box.
 
-## AI Disclosure
+**AI Disclosure:** This project is developed by a human. Some features are implemented initially by AI to reduce development time. Hence the label, “AI in the loop.”
 
-![AI: in the loop](./LABEL_AI IN-THE-LOOP_black.svg)
-
-This project is developed with AI tools in the loop.
+![AI: in the loop](./LABEL_AI_IN-THE-LOOP_black.svg)
