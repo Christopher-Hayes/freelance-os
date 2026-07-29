@@ -274,13 +274,8 @@ pnpm db:generate
 # client-portal: "dev": "next dev --port 3010"
 ```
 
-## 🚧 Roadmap
+## AI Disclosure
 
-- [ ] NextAuth.js integration for client portal
-- [ ] Activity analytics dashboard with charts
-- [ ] Invoice PDF generation
-- [ ] Email notifications for invoices
-- [ ] Automated time entry from activity sessions
-- [ ] Client project reports
-- [ ] Revenue forecasting
-- [ ] API endpoints for mobile apps
+![AI: in the loop](./LABEL_AI IN-THE-LOOP_black.svg)
+
+This project is developed with AI tools in the loop.
