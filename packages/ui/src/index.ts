@@ -65,6 +65,12 @@ export { ApiKeyList } from "./api-key-list";
 export { OptionsMenu, OptionsMenuItem, OptionsMenuSeparator } from "./options-menu";
 export type { OptionsMenuProps, OptionsMenuItemProps } from "./options-menu";
 
+export { ThemeProvider, useTheme, THEME_NO_FLASH_SCRIPT } from "./theme";
+export type { Theme } from "./theme";
+
+export { ThemeToggle } from "./theme-toggle";
+export type { ThemeToggleProps } from "./theme-toggle";
+
 // Legacy components
 export { Gradient } from "./gradient";
 export { TurborepoLogo } from "./turborepo-logo";

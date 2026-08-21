@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@repo/ui";
 import { auth } from "@/lib/auth";
 import { handleSignOut } from "@/lib/actions";
 import { Sidebar } from "./Sidebar";
@@ -17,6 +18,7 @@ export async function DashboardLayout({ children }: { children: React.ReactNode 
               </h1>
             </div>
             <div className="flex items-center gap-4">
+              <ThemeToggle />
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 {session?.user?.email}
               </span>

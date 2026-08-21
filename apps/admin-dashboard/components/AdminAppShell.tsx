@@ -21,6 +21,7 @@ import {
 import LogoDark from "@/public/logo.webp";
 import LogoLight from "@/public/logo-light.webp";
 import { useEffect, useMemo, useState } from "react";
+import { ThemeToggle } from "@repo/ui";
 import CommandPalette from "@/components/CommandPalette";
 import JobsIndicator from "@/components/JobsIndicator";
 import LogoutButton from "@/components/LogoutButton";
@@ -274,6 +275,7 @@ export default function AdminAppShell({ children }: AdminAppShellProps) {
               </button>
 
               <div className="flex items-center gap-x-2 sm:gap-x-3">
+                <ThemeToggle />
                 <JobsIndicator />
                 <div className="flex items-center gap-3 px-2 py-1">
                   <div className="hidden text-right sm:block">

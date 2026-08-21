@@ -3,6 +3,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { Suspense } from "react";
+import { THEME_NO_FLASH_SCRIPT } from "@repo/ui";
 import { Providers } from "@/components/Providers";
 import { AuthErrorBoundary } from "@/components/AuthErrorBoundary";
 import AdminAppShell from "@/components/AdminAppShell";
@@ -31,7 +32,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
+      </head>
       <body className={geist.className}>
         <AuthErrorBoundary>
           <Providers>

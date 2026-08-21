@@ -2,7 +2,7 @@ import "@repo/ui/styles.css";
 import "./globals.css";
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { Toaster } from "@repo/ui";
+import { Toaster, ThemeProvider, THEME_NO_FLASH_SCRIPT } from "@repo/ui";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -17,10 +17,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_NO_FLASH_SCRIPT }} />
+      </head>
       <body className={geist.className}>
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );
