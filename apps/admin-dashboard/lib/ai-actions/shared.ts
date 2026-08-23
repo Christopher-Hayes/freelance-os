@@ -8,6 +8,11 @@ import {
   markAiTelemetryFailed,
 } from "@/lib/ai-telemetry";
 import { Temporal } from "@/lib/temporal-polyfill";
+import {
+  type ActivitySessionForAI,
+  buildSessionDigest,
+  summarizeDigestOneLine,
+} from "./activity-digest";
 
 export type DebugTelemetryOptions = {
   jobId?: number;
@@ -145,15 +150,18 @@ export async function generateObjectWithTelemetry<TSchema extends z.ZodTypeAny>(
 // Activity session merging helpers (shared by autofill and time-entry)
 // ---------------------------------------------------------------------------
 
-export type ActivitySessionForAI = {
-  id: number;
-  startTime: string;
-  endTime: string;
-  appClass: string;
-  windowTitle: string | null;
-  durationSeconds: number;
-  subSessions?: ActivitySessionForAI[];
-};
+export type { ActivitySessionForAI } from "./activity-digest";
+export {
+  buildSessionDigest,
+  formatSessionDigest,
+  formatSessionsForPrompt,
+  summarizeDigestOneLine,
+  formatDayRollup,
+  formatDuration,
+} from "./activity-digest";
+
+const MERGE_GAP_MINUTES = 10;
+const MIN_MERGED_SESSION_SECONDS = 300;
 
 export function cloneActivitySessionForAI(session: ActivitySessionForAI): ActivitySessionForAI {
   return {
@@ -166,112 +174,21 @@ export function cloneActivitySessionForAI(session: ActivitySessionForAI): Activi
   };
 }
 
+/**
+ * Merge same-app sessions separated by short gaps into single blocks, keeping
+ * every original session under `subSessions` so downstream digests can compute
+ * real per-site totals. `windowTitle` becomes a one-line rollup; callers that
+ * need the full breakdown should use formatSessionsForPrompt / buildSessionDigest.
+ */
 export function mergeSessionsForAI(sessions: ActivitySessionForAI[]): ActivitySessionForAI[] {
   if (sessions.length === 0) return [];
 
-  const MERGE_GAP_MINUTES = 10;
-  const INTERVAL_CHUNK_MINUTES = 15;
-  const INTERVAL_BREAKDOWN_THRESHOLD_MINUTES = 30;
-  const MAX_DESCRIPTION_LENGTH = 500;
-
-  const sorted = [...sessions].sort((a, b) => {
-    const aInstant = Temporal.Instant.from(a.startTime);
-    const bInstant = Temporal.Instant.from(b.startTime);
-    return Temporal.Instant.compare(aInstant, bInstant);
-  });
-
-  const stripTrailingAppName = (title: string) => {
-    const lastDash = title.lastIndexOf(" - ");
-    if (lastDash > 0) {
-      return title.slice(0, lastDash);
-    }
-    return title;
-  };
-
-  const truncateTitle = (title: string) =>
-    title.length > MAX_DESCRIPTION_LENGTH
-      ? `${title.substring(0, MAX_DESCRIPTION_LENGTH)}...`
-      : title;
-
-  const formatIntervalLabel = (instant: Temporal.Instant) => {
-    const zdt = instant.toZonedDateTimeISO(Temporal.Now.timeZoneId());
-    const hour = zdt.hour;
-    const minute = zdt.minute;
-    const period = hour >= 12 ? "PM" : "AM";
-    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
-  };
-
-  const describeSessionTitles = (session: ActivitySessionForAI) => {
-    const subSessions = session.subSessions ?? [session];
-    const distinctTitles = Array.from(
-      new Set(
-        subSessions
-          .map((sub) => sub.windowTitle?.trim())
-          .filter((title): title is string => Boolean(title))
-          .map(stripTrailingAppName)
-      )
-    );
-
-    if (session.durationSeconds < INTERVAL_BREAKDOWN_THRESHOLD_MINUTES * 60) {
-      return truncateTitle(distinctTitles.slice(0, 3).join(" / "));
-    }
-
-    const sessionStart = Temporal.Instant.from(session.startTime);
-    const sessionEnd = Temporal.Instant.from(session.endTime);
-    const chunkSeconds = INTERVAL_CHUNK_MINUTES * 60;
-    const intervalSummaries: string[] = [];
-
-    for (
-      let intervalStart = sessionStart;
-      Temporal.Instant.compare(intervalStart, sessionEnd) < 0;
-      intervalStart = intervalStart.add({ minutes: INTERVAL_CHUNK_MINUTES })
-    ) {
-      const intervalEndCandidate = intervalStart.add({ minutes: INTERVAL_CHUNK_MINUTES });
-      const intervalEnd =
-        Temporal.Instant.compare(intervalEndCandidate, sessionEnd) > 0
-          ? sessionEnd
-          : intervalEndCandidate;
-
-      let bestTitle = "";
-      let bestOverlapSeconds = 0;
-
-      for (const sub of subSessions) {
-        if (!sub.windowTitle?.trim()) continue;
-
-        const subStart = Temporal.Instant.from(sub.startTime);
-        const subEnd = Temporal.Instant.from(sub.endTime);
-        const overlapStart =
-          Temporal.Instant.compare(intervalStart, subStart) > 0 ? intervalStart : subStart;
-        const overlapEnd =
-          Temporal.Instant.compare(intervalEnd, subEnd) < 0 ? intervalEnd : subEnd;
-
-        if (Temporal.Instant.compare(overlapStart, overlapEnd) >= 0) continue;
-
-        const overlapNs = overlapEnd.epochNanoseconds - overlapStart.epochNanoseconds;
-        const overlapSeconds = Number(overlapNs / 1_000_000_000n);
-
-        if (overlapSeconds > bestOverlapSeconds) {
-          bestOverlapSeconds = overlapSeconds;
-          bestTitle = stripTrailingAppName(sub.windowTitle);
-        }
-      }
-
-      if (bestTitle && bestOverlapSeconds >= Math.min(chunkSeconds / 3, chunkSeconds)) {
-        const label = formatIntervalLabel(intervalStart);
-        const summary = `${label}: ${bestTitle}`;
-        if (intervalSummaries.at(-1) !== summary) {
-          intervalSummaries.push(summary);
-        }
-      }
-    }
-
-    if (intervalSummaries.length > 0) {
-      return truncateTitle(intervalSummaries.join(" | "));
-    }
-
-    return truncateTitle(distinctTitles.slice(0, 5).join(" / "));
-  };
+  const sorted = [...sessions].sort((a, b) =>
+    Temporal.Instant.compare(
+      Temporal.Instant.from(a.startTime),
+      Temporal.Instant.from(b.startTime)
+    )
+  );
 
   const merged: ActivitySessionForAI[] = [];
 
@@ -286,8 +203,8 @@ export function mergeSessionsForAI(sessions: ActivitySessionForAI[]): ActivitySe
       if (m.appClass !== session.appClass) continue;
 
       const mEnd = Temporal.Instant.from(m.endTime);
-      const gapNs = currentStart.epochNanoseconds - mEnd.epochNanoseconds;
-      const gapMinutes = Number(gapNs) / (1_000_000_000 * 60);
+      const gapMinutes =
+        Number(currentStart.epochNanoseconds - mEnd.epochNanoseconds) / (1_000_000_000 * 60);
 
       if (gapMinutes <= MERGE_GAP_MINUTES) {
         existingIndex = i;
@@ -295,38 +212,34 @@ export function mergeSessionsForAI(sessions: ActivitySessionForAI[]): ActivitySe
       }
     }
 
-    if (existingIndex >= 0) {
-      const existing = merged[existingIndex];
-      if (!existing) {
-        continue;
-      }
-      existing.subSessions = existing.subSessions ?? [cloneActivitySessionForAI(existing)];
-      existing.subSessions.push(cloneActivitySessionForAI(session));
-      const existingEnd = Temporal.Instant.from(existing.endTime);
-
-      if (Temporal.Instant.compare(currentEnd, existingEnd) > 0) {
-        existing.endTime = session.endTime;
-      }
-
-      const existingStart = Temporal.Instant.from(existing.startTime);
-      const existingEndInstant = Temporal.Instant.from(existing.endTime);
-      const newDurationNs =
-        existingEndInstant.epochNanoseconds - existingStart.epochNanoseconds;
-      existing.durationSeconds = Math.floor(Number(newDurationNs) / 1_000_000_000);
-
-      existing.windowTitle = describeSessionTitles(existing);
-    } else {
-      const truncated: ActivitySessionForAI = {
+    if (existingIndex < 0) {
+      merged.push({
         ...session,
         subSessions: [cloneActivitySessionForAI(session)],
-      };
-      truncated.windowTitle = truncated.windowTitle
-        ? describeSessionTitles(truncated)
-        : truncated.windowTitle;
-      merged.push(truncated);
+      });
+      continue;
     }
+
+    const existing = merged[existingIndex];
+    if (!existing) continue;
+
+    existing.subSessions = existing.subSessions ?? [cloneActivitySessionForAI(existing)];
+    existing.subSessions.push(cloneActivitySessionForAI(session));
+
+    if (Temporal.Instant.compare(currentEnd, Temporal.Instant.from(existing.endTime)) > 0) {
+      existing.endTime = session.endTime;
+    }
+
+    const existingStart = Temporal.Instant.from(existing.startTime);
+    const existingEnd = Temporal.Instant.from(existing.endTime);
+    existing.durationSeconds = Math.floor(
+      Number(existingEnd.epochNanoseconds - existingStart.epochNanoseconds) / 1_000_000_000
+    );
   }
 
-  // Remove any sessions shorter than 5 minutes after merging
-  return merged.filter((s) => s.durationSeconds >= 300);
+  for (const session of merged) {
+    session.windowTitle = summarizeDigestOneLine(buildSessionDigest(session));
+  }
+
+  return merged.filter((s) => s.durationSeconds >= MIN_MERGED_SESSION_SECONDS);
 }

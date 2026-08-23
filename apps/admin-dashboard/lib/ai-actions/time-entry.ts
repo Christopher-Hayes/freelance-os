@@ -7,6 +7,7 @@ import {
   type DebugTelemetryOptions,
   generateTextWithTelemetry,
   mergeSessionsForAI,
+  formatSessionsForPrompt,
 } from "./shared";
 
 /**
@@ -97,20 +98,15 @@ ${projectContext}
 
 Time Entry Period: ${params.startTime} to ${params.endTime}
 
-Activity Sessions during this period (sorted by duration):
-${mergedSessions
-  .map(
-    (s) =>
-      `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes)`
-  )
-  .join("\n")}
+Activity during this period (each "•" is a site/repo with its total time inside that app session):
+${formatSessionsForPrompt(mergedSessions, { charBudget: 4000 })}
 
 Based on these activity sessions, generate a SINGLE, concise description (5-10 words) for what was worked on during this time entry.
 
 Guidelines:
 - Be specific about what was accomplished or worked on
 - Use professional, client-friendly language
-- Focus on the most significant activities by duration
+- Focus on the most significant activities by duration, using the per-site totals rather than the number of visits
 - Avoid generic phrases like "worked on project" or "coding"
 - If window titles indicate specific features or tasks, mention them
 - Keep it brief and actionable

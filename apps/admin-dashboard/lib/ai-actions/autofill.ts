@@ -17,6 +17,8 @@ import {
   maybeCreateTelemetryRun,
   generateObjectWithTelemetry,
   mergeSessionsForAI,
+  formatSessionsForPrompt,
+  formatDayRollup,
 } from "./shared";
 
 /**
@@ -74,9 +76,14 @@ export async function generateAutofillSuggestions(params: {
     }))
   );
 
-  const sortedByDuration = mergedSessions
+  // Keep the most substantial blocks of the day, but render them in
+  // chronological order so the model can lay out a coherent timeline.
+  const significantSessions = [...mergedSessions]
     .sort((a, b) => b.durationSeconds - a.durationSeconds)
     .slice(0, 50);
+
+  const activityDigest = formatSessionsForPrompt(significantSessions, { timeZone: localTz });
+  const dayRollup = formatDayRollup(mergedSessions);
 
   // Project eligibility rules based on start/end dates and status:
   // 1. Has both dates → include if autofill date falls within range (ignore status)
@@ -128,7 +135,7 @@ export async function generateAutofillSuggestions(params: {
       });
 
   if (projects.length === 0) {
-    return { suggestions: [], activityCount: sessions.length, mergedCount: sortedByDuration.length };
+    return { suggestions: [], activityCount: sessions.length, mergedCount: significantSessions.length };
   }
 
   const existingEntries = await prisma.timeEntry.findMany({
@@ -213,13 +220,18 @@ ${existingEntriesInfo
 
 `
     : ""
-}Activity Sessions (merged, top by duration):
-${sortedByDuration
-  .map(
-    (s) =>
-      `- ${s.appClass}${s.windowTitle ? ` - ${s.windowTitle}` : ""} (${Math.round(s.durationSeconds / 60)} minutes, ${s.startTime} to ${s.endTime})`
-  )
-  .join("\n")}
+}Day totals by site/app (every tracked session, most time first):
+${dayRollup}
+
+Activity Digest (chronological; each app session is rolled up by site/project):
+${activityDigest}
+
+How to read this:
+- "Day totals" is the ground truth for how much time each site/app got today. An entry set that assigns far less time to a work-related site than its day total is wrong.
+- In the digest, each "-" line is one continuous app session: its wall-clock span, the tracked time inside it, and the clock range.
+- Each "•" line is one site, repo, or app used inside that session, with the TOTAL time spent on it across the whole session and the clock ranges when it was active.
+- These totals are authoritative and already account for tab switching. If a site shows 1h 54m, that is roughly 1h 54m of real work on it, even though it was interleaved with other tabs.
+- "brief/other titles" lines are incidental noise (short lookups, quick tab visits). Do not build entries out of them, but they are fine to absorb into a surrounding block.
 
 Based on these activity sessions, suggest how the day's time entries should look. You can both create missing entries and refine existing ones. Group related activities together into logical work blocks.
 
@@ -236,7 +248,9 @@ Guidelines:
 - Prefer action="update" over delete+create when the existing entry is roughly correct. Only delete when the entry is too inaccurate to salvage.
 - Treat the final combined set of kept existing entries, updated entries, and new entries as a complete day plan: no overlaps after your changes, and no overlaps among your returned suggestions.
 - Only return updates or deletes for entries that should actually change. Do not return unchanged existing entries.
-- Ignore casual web browsing unless window titles clearly indicate project work.
+- Browser time is real work time when the site indicates project work (design tools, project dashboards, deploy logs, docs, client sites). Size such entries from the site's TOTAL time in the digest and its active clock ranges — not from how many separate visits it took.
+- A site that was interleaved with unrelated browsing across several hours still deserves an entry covering the stretch its blocks span, minus obvious long detours.
+- Ignore casual web browsing (video, social, shopping, games, news) unless titles clearly indicate project work.
 - Entries should be at minimum 15 minutes long.
 - Keep descriptions concise but informative.`;
 
@@ -263,7 +277,7 @@ Guidelines:
           date: params.date,
           projectIds: params.projectIds,
           activityCount: sessions.length,
-          mergedCount: sortedByDuration.length,
+          mergedCount: significantSessions.length,
         },
       }
     );
@@ -271,7 +285,7 @@ Guidelines:
     return {
       suggestions: object.suggestions,
       activityCount: sessions.length,
-      mergedCount: sortedByDuration.length,
+      mergedCount: significantSessions.length,
     };
   }
 
@@ -311,7 +325,7 @@ Guidelines:
             date: params.date,
             projectIds: params.projectIds,
             activityCount: sessions.length,
-            mergedCount: sortedByDuration.length,
+            mergedCount: significantSessions.length,
           },
           null,
           2
@@ -352,6 +366,7 @@ Guidelines:
   systemParts.push(`${stepNum}. Combine all data sources to produce comprehensive time entry suggestions, including updates to existing entries when helpful`);
   systemParts.push(``);
   systemParts.push(`Prefer activity session data as the primary source for time entry timestamps.`);
+  systemParts.push(`The activity digest reports per-site TOTAL time inside each session. Use those totals to size entries — a design tool or project site that accumulated hours should produce hours of tracked time, not a token 15 minutes.`);
   systemParts.push(`When existing time entries are present, treat them as editable drafts rather than immutable records.`);
   systemParts.push(`Only emit action="update" for entries that materially improve the day's record.`);
   systemParts.push(`Use action="delete" (with existingEntryId set) when an existing entry is attributed to the wrong project and is too inaccurate to salvage — then emit a separate action="create" for the correct entry. Prefer update over delete+create when the entry is roughly correct.`);
@@ -413,6 +428,6 @@ Guidelines:
   return {
     suggestions: result.output.suggestions,
     activityCount: sessions.length,
-    mergedCount: sortedByDuration.length,
+    mergedCount: significantSessions.length,
   };
 }
