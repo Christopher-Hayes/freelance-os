@@ -4,6 +4,7 @@ import { tool, generateObject } from "ai";
 import { z } from "zod";
 import { Temporal } from "@/lib/temporal-polyfill";
 import { getAiModel } from "@/lib/ai-provider";
+import { withAiCache } from "@/lib/ai-actions/ai-cache";
 import {
   getMailboxes as getMailboxesFromProvider,
   searchEmailsByKeyword,
@@ -75,20 +76,24 @@ async function estimateEmailCompositionMinutes(
   newBodyText: string,
   originalBodyLength: number,
 ): Promise<{ minutes: number; reasoning: string }> {
-  const model = await getAiModel();
+  return withAiCache(
+    "email.estimateCompositionMinutes",
+    { subject, newBodyText, originalBodyLength },
+    async () => {
+      const model = await getAiModel();
 
-  const { object } = await generateObject({
-    model,
-    schema: z.object({
-      estimatedMinutes: z
-        .number()
-        .int()
-        .describe("Estimated minutes spent composing this email (5–120)"),
-      reasoning: z
-        .string()
-        .describe("One sentence explaining the estimate"),
-    }),
-    prompt: `You are estimating how long a freelancer spent composing a sent email.
+      const { object } = await generateObject({
+        model,
+        schema: z.object({
+          estimatedMinutes: z
+            .number()
+            .int()
+            .describe("Estimated minutes spent composing this email (5–120)"),
+          reasoning: z
+            .string()
+            .describe("One sentence explaining the estimate"),
+        }),
+        prompt: `You are estimating how long a freelancer spent composing a sent email.
 
 Subject: ${subject}
 New text written (quoted/forwarded content already stripped):
@@ -106,9 +111,11 @@ Consider:
 - A forwarded message with a brief note is 5–10 min
 
 Return a realistic estimate between 5 and 120 minutes.`,
-  });
+      });
 
-  return { minutes: object.estimatedMinutes, reasoning: object.reasoning };
+      return { minutes: object.estimatedMinutes, reasoning: object.reasoning };
+    }
+  );
 }
 
 // ──────────────────────────────────────────────────

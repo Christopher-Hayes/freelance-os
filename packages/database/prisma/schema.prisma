@@ -406,6 +406,23 @@ model AiTelemetryToolCall {
   @@map("ai_telemetry_tool_calls")
 }
 
+// Generic cache for deterministic AI action outputs, keyed by a hash of the
+// exact input given to a specific AI function. Lets repeated calls with the
+// same functionId + input (e.g. summarizing the same email twice) reuse a
+// previous result instead of paying for another model call.
+model AiCallCache {
+  id         Int      @id @default(autoincrement())
+  functionId String   @map("function_id") @db.VarChar(255) // Identifies the AI action, e.g. "email.estimateCompositionMinutes"
+  inputHash  String   @map("input_hash") @db.VarChar(64) // sha256 of the normalized input
+  output     Json // Cached result, shaped however the caller needs
+  hitCount   Int      @default(0) @map("hit_count") // Number of times this cache entry was reused
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([functionId, inputHash])
+  @@map("ai_call_cache")
+}
+
 // App-level metadata (display names, AI suggestions, visibility)
 model App {
   id                   Int      @id @default(autoincrement())
