@@ -356,6 +356,7 @@ export async function GET(
         where: {
           clientId: invoice.client.id,
           id: { not: invoice.id },
+          status: { not: 'cancelled' },
         },
         include: {
           projects: { include: { project: { select: { name: true } } } },

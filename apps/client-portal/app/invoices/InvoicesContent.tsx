@@ -89,7 +89,9 @@ export function InvoicesContent() {
   };
 
   const calculateTotalAmount = () => {
-    return invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+    return invoices
+      .filter(inv => inv.status !== 'cancelled')
+      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
   };
 
   const calculatePaidAmount = () => {

@@ -147,7 +147,9 @@ export default function InvoicesPage() {
   }, [fetchInvoices]);
 
   const totals = useMemo(() => {
-    const totalAmount = invoices.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+    const totalAmount = invoices
+      .filter((invoice) => invoice.status !== 'cancelled')
+      .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
     const paidAmount = invoices
       .filter((invoice) => invoice.status === 'paid')
       .reduce((sum, invoice) => sum + Number(invoice.amount), 0);
