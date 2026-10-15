@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { Badge, Button, Input, Page, PageContent, PageHeader, PageLoading, Section, Select, Surface, Textarea, toast, ApiKeyModal, ApiKeyList } from "@repo/ui";
 import type { AiProvider, ApiKeyListItem } from "@freelance-os/types";
+import {
+  DEFAULT_OPENAI_FAST_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  OPENAI_MODELS,
+  findOpenAiModel,
+} from "@/lib/openai-models";
 import { authFetch, syncAppDataToLocalStorage } from '@/lib/util';
 import { fetchMailboxes } from '@/lib/jmap-actions';
 import type { MailboxInfo } from '@/lib/jmap-provider';
@@ -289,6 +295,13 @@ export default function SettingsPage() {
   const [openaiApiKey, setOpenaiApiKey] = useState("");
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<AiProvider>("openai");
+  const [openaiModel, setOpenaiModel] = useState(DEFAULT_OPENAI_MODEL);
+  const [openaiFastModel, setOpenaiFastModel] = useState(DEFAULT_OPENAI_FAST_MODEL);
+  // Prices are USD per 1M tokens, kept as strings so partial typing ("0.") works
+  const [openaiPrices, setOpenaiPrices] = useState({
+    main: { input: "", output: "" },
+    fast: { input: "", output: "" },
+  });
   const [appRecords, setAppRecords] = useState<AppRecord[]>([]);
   const [newRenameAppClass, setNewRenameAppClass] = useState("");
   const [newRenameDisplayName, setNewRenameDisplayName] = useState("");
@@ -446,6 +459,22 @@ export default function SettingsPage() {
         setOpenaiApiKey(data.openaiKey || "");
         setGoogleApiKey(data.googleApiKey || "");
         setAiProvider(data.aiProvider || "openai");
+        const mainModel = data.openaiModel || DEFAULT_OPENAI_MODEL;
+        const fastModel = data.openaiFastModel || DEFAULT_OPENAI_FAST_MODEL;
+        setOpenaiModel(mainModel);
+        setOpenaiFastModel(fastModel);
+        const priceStr = (saved: number | null | undefined, fallback?: number) =>
+          saved != null ? String(saved) : fallback != null ? String(fallback) : "";
+        setOpenaiPrices({
+          main: {
+            input: priceStr(data.openaiInputPrice, findOpenAiModel(mainModel)?.inputPrice),
+            output: priceStr(data.openaiOutputPrice, findOpenAiModel(mainModel)?.outputPrice),
+          },
+          fast: {
+            input: priceStr(data.openaiFastInputPrice, findOpenAiModel(fastModel)?.inputPrice),
+            output: priceStr(data.openaiFastOutputPrice, findOpenAiModel(fastModel)?.outputPrice),
+          },
+        });
         setJmapToken(data.jmapToken || "");
         setCanReadMailbox(data.canReadMailbox || false);
         setJmapAllowedMailboxes(data.jmapAllowedMailboxes || []);
@@ -479,7 +508,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveSetting = async (field: string, value: string | AiProvider) => {
+  const saveSetting = async (field: string, value: string | number | null | AiProvider) => {
     try {
       const response = await authFetch("/api/settings/all", {
         method: "PUT",
@@ -651,6 +680,41 @@ export default function SettingsPage() {
   const handleAiProviderChange = (value: AiProvider) => {
     setAiProvider(value);
     saveSetting("aiProvider", value);
+  };
+
+  const handleOpenaiModelChange = (slot: "main" | "fast", modelId: string) => {
+    const preset = findOpenAiModel(modelId);
+    const prefix = slot === "main" ? "openai" : "openaiFast";
+    if (slot === "main") setOpenaiModel(modelId);
+    else setOpenaiFastModel(modelId);
+
+    // Switching models resets prices to the catalog defaults for that model
+    const input = preset ? String(preset.inputPrice) : "";
+    const output = preset ? String(preset.outputPrice) : "";
+    setOpenaiPrices((prev) => ({ ...prev, [slot]: { input, output } }));
+    saveSetting(`${prefix}Model`, modelId);
+    saveSetting(`${prefix}InputPrice`, input === "" ? null : Number(input));
+    saveSetting(`${prefix}OutputPrice`, output === "" ? null : Number(output));
+  };
+
+  const handleOpenaiPriceChange = (
+    slot: "main" | "fast",
+    kind: "input" | "output",
+    value: string
+  ) => {
+    setOpenaiPrices((prev) => ({ ...prev, [slot]: { ...prev[slot], [kind]: value } }));
+  };
+
+  const saveOpenaiPrice = (slot: "main" | "fast", kind: "input" | "output") => {
+    const raw = openaiPrices[slot][kind].trim();
+    const field = `${slot === "main" ? "openai" : "openaiFast"}${kind === "input" ? "Input" : "Output"}Price`;
+    if (raw === "") return saveSetting(field, null);
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      toast.error("Price must be a non-negative number");
+      return;
+    }
+    saveSetting(field, n);
   };
 
   const handleJmapTokenChange = (value: string) => {
@@ -1524,11 +1588,57 @@ export default function SettingsPage() {
                   onChange={(e) => handleAiProviderChange(e.target.value as AiProvider)}
                   helperText="Choose which AI provider to use for AI-powered features."
                 >
-                  <option value="openai">OpenAI (gpt-5.4)</option>
+                  <option value="openai">OpenAI</option>
                   <option value="gemini">Google Gemini (gemini-2.5-pro)</option>
                 </Select>
 
                 {aiProvider === "openai" && (
+                  <div className="space-y-4">
+                    {(
+                      [
+                        { slot: "main", label: "Model", value: openaiModel, helper: "Used for complex tasks like summaries and autofill." },
+                        { slot: "fast", label: "Fast Model", value: openaiFastModel, helper: "Used for quick, low-cost tasks." },
+                      ] as const
+                    ).map(({ slot, label, value, helper }) => (
+                      <div key={slot} className="space-y-2">
+                        <Select
+                          id={`openai_${slot}_model`}
+                          label={`OpenAI ${label}`}
+                          value={value}
+                          onChange={(e) => handleOpenaiModelChange(slot, e.target.value)}
+                          helperText={helper}
+                        >
+                          {OPENAI_MODELS.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} ({m.id})
+                            </option>
+                          ))}
+                          {!findOpenAiModel(value) && <option value={value}>{value}</option>}
+                        </Select>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            id={`openai_${slot}_input_price`}
+                            label="Input price ($ / 1M tokens)"
+                            value={openaiPrices[slot].input}
+                            onChange={(e) => handleOpenaiPriceChange(slot, "input", e.target.value)}
+                            onBlur={() => saveOpenaiPrice(slot, "input")}
+                          />
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            id={`openai_${slot}_output_price`}
+                            label="Output price ($ / 1M tokens)"
+                            value={openaiPrices[slot].output}
+                            onChange={(e) => handleOpenaiPriceChange(slot, "output", e.target.value)}
+                            onBlur={() => saveOpenaiPrice(slot, "output")}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   <div className="space-y-2">
                     <Input
                       type="password"
@@ -1555,6 +1665,7 @@ export default function SettingsPage() {
                         </>
                       )}
                     </p>
+                  </div>
                   </div>
                 )}
 

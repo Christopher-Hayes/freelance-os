@@ -1,6 +1,7 @@
 // @ts-ignore
 import { Prisma } from "@prisma/client";
 import { prisma } from "@freelance-os/database";
+import { getCostCalculator } from "./ai-pricing";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -115,9 +116,11 @@ export async function recordTelemetryStep(runId: number, event: unknown) {
     const modelId = typeof modelObj?.modelId === "string" ? modelObj.modelId : undefined;
     const modelProvider = typeof modelObj?.provider === "string" ? modelObj.provider : undefined;
 
+    const costOf = await getCostCalculator();
     const data = {
       modelProvider,
       modelId,
+      costUsd: costOf(modelId, usage),
       finishReason:
         typeof step.finishReason === "string"
           ? step.finishReason
@@ -213,11 +216,14 @@ export async function finishTelemetryRun(
     numberOrUndefined(result.durationMs) ??
     (stepDurationSum > 0 ? stepDurationSum : undefined);
 
+  const costOf = await getCostCalculator();
+
   await prisma.aiTelemetryRun.update({
     where: { id: runId },
     data: {
       status: "completed",
       modelId,
+      costUsd: costOf(modelId, totalUsage),
       finishReason:
         typeof result.finishReason === "string"
           ? result.finishReason

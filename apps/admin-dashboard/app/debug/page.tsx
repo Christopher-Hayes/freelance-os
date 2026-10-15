@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatUsd } from "@/lib/openai-models";
 import type { AiJobDebug, AiTelemetryRun } from "@freelance-os/types";
 import { getJobsForDebug, getStandaloneTelemetryRuns } from "@/lib/debug-data";
 import { enrichJobWithDisplay, getJobStatusColor } from "@/lib/job-utils";
@@ -6,6 +7,13 @@ import { enrichJobWithDisplay, getJobStatusColor } from "@/lib/job-utils";
 function formatDate(value?: Date | string) {
   if (!value) return "—";
   return new Date(value).toLocaleString();
+}
+
+function sumCost(job: AiJobDebug) {
+  return (job.telemetryRuns ?? []).reduce(
+    (sum, run) => sum + (run.costUsd ?? 0),
+    0
+  );
 }
 
 function countTokens(job: AiJobDebug) {
@@ -102,6 +110,7 @@ export default async function DebugPage({
                     <span>#{job.id}</span>
                     <span>{formatDate(job.createdAt)}</span>
                     <span>{countTokens(job)} tokens</span>
+                    <span>{formatUsd(sumCost(job))}</span>
                     <span>{job.telemetryRuns?.reduce((sum, run) => sum + (run.toolCalls?.length ?? 0), 0) ?? 0} tool calls</span>
                   </div>
                 </Link>
@@ -128,6 +137,7 @@ export default async function DebugPage({
                         <span>run #{run.id}</span>
                         <span>{formatDate(run.createdAt)}</span>
                         <span>{run.totalTokens ?? 0} tokens</span>
+                        <span>{formatUsd(run.costUsd)}</span>
                         <span>{run.toolCalls?.length ?? 0} tool calls</span>
                       </div>
                     </Link>

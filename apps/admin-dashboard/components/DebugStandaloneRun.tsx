@@ -1,6 +1,7 @@
 "use client";
 
 import type { AiTelemetryRun } from "@freelance-os/types";
+import { formatUsd } from "@/lib/openai-models";
 
 function formatJson(value: unknown) {
   if (value == null) return "—";
@@ -45,6 +46,10 @@ export default function DebugStandaloneRun({ run }: { run: AiTelemetryRun }) {
               <dd className="font-medium text-gray-900 dark:text-white">{run.totalTokens ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-gray-500 dark:text-gray-400">Cost</dt>
+              <dd className="font-medium text-gray-900 dark:text-white">{formatUsd(run.costUsd)}</dd>
+            </div>
+            <div>
               <dt className="text-gray-500 dark:text-gray-400">Model</dt>
               <dd className="font-medium text-gray-900 dark:text-white">{run.modelId || "—"}</dd>
             </div>
@@ -84,6 +89,7 @@ export default function DebugStandaloneRun({ run }: { run: AiTelemetryRun }) {
                 <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
                   <span className="font-medium text-gray-900 dark:text-white">Step {step.stepNumber}</span>
                   <span className="text-gray-600 dark:text-gray-400">{step.totalTokens ?? 0} tokens</span>
+                  <span className="text-gray-600 dark:text-gray-400">{formatUsd(step.costUsd)}</span>
                   <span className="text-gray-600 dark:text-gray-400">{step.durationMs ?? 0} ms</span>
                   <span className="text-gray-600 dark:text-gray-400">{step.finishReason || "—"}</span>
                 </div>

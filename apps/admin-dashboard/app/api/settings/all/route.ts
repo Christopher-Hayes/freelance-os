@@ -11,6 +11,26 @@ function maskIfPresent(value: string | null): string {
   return value ? MASK_VALUE : "";
 }
 
+function openaiModelFields(setting: any) {
+  return {
+    openaiModel: setting.openaiModel ?? null,
+    openaiFastModel: setting.openaiFastModel ?? null,
+    openaiInputPrice: setting.openaiInputPrice ?? null,
+    openaiOutputPrice: setting.openaiOutputPrice ?? null,
+    openaiFastInputPrice: setting.openaiFastInputPrice ?? null,
+    openaiFastOutputPrice: setting.openaiFastOutputPrice ?? null,
+  };
+}
+
+// Accepts a number or numeric string; empty/null clears; undefined = not provided.
+// Returns NaN-free value or the string "invalid".
+function parsePrice(value: unknown): number | null | undefined | "invalid" {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : "invalid";
+}
+
 function normalizeAppTitleRenames(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -108,6 +128,7 @@ export async function GET() {
       
       // Non-sensitive fields - safe to expose
     aiProvider: setting.aiProvider || "openai",
+      ...openaiModelFields(setting),
     appTitleRenames: setting.appTitleRenames || [],
     hiddenAppClasses: setting.hiddenAppClasses || [],
       canReadMailbox: setting.canReadMailbox || false,
@@ -165,6 +186,8 @@ export async function PUT(request: Request) {
       openaiKey, 
       googleApiKey, 
     aiProvider,
+    openaiModel,
+    openaiFastModel,
     appTitleRenames,
     hiddenAppClasses,
       canReadMailbox,
@@ -189,6 +212,26 @@ export async function PUT(request: Request) {
       mcpEnabled,
       codingStatsEnabled,
     } = body;
+
+    const priceFields = {
+      openaiInputPrice: parsePrice(body.openaiInputPrice),
+      openaiOutputPrice: parsePrice(body.openaiOutputPrice),
+      openaiFastInputPrice: parsePrice(body.openaiFastInputPrice),
+      openaiFastOutputPrice: parsePrice(body.openaiFastOutputPrice),
+    };
+    for (const [name, value] of Object.entries(priceFields)) {
+      if (value === "invalid") {
+        return NextResponse.json(
+          { error: `Invalid ${name}: must be a non-negative number` },
+          { status: 400 }
+        );
+      }
+    }
+    for (const [name, value] of Object.entries({ openaiModel, openaiFastModel })) {
+      if (value !== undefined && value !== null && typeof value !== "string") {
+        return NextResponse.json({ error: `Invalid ${name}` }, { status: 400 });
+      }
+    }
 
     // Validate AI provider if provided
     if (aiProvider !== undefined && !["openai", "gemini"].includes(aiProvider)) {
@@ -242,6 +285,11 @@ export async function PUT(request: Request) {
     
     // Non-sensitive fields can be updated normally
     if (aiProvider !== undefined) updateData.aiProvider = aiProvider as AiProvider;
+    if (openaiModel !== undefined) updateData.openaiModel = openaiModel?.trim() || null;
+    if (openaiFastModel !== undefined) updateData.openaiFastModel = openaiFastModel?.trim() || null;
+    for (const [name, value] of Object.entries(priceFields)) {
+      if (value !== undefined) updateData[name] = value;
+    }
     if (appTitleRenames !== undefined) {
       updateData.appTitleRenames = normalizeAppTitleRenames(appTitleRenames);
     }
@@ -282,6 +330,11 @@ export async function PUT(request: Request) {
         openaiKey: openaiKey && openaiKey !== MASK_VALUE ? openaiKey : null,
         googleApiKey: googleApiKey && googleApiKey !== MASK_VALUE ? googleApiKey : null,
         aiProvider: (aiProvider as AiProvider) || "openai",
+        openaiModel: openaiModel?.trim() || null,
+        openaiFastModel: openaiFastModel?.trim() || null,
+        ...Object.fromEntries(
+          Object.entries(priceFields).map(([k, v]) => [k, v ?? null])
+        ),
         appTitleRenames: normalizeAppTitleRenames(appTitleRenames),
   hiddenAppClasses: normalizeHiddenAppClasses(hiddenAppClasses),
         canReadMailbox: canReadMailbox === "true" || canReadMailbox === true || false,
@@ -320,6 +373,7 @@ export async function PUT(request: Request) {
       gitlabToken: maskIfPresent(setting.gitlabToken),
       codebergToken: maskIfPresent(setting.codebergToken),
     aiProvider: setting.aiProvider || "openai",
+      ...openaiModelFields(setting),
     appTitleRenames: setting.appTitleRenames || [],
     hiddenAppClasses: setting.hiddenAppClasses || [],
       canReadMailbox: setting.canReadMailbox || false,

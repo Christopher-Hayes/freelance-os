@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AiJobDebug, AiTelemetryRun } from "@freelance-os/types";
 import { getJobStatusColor, enrichJobWithDisplay } from "@/lib/job-utils";
+import { formatUsd } from "@/lib/openai-models";
 
 const POLL_INTERVAL = 3_000; // 3 seconds
 
@@ -179,10 +180,11 @@ export default function DebugJobDetail({ job: initialJob }: { job: AiJobDebug })
 function TelemetryRunPanel({ run }: { run: AiTelemetryRun }) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <MetricCard label="Function" value={run.functionId} />
         <MetricCard label="Model" value={run.modelId || "—"} />
         <MetricCard label="Tokens" value={run.totalTokens?.toString() || "—"} />
+        <MetricCard label="Cost" value={formatUsd(run.costUsd)} />
         <MetricCard label="Duration" value={run.totalDurationMs ? `${run.totalDurationMs} ms` : "—"} />
       </div>
 
@@ -204,6 +206,7 @@ function TelemetryRunPanel({ run }: { run: AiTelemetryRun }) {
               <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
                 <span className="font-medium text-gray-900 dark:text-white">Step {step.stepNumber}</span>
                 <span className="text-gray-600 dark:text-gray-400">{step.totalTokens ?? 0} tokens</span>
+                <span className="text-gray-600 dark:text-gray-400">{formatUsd(step.costUsd)}</span>
                 <span className="text-gray-600 dark:text-gray-400">{step.durationMs ?? 0} ms</span>
                 <span className="text-gray-600 dark:text-gray-400">{step.finishReason || "—"}</span>
               </div>

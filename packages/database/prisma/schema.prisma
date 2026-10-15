@@ -347,6 +347,7 @@ model AiTelemetryRun {
   promptTokens        Int?                    @map("prompt_tokens")
   completionTokens    Int?                    @map("completion_tokens")
   totalTokens         Int?                    @map("total_tokens")
+  costUsd             Float?                  @map("cost_usd") // USD cost at the prices in effect when the run finished
   totalDurationMs     Int?                    @map("total_duration_ms")
   error               String?                 @db.Text
   createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz
@@ -372,6 +373,7 @@ model AiTelemetryStep {
   promptTokens       Int?            @map("prompt_tokens")
   completionTokens   Int?            @map("completion_tokens")
   totalTokens        Int?            @map("total_tokens")
+  costUsd            Float?          @map("cost_usd") // USD cost at the prices in effect when the step finished
   durationMs         Int?            @map("duration_ms")
   promptPreview      String?         @map("prompt_preview") @db.Text
   outputPreview      String?         @map("output_preview") @db.Text
@@ -449,6 +451,12 @@ model Setting {
   openaiKey       String?     @map("openai_key") @db.Text
   googleApiKey    String?     @map("google_api_key") @db.Text
   aiProvider      AiProvider? @default(openai) @map("ai_provider")
+  openaiModel          String? @map("openai_model") @db.VarChar(100)      // Main OpenAI model id (null = default)
+  openaiFastModel      String? @map("openai_fast_model") @db.VarChar(100) // Fast OpenAI model id (null = default)
+  openaiInputPrice     Float?  @map("openai_input_price")      // USD per 1M input tokens, main model
+  openaiOutputPrice    Float?  @map("openai_output_price")     // USD per 1M output tokens, main model
+  openaiFastInputPrice  Float? @map("openai_fast_input_price")  // USD per 1M input tokens, fast model
+  openaiFastOutputPrice Float? @map("openai_fast_output_price") // USD per 1M output tokens, fast model
   jmapToken              String?  @map("jmap_token") @db.Text
   jmapUsername           String?  @map("jmap_username") @db.Text
   jmapHostname           String?  @map("jmap_hostname") @db.Text

@@ -21,6 +21,7 @@ interface UseColumnActionsReturn {
   importingRescueTimeProjects: boolean;
   mergingRescueTimeProjects: boolean;
   handleAutofill: () => Promise<void>;
+  handleAutofillWeek: () => Promise<void>;
   handleImportProjectTimesFromRescueTime: () => Promise<void>;
   handleMergeRescueTimeProjects: () => Promise<void>;
   handleClearDayEntries: () => Promise<void>;
@@ -105,6 +106,34 @@ export function useColumnActions(
     } catch (error: any) {
       console.error("Error starting autofill:", error);
       toast.error(error.message || "Failed to start autofill job");
+    } finally {
+      setLoadingAutofill(false);
+    }
+  }, [selectedDate, createJob]);
+
+  const handleAutofillWeek = useCallback(async () => {
+    setLoadingAutofill(true);
+    try {
+      // Monday–Sunday week containing the selected date
+      const weekStart = selectedDate.subtract({ days: selectedDate.dayOfWeek - 1 });
+      const dates = Array.from({ length: 7 }, (_, i) => formatDateStr(weekStart.add({ days: i })));
+      const results = await Promise.allSettled(
+        dates.map((date) => createJob("autofill_time_entries", { date }))
+      );
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length === dates.length) {
+        throw new Error("Failed to start autofill jobs for this week");
+      }
+      if (failures.length > 0) {
+        toast.warning(
+          `Started ${dates.length - failures.length} of ${dates.length} autofill jobs for this week`
+        );
+      } else {
+        toast.info("Autofill started for each day this week! You'll be notified as they complete.");
+      }
+    } catch (error: any) {
+      console.error("Error starting weekly autofill:", error);
+      toast.error(error.message || "Failed to start weekly autofill");
     } finally {
       setLoadingAutofill(false);
     }
@@ -223,6 +252,7 @@ export function useColumnActions(
     importingRescueTimeProjects,
     mergingRescueTimeProjects,
     handleAutofill,
+    handleAutofillWeek,
     handleImportProjectTimesFromRescueTime,
     handleMergeRescueTimeProjects,
     handleClearDayEntries,

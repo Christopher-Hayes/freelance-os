@@ -24,26 +24,38 @@ export async function checkCalDavEnabled(): Promise<boolean> {
 }
 
 const CALENDAR_EVENTS_CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours
+const CALENDAR_EVENTS_CACHE_MAX_ENTRIES = 100;
 
 interface CalendarEventsCacheEntry {
   events: CalendarEvent[];
   fetchedAt: number;
 }
 
-// Module-level cache, shared across requests on this server instance.
-const calendarEventsCache = new Map<string, CalendarEventsCacheEntry>();
+// Stored on globalThis so the caches survive dev-mode HMR module reloads.
+// Shared across requests on this server instance.
+const calendarEventsCache: Map<string, CalendarEventsCacheEntry> =
+  ((globalThis as any).__calendarEventsCache ??= new Map());
+// Dedupes concurrent requests for the same range (e.g. prefetch + navigation).
+const inFlightRequests: Map<string, Promise<CalendarEvent[]>> =
+  ((globalThis as any).__calendarEventsInFlight ??= new Map());
 
 /**
- * Server action to fetch calendar events for a specific day.
- * Returns empty array if CalDAV is not configured or no events found.
- * Results are cached in-memory per day for CALENDAR_EVENTS_CACHE_TTL_MS;
- * pass forceRefresh to bypass the cache.
+ * Server action to fetch calendar events overlapping [startIso, endIso).
+ * The client passes week boundaries computed in the browser's timezone, so
+ * the server's timezone never matters. A CalDAV query costs about the same for
+ * a week as for a day (it's dominated by round trips), so fetch a week at a
+ * time and let the client slice it into days.
+ *
+ * Results are cached in-memory per range for CALENDAR_EVENTS_CACHE_TTL_MS;
+ * pass forceRefresh to bypass the cache (also re-runs CalDAV discovery).
  */
-export async function fetchCalendarEventsForDay(
-  dateStr: string,
+export async function fetchCalendarEventsForRange(
+  startIso: string,
+  endIso: string,
   options?: { forceRefresh?: boolean }
 ): Promise<CalendarEvent[]> {
-  const cached = calendarEventsCache.get(dateStr);
+  const key = `${startIso}|${endIso}`;
+  const cached = calendarEventsCache.get(key);
   if (
     !options?.forceRefresh &&
     cached &&
@@ -52,28 +64,35 @@ export async function fetchCalendarEventsForDay(
     return cached.events;
   }
 
-  try {
-    const date = Temporal.PlainDate.from(dateStr);
-    const timeZone = Temporal.Now.timeZoneId();
-    const startOfDay = date
-      .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
-      .toZonedDateTime(timeZone);
-    const endOfDay = date
-      .add({ days: 1 })
-      .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
-      .toZonedDateTime(timeZone);
+  const inFlight = inFlightRequests.get(key);
+  if (inFlight && !options?.forceRefresh) return inFlight;
 
-    const events = await searchEventsByDateRange(
-      startOfDay.toInstant(),
-      endOfDay.toInstant()
-    );
-    calendarEventsCache.set(dateStr, { events, fetchedAt: Date.now() });
-    return events;
-  } catch (error) {
-    console.error("Error fetching calendar events for day:", error);
-    // Prefer stale cached data over nothing if a refresh attempt fails.
-    return cached?.events ?? [];
-  }
+  const request = (async () => {
+    try {
+      const events = await searchEventsByDateRange(
+        Temporal.Instant.from(startIso),
+        Temporal.Instant.from(endIso),
+        { refreshProviders: options?.forceRefresh }
+      );
+      // Re-insert so Map order tracks recency, then evict the oldest entries.
+      calendarEventsCache.delete(key);
+      calendarEventsCache.set(key, { events, fetchedAt: Date.now() });
+      while (calendarEventsCache.size > CALENDAR_EVENTS_CACHE_MAX_ENTRIES) {
+        calendarEventsCache.delete(calendarEventsCache.keys().next().value!);
+      }
+      return events;
+    } catch (error) {
+      console.error("Error fetching calendar events for range:", error);
+      // Prefer stale cached data over nothing if a refresh attempt fails.
+      return cached?.events ?? [];
+    }
+  })().finally(() => {
+    // A forced refresh may have replaced this entry; only clear our own.
+    if (inFlightRequests.get(key) === request) inFlightRequests.delete(key);
+  });
+
+  inFlightRequests.set(key, request);
+  return request;
 }
 
 /**

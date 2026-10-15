@@ -377,6 +377,7 @@ export interface AiTelemetryStep {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  costUsd?: number | null;
   durationMs?: number;
   promptPreview?: string;
   outputPreview?: string;
@@ -401,6 +402,7 @@ export interface AiTelemetryRun {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  costUsd?: number | null;
   totalDurationMs?: number;
   error?: string;
   createdAt: Date;

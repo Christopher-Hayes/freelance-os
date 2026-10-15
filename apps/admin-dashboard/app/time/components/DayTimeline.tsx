@@ -118,6 +118,7 @@ export default function DayTimeline({ selectedDate, onDateChange }: DayTimelineP
     importingRescueTimeProjects,
     mergingRescueTimeProjects,
     handleAutofill,
+    handleAutofillWeek,
     handleImportProjectTimesFromRescueTime,
     handleMergeRescueTimeProjects,
     handleClearDayEntries,
@@ -267,6 +268,7 @@ export default function DayTimeline({ selectedDate, onDateChange }: DayTimelineP
             isDraggingProjectMinimapViewport={isDraggingProjectMinimapViewport}
             setIsDraggingProjectMinimapViewport={setIsDraggingProjectMinimapViewport}
             onAutofill={handleAutofill}
+            onAutofillWeek={handleAutofillWeek}
             onMergeRescueTimeProjects={handleMergeRescueTimeProjects}
             onClearDayEntries={handleClearDayEntries}
             onImportProjectTimesFromRescueTime={handleImportProjectTimesFromRescueTime}

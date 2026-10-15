@@ -44,33 +44,58 @@ type ProviderClient = {
   };
 };
 
-/**
- * Get a CalDAV client for each enabled, fully-configured provider.
- */
-async function getCalDavClients(): Promise<ProviderClient[]> {
+type ProviderSession = ProviderClient & { calendars: DAVCalendar[] };
+
+// createDAVClient runs account discovery (several PROPFIND round trips) and
+// fetchCalendars adds another, so cache both per provider. Keyed on the
+// provider's updatedAt so edits in settings take effect immediately.
+const PROVIDER_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface ProviderSessionCacheEntry {
+  version: number;
+  session: ProviderSession;
+  fetchedAt: number;
+}
+
+// Stored on globalThis so the cache survives dev-mode HMR module reloads.
+const providerSessionCache: Map<number, ProviderSessionCacheEntry> =
+  ((globalThis as any).__caldavProviderSessionCache ??= new Map());
+
+async function getEnabledProviders() {
   const providers = await prisma.calDavProvider.findMany({
     where: { enabled: true },
     orderBy: { createdAt: "asc" },
   });
+  return providers.filter((p) => p.url && p.username && p.password);
+}
 
+async function createProviderClient(provider: {
+  url: string;
+  username: string;
+  password: string;
+}) {
+  return createDAVClient({
+    serverUrl: provider.url,
+    credentials: {
+      username: provider.username,
+      password: provider.password,
+    },
+    authMethod: "Basic",
+    defaultAccountType: "caldav",
+  });
+}
+
+/**
+ * Get a CalDAV client for each enabled, fully-configured provider.
+ * Always uncached — used where a live calendar list matters (settings).
+ */
+async function getCalDavClients(): Promise<ProviderClient[]> {
+  const providers = await getEnabledProviders();
   const clients: ProviderClient[] = [];
 
   for (const provider of providers) {
-    if (!provider.url || !provider.username || !provider.password) {
-      continue;
-    }
-
     try {
-      const client = await createDAVClient({
-        serverUrl: provider.url,
-        credentials: {
-          username: provider.username,
-          password: provider.password,
-        },
-        authMethod: "Basic",
-        defaultAccountType: "caldav",
-      });
-
+      const client = await createProviderClient(provider);
       clients.push({
         client,
         provider: {
@@ -85,6 +110,50 @@ async function getCalDavClients(): Promise<ProviderClient[]> {
   }
 
   return clients;
+}
+
+/**
+ * Get a client plus its calendar list for each enabled provider, reusing
+ * cached discovery results for up to PROVIDER_SESSION_TTL_MS.
+ */
+async function getProviderSessions(forceRefresh = false): Promise<ProviderSession[]> {
+  if (forceRefresh) providerSessionCache.clear();
+  const providers = await getEnabledProviders();
+
+  const sessions = await Promise.all(
+    providers.map(async (provider): Promise<ProviderSession | null> => {
+      const version = provider.updatedAt.getTime();
+      const cached = providerSessionCache.get(provider.id);
+      if (
+        cached &&
+        cached.version === version &&
+        Date.now() - cached.fetchedAt < PROVIDER_SESSION_TTL_MS
+      ) {
+        return cached.session;
+      }
+
+      try {
+        const client = await createProviderClient(provider);
+        const calendars = await client.fetchCalendars();
+        const session: ProviderSession = {
+          client,
+          calendars,
+          provider: {
+            id: provider.id,
+            name: provider.name,
+            allowedCalendars: provider.allowedCalendars,
+          },
+        };
+        providerSessionCache.set(provider.id, { version, session, fetchedAt: Date.now() });
+        return session;
+      } catch (error) {
+        console.error(`Error connecting to CalDAV provider "${provider.name}":`, error);
+        return null;
+      }
+    })
+  );
+
+  return sessions.filter((s): s is ProviderSession => s !== null);
 }
 
 // ──────────────────────────────────────────────────
@@ -276,6 +345,7 @@ export async function getCalendars(): Promise<CalendarInfo[]> {
 export async function searchEventsByDateRange(
   startInstant: Temporal.Instant,
   endInstant: Temporal.Instant,
+  options?: { refreshProviders?: boolean },
 ): Promise<CalendarEvent[]> {
   const settings = await prisma.setting.findUnique({
     where: { key: "main" },
@@ -286,9 +356,9 @@ export async function searchEventsByDateRange(
     return [];
   }
 
-  const providerClients = await getCalDavClients();
+  const providerSessions = await getProviderSessions(options?.refreshProviders);
 
-  if (providerClients.length === 0) {
+  if (providerSessions.length === 0) {
     console.log("No enabled CalDAV providers configured, skipping event search");
     return [];
   }
@@ -298,8 +368,8 @@ export async function searchEventsByDateRange(
 
   // Query all providers in parallel
   const perProviderResults = await Promise.all(
-    providerClients.map(({ client, provider }) =>
-      fetchEventsFromProvider(client, provider, startInstant, endInstant, startIso, endIso)
+    providerSessions.map((session) =>
+      fetchEventsFromProvider(session, startInstant, endInstant, startIso, endIso)
     )
   );
 
@@ -311,23 +381,20 @@ export async function searchEventsByDateRange(
   );
 
   console.log(
-    `CalDAV - found ${allEvents.length} events between ${startIso} and ${endIso} across ${providerClients.length} provider(s)`
+    `CalDAV - found ${allEvents.length} events between ${startIso} and ${endIso} across ${providerSessions.length} provider(s)`
   );
 
   return allEvents;
 }
 
 async function fetchEventsFromProvider(
-  client: Awaited<ReturnType<typeof createDAVClient>>,
-  provider: { id: number; name: string; allowedCalendars: string[] },
+  { client, provider, calendars }: ProviderSession,
   startInstant: Temporal.Instant,
   endInstant: Temporal.Instant,
   startIso: string,
   endIso: string,
 ): Promise<CalendarEvent[]> {
   try {
-    const calendars: DAVCalendar[] = await client.fetchCalendars();
-
     // Apply per-provider calendar filter
     const filteredCalendars =
       provider.allowedCalendars.length > 0
@@ -338,9 +405,9 @@ async function fetchEventsFromProvider(
       return [];
     }
 
-    const events: CalendarEvent[] = [];
-
-    for (const calendar of filteredCalendars) {
+    // Query calendars in parallel; each pushes into its own array
+    const perCalendarEvents = await Promise.all(filteredCalendars.map(async (calendar) => {
+      const events: CalendarEvent[] = [];
       try {
         const objects: DAVObject[] = await client.fetchCalendarObjects({
           calendar,
@@ -413,9 +480,10 @@ async function fetchEventsFromProvider(
           calError
         );
       }
-    }
+      return events;
+    }));
 
-    return events;
+    return perCalendarEvents.flat();
   } catch (error) {
     console.error(`Error fetching events from provider "${provider.name}":`, error);
     return [];

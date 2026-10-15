@@ -25,6 +25,7 @@ export type DebugTelemetryOptions = {
 export type ProviderOptions = {
   openai: {
     reasoningEffort: "none" | "low" | "medium" | "high";
+    forceReasoning: boolean;
   };
   google: {
     reasoningEffort: "none" | "low" | "medium" | "high";
@@ -34,6 +35,9 @@ export type ProviderOptions = {
 export const PROVIDER_OPTIONS = {
   openai: {
     reasoningEffort: "medium", // 'none' | 'low' | 'medium' | 'high'
+    // @ai-sdk/openai only recognises o-series/gpt-5* as reasoning models by id
+    // prefix, so it drops reasoningEffort (and warns) for gpt-6*. Force it.
+    forceReasoning: true,
   },
   google: {
     reasoningEffort: "medium", // 'none' | 'low' | 'medium' | 'high'
@@ -43,6 +47,9 @@ export const PROVIDER_OPTIONS = {
 export const PROVIDER_OPTIONS_SMART = {
   openai: {
     reasoningEffort: "high", // 'none' | 'low' | 'medium' | 'high'
+    // @ai-sdk/openai only recognises o-series/gpt-5* as reasoning models by id
+    // prefix, so it drops reasoningEffort (and warns) for gpt-6*. Force it.
+    forceReasoning: true,
   },
   google: {
     reasoningEffort: "high", // 'none' | 'low' | 'medium' | 'high'
@@ -53,6 +60,9 @@ export const PROVIDER_OPTIONS_SMART = {
 export const PROVIDER_OPTIONS_FAST = {
   openai: {
     reasoningEffort: "low", // 'none' | 'low' | 'medium' | 'high'
+    // @ai-sdk/openai only recognises o-series/gpt-5* as reasoning models by id
+    // prefix, so it drops reasoningEffort (and warns) for gpt-6*. Force it.
+    forceReasoning: true,
   },
   google: {
     reasoningEffort: "low", // 'none' | 'low' | 'medium' | 'high'

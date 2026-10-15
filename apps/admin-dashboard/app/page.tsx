@@ -20,6 +20,7 @@ import {
 import { ClientDateTime } from "@/components/ClientDateTime";
 import { formatAppTitle } from "@/lib/util";
 import { getAppRenameMap } from "@/lib/app-analytics";
+import { formatUsd } from "@/lib/openai-models";
 
 function getAppAnalyticsHref(appClass: string) {
   return `/analytics/apps/${encodeURIComponent(appClass).replace(/\(/g, "%28").replace(/\)/g, "%29")}`;
@@ -86,6 +87,7 @@ type DashboardData = {
   hoursLoggedThisMonth: number;
   billableHoursLast7Days: number;
   aiTokensLast7Days: number;
+  aiCostLast7Days: number;
   aiRunsLast7Days: number;
   avgTokensPerRun: number;
   topApps: TopApp[];
@@ -258,6 +260,7 @@ async function getDashboardData(): Promise<DashboardData> {
       },
       select: {
         totalTokens: true,
+        costUsd: true,
       },
     }),
     prisma.activitySession.findMany({
@@ -562,6 +565,10 @@ async function getDashboardData(): Promise<DashboardData> {
     (sum, run) => sum + (run.totalTokens ?? 0),
     0
   );
+  const aiCostLast7Days = aiTelemetryRuns.reduce(
+    (sum, run) => sum + (run.costUsd ?? 0),
+    0
+  );
   const aiRunsLast7Days = aiTelemetryRuns.length;
 
   const recentActivities = recentActivityRows.map((activity) => ({
@@ -581,6 +588,7 @@ async function getDashboardData(): Promise<DashboardData> {
     hoursLoggedThisMonth: (monthlyTimeAggregate._sum.durationMinutes ?? 0) / 60,
     billableHoursLast7Days,
     aiTokensLast7Days,
+    aiCostLast7Days,
     aiRunsLast7Days,
     avgTokensPerRun:
       aiRunsLast7Days > 0 ? Math.round(aiTokensLast7Days / aiRunsLast7Days) : 0,
@@ -835,8 +843,9 @@ export default async function Page() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricPill label="Total tokens" value={formatCompactNumber(data.aiTokensLast7Days)} />
+              <MetricPill label="Cost" value={formatUsd(data.aiCostLast7Days)} />
               <MetricPill label="Runs" value={formatNumber(data.aiRunsLast7Days)} />
               <MetricPill label="Avg / run" value={formatCompactNumber(data.avgTokensPerRun)} />
             </div>

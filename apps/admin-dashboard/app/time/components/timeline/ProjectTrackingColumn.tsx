@@ -72,6 +72,7 @@ interface ProjectTrackingColumnProps {
   setIsDraggingProjectMinimapViewport: (v: boolean) => void;
   // Handlers
   onAutofill: () => void;
+  onAutofillWeek: () => void;
   onMergeRescueTimeProjects: () => void;
   onClearDayEntries: () => void;
   onImportProjectTimesFromRescueTime: () => void;
@@ -125,6 +126,7 @@ export default function ProjectTrackingColumn({
   isDraggingProjectMinimapViewport,
   setIsDraggingProjectMinimapViewport,
   onAutofill,
+  onAutofillWeek,
   onMergeRescueTimeProjects,
   onClearDayEntries,
   onImportProjectTimesFromRescueTime,
@@ -147,6 +149,17 @@ export default function ProjectTrackingColumn({
   timelineRef,
 }: ProjectTrackingColumnProps) {
   const dateStr = formatDateStr(selectedDate);
+  const [autofillMenuOpen, setAutofillMenuOpen] = React.useState(false);
+  const autofillMenuRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!autofillMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!autofillMenuRef.current?.contains(e.target as Node)) setAutofillMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [autofillMenuOpen]);
+
   const isAutofillActive = loadingAutofill || hasActiveJobForDate(jobs, dateStr);
 
   const renderTimeEntries = () => {
@@ -247,40 +260,72 @@ export default function ProjectTrackingColumn({
           Project Tracking
         </h3>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={onAutofill}
-            disabled={isAutofillActive}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
-            title={
-              isAutofillActive
-                ? "Autofill in progress..."
-                : "Use AI to suggest time entries based on app activity"
-            }
-          >
-            <svg
-              className={`w-4 h-4 ${isAutofillActive ? "animate-spin" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div ref={autofillMenuRef} className="relative inline-flex">
+            <button
+              onClick={onAutofill}
+              disabled={isAutofillActive}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-l-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
+              title={
+                isAutofillActive
+                  ? "Autofill in progress..."
+                  : "Use AI to suggest time entries based on app activity"
+              }
             >
-              {isAutofillActive ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              )}
-            </svg>
-            {isAutofillActive ? "Processing..." : "Autofill"}
-          </button>
+              <svg
+                className={`w-4 h-4 ${isAutofillActive ? "animate-spin" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                {isAutofillActive ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                )}
+              </svg>
+              {isAutofillActive ? "Processing..." : "Autofill"}
+            </button>
+
+            <button
+              onClick={() => setAutofillMenuOpen((open) => !open)}
+              disabled={isAutofillActive}
+              aria-label="More autofill options"
+              aria-haspopup="menu"
+              aria-expanded={autofillMenuOpen}
+              className="inline-flex cursor-pointer items-center rounded-r-xl border border-l-0 border-blue-200 bg-blue-50 px-2 py-2 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/30"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {autofillMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-20 mt-1 min-w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-white/10 dark:bg-slate-900"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setAutofillMenuOpen(false);
+                    onAutofillWeek();
+                  }}
+                  className="w-full cursor-pointer rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
+                >
+                  Autofill this week
+                </button>
+              </div>
+            )}
+          </div>
           <OptionsMenu label="Project Tracking options">
             {timeEntries.length === 0 ? (
               <OptionsMenuItem

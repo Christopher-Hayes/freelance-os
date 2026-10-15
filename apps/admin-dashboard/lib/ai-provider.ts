@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { prisma } from "@freelance-os/database";
+import { DEFAULT_OPENAI_FAST_MODEL, DEFAULT_OPENAI_MODEL } from "./openai-models";
 import type { AiProvider } from "@freelance-os/types";
 import type { LanguageModel } from "ai";
 
@@ -47,7 +48,7 @@ export async function getAiModel(): Promise<LanguageModel> {
       // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
       // but we'll set it in the environment for this process
       process.env.OPENAI_API_KEY = openaiKey;
-      return openai("gpt-5.4")
+      return openai(setting?.openaiModel || DEFAULT_OPENAI_MODEL)
   }
 }
 
@@ -92,7 +93,7 @@ export async function getFastAiModel(): Promise<LanguageModel> {
       // Return OpenAI model - the SDK uses OPENAI_API_KEY env var by default,
       // but we'll set it in the environment for this process
       process.env.OPENAI_API_KEY = openaiKey;
-      return openai("gpt-5.4-mini")
+      return openai(setting?.openaiFastModel || DEFAULT_OPENAI_FAST_MODEL)
   }
 }
 

@@ -3,11 +3,11 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Temporal } from "@/lib/temporal-polyfill";
 import type { CalendarEvent } from "@/lib/webdav-provider";
-import { fetchCalendarEventsForDay } from "@/lib/webdav-actions";
+import { fetchCalendarEventsForRange } from "@/lib/webdav-actions";
 import TimelineHourMarkers from "./TimelineHourMarkers";
 import CurrentTimeLine from "./CurrentTimeLine";
 import CalendarScrollbarMinimap from "./CalendarScrollbarMinimap";
-import { HOUR_HEIGHT, TIMELINE_PADDING_TOP, formatDateStr } from "./utils";
+import { HOUR_HEIGHT, TIMELINE_PADDING_TOP } from "./utils";
 
 interface ScrollMetrics {
   scrollTop: number;
@@ -66,6 +66,73 @@ function isoToY(isoStr: string, selectedDate: Temporal.PlainDate): number {
 
 const MIN_EVENT_HEIGHT = 16; // px — so very short events are still visible
 
+// ── Week-level event cache ──────────────────────────────────────────────
+// Events are fetched a week (Mon–Sun, local time) at a time and sliced into
+// days here, so navigating between days in the same week needs no request.
+// Module-level so it survives remounts within this tab. The server keeps its
+// own longer-lived cache, so expiring here only costs a cheap round trip.
+const CLIENT_WEEK_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+const weekCache = new Map<string, { events: CalendarEvent[]; fetchedAt: number }>();
+const weekRequests = new Map<string, Promise<CalendarEvent[]>>();
+
+function startOfDayMs(date: Temporal.PlainDate, timeZone: string): number {
+  return date
+    .toPlainDateTime(Temporal.PlainTime.from("00:00:00"))
+    .toZonedDateTime(timeZone).epochMilliseconds;
+}
+
+function getWeekRange(date: Temporal.PlainDate) {
+  const timeZone = Temporal.Now.timeZoneId();
+  const weekStart = date.subtract({ days: date.dayOfWeek - 1 }); // Monday
+  const startIso = Temporal.Instant.fromEpochMilliseconds(startOfDayMs(weekStart, timeZone)).toString();
+  const endIso = Temporal.Instant.fromEpochMilliseconds(
+    startOfDayMs(weekStart.add({ days: 7 }), timeZone)
+  ).toString();
+  return { key: `${startIso}|${endIso}`, startIso, endIso };
+}
+
+function getCachedWeek(date: Temporal.PlainDate): CalendarEvent[] | null {
+  const cached = weekCache.get(getWeekRange(date).key);
+  if (!cached) return null;
+  const age = Temporal.Now.instant().epochMilliseconds - cached.fetchedAt;
+  return age < CLIENT_WEEK_CACHE_TTL_MS ? cached.events : null;
+}
+
+function loadWeek(date: Temporal.PlainDate, forceRefresh = false): Promise<CalendarEvent[]> {
+  const { key, startIso, endIso } = getWeekRange(date);
+  if (!forceRefresh) {
+    const cached = getCachedWeek(date);
+    if (cached) return Promise.resolve(cached);
+    const pending = weekRequests.get(key);
+    if (pending) return pending;
+  }
+
+  const request = fetchCalendarEventsForRange(startIso, endIso, { forceRefresh })
+    .then((events) => {
+      weekCache.set(key, { events, fetchedAt: Temporal.Now.instant().epochMilliseconds });
+      return events;
+    })
+    .finally(() => {
+      if (weekRequests.get(key) === request) weekRequests.delete(key);
+    });
+  weekRequests.set(key, request);
+  return request;
+}
+
+/** Keep only events overlapping the given local day. */
+function eventsForDay(events: CalendarEvent[], date: Temporal.PlainDate): CalendarEvent[] {
+  const timeZone = Temporal.Now.timeZoneId();
+  const dayStart = startOfDayMs(date, timeZone);
+  const dayEnd = startOfDayMs(date.add({ days: 1 }), timeZone);
+  return events.filter((e) => {
+    const start = Date.parse(e.startTime);
+    const end = Date.parse(e.endTime);
+    // Zero-length events count if they start within the day
+    return start < dayEnd && (end > dayStart || start >= dayStart);
+  });
+}
+
 export default function CalendarEventsColumn({
   selectedDate,
   isClient,
@@ -87,12 +154,32 @@ export default function CalendarEventsColumn({
 
   const fetchEvents = useCallback(async (forceRefresh = false) => {
     const requestId = ++requestIdRef.current;
+
+    // Warm the adjacent week when sitting on a week boundary, so crossing it
+    // is instant too.
+    const prefetchNeighborWeek = () => {
+      const neighbor =
+        selectedDate.dayOfWeek === 1 ? selectedDate.subtract({ days: 1 }) :
+        selectedDate.dayOfWeek === 7 ? selectedDate.add({ days: 1 }) :
+        null;
+      if (neighbor) loadWeek(neighbor).catch(() => {});
+    };
+
+    // Cache hit: render synchronously, no spinner flash
+    const cached = forceRefresh ? null : getCachedWeek(selectedDate);
+    if (cached) {
+      setEvents(eventsForDay(cached, selectedDate));
+      setLoading(false);
+      prefetchNeighborWeek();
+      return;
+    }
+
     setLoading(true);
     try {
-      const dateStr = formatDateStr(selectedDate);
-      const data = await fetchCalendarEventsForDay(dateStr, { forceRefresh });
+      const weekEvents = await loadWeek(selectedDate, forceRefresh);
       if (requestId !== requestIdRef.current) return;
-      setEvents(data);
+      setEvents(eventsForDay(weekEvents, selectedDate));
+      prefetchNeighborWeek();
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch calendar events:", err);
